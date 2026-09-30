@@ -1,0 +1,46 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+.venv*/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+*.log
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Docker
+*.pid
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# User uploads
+uploads/
+*.pdf
+
+# User uploads
+uploads/
+*.pdf

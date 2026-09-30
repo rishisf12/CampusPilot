@@ -1,0 +1,19 @@
+# Backend dependencies — pinned versions for reproducibility
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+sqlmodel==0.0.22
+python-dotenv==1.0.1
+pdfplumber==0.11.4
+reportlab==4.2.0
+pandas==2.2.3
+pydantic==2.10.0
+pydantic-settings==2.8.0
+pytest==8.3.0
+httpx==0.28.0
+python-multipart==0.0.9
+
+# OCR + LLM dependencies
+pytesseract==0.3.10
+pdf2image==1.17.0
+pillow==10.3.0
+requests==2.31.0
