@@ -23,6 +23,7 @@ async def extract_timetable(
     file: UploadFile = File(...),
     hf_token: str = Form(None),
     model: str = Form("microsoft/phi-3-mini-4k-instruct"),
+    poppler_path: str = Form(None),
     session: Session = Depends(get_session)
 ):
     """
@@ -38,7 +39,7 @@ async def extract_timetable(
         saved_path = save_upload(file, "ocr_timetable")
         
         hf_token = hf_token or os.getenv("HF_TOKEN")
-        result = process_uploaded_pdf(saved_path, 'timetable', hf_token=hf_token)
+        result = process_uploaded_pdf(saved_path, 'timetable', hf_token=hf_token, poppler_path=poppler_path)
         
         # Store in database if needed
         from models import TimetableSlot
@@ -77,6 +78,7 @@ async def extract_exam(
     file: UploadFile = File(...),
     hf_token: str = Form(None),
     model: str = Form("microsoft/phi-3-mini-4k-instruct"),
+    poppler_path: str = Form(None),
     session: Session = Depends(get_session)
 ):
     """
@@ -92,7 +94,7 @@ async def extract_exam(
         saved_path = save_upload(file, "ocr_exam")
         
         hf_token = hf_token or os.getenv("HF_TOKEN")
-        result = process_uploaded_pdf(saved_path, 'exam', hf_token=hf_token)
+        result = process_uploaded_pdf(saved_path, 'exam', hf_token=hf_token, poppler_path=poppler_path)
         
         # Store in database
         from models import ExamSeating
@@ -128,6 +130,7 @@ async def extract_exam(
 @router.post("/debug/extract-text")
 async def debug_extract_text(
     file: UploadFile = File(...),
+    poppler_path: str = Form(None),
 ):
     """
     Debug endpoint: Returns raw OCR text from each page.
@@ -138,7 +141,7 @@ async def debug_extract_text(
         saved_path = save_upload(file, "ocr_debug")
         
         from ocr_engine import extract_text_from_pdf
-        ocr_results = extract_text_from_pdf(saved_path)
+        ocr_results = extract_text_from_pdf(saved_path, poppler_path=poppler_path)
         
         return {
             'file': file.filename,
