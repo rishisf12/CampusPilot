@@ -58,6 +58,7 @@ def pdf_to_images(pdf_path: Path, dpi: int = 300, poppler_path: Optional[str] = 
         elif os.name == 'nt':
             # Try to find poppler on Windows
             possible_paths = [
+                r'C:\poppler\poppler-24.08.0\Library\bin',
                 r'C:\Program Files\poppler\bin',
                 r'C:\Program Files (x86)\poppler\bin',
                 r'C:\poppler\bin',
