@@ -1,46 +1,81 @@
 ﻿# Python
 __pycache__/
 *.py[cod]
-.venv*/
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
 venv/
 env/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
+ENV/
 
-# Node
-node_modules/
-dist/
-build/
-.vite/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
 *.log
-
-# Env / secrets
-.env
-.env.local
-.env.*.local
-
-# Docker
-*.pid
+logs/
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# IDE
-.vscode/
-.idea/
-
-# User uploads
+# Uploads
 uploads/
-*.pdf
 
-# User uploads
-uploads/
-*.pdf
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Frontend
+node_modules/
+dist/
+build/
+*.local
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Poppler (if bundled)
+poppler/
+poppler-*/
