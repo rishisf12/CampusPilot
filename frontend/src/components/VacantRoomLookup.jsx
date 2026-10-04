@@ -1,186 +1,168 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { roomsApi } from '../api'
+import { DAYS } from '../constants'
 import ErrorBanner from './ErrorBanner'
 import Spinner from './Spinner'
 
-export default function VacantRoomLookup() {
-  const [mode, setMode] = useState('live')
-  const [manualDay, setManualDay] = useState('Mon')
-  const [manualHour, setManualHour] = useState('10:00')
-  const [data, setData] = useState(null)
+/** "14:30" -> "2:30 PM" */
+function formatTime(value) {
+  if (!value) return ''
+  const [hour, minute] = value.split(':')
+  const h = Number(hour)
+  return `${h % 12 === 0 ? 12 : h % 12}:${minute} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
+/** Vacant room lookup with day/time filters, plus the full room list. */
+export default function VacantRoomLookup({ onError }) {
+  const [day, setDay] = useState('')
+  const [hour, setHour] = useState('')
+  const [result, setResult] = useState(null)
+  const [allRooms, setAllRooms] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [allRooms, setAllRooms] = useState([])
 
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-  useEffect(() => {
-    loadAllRooms()
-    fetchVacant()
-  }, [mode, manualDay, manualHour])
-
-  const loadAllRooms = async () => {
-    try {
-      const res = await roomsApi.all()
-      setAllRooms(res.rooms)
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const fetchVacant = async () => {
+  const search = useCallback(async () => {
+    if (!day || !hour) return
     setLoading(true)
-    setError(null)
     try {
-      const params = mode === 'live' ? { mode: 'live' } : { mode: 'manual', day: manualDay, hour: manualHour }
-      const res = await roomsApi.vacant(params)
-      setData(res)
-    } catch (e) {
-      setError(e.message)
+      const data = await roomsApi.vacant({ mode: 'manual', day, hour })
+      setResult(data)
+      setError(null)
+    } catch (err) {
+      setError(err.message)
+      onError?.(err.message)
     } finally {
       setLoading(false)
     }
-  }
+  }, [day, hour, onError])
 
-  const getStatusBadge = (occupied) => {
-    if (occupied.length === 0) return null
-    return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-100 text-warning-800">
-        {occupied.length} occupied
-      </span>
-    )
-  }
+  // Live mode by default, refreshed on load.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [live, rooms] = await Promise.all([roomsApi.vacant({ mode: 'live' }), roomsApi.all()])
+        if (cancelled) return
+        setResult(live)
+        setAllRooms(rooms.rooms || [])
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message)
+          onError?.(err.message)
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [onError])
+
+  // Seed the filters from the live result so they reflect "now".
+  useEffect(() => {
+    if (result?.day && !day) setDay(result.day)
+    if (result?.time && !hour) setHour(result.time)
+    // Only seed once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result])
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="space-y-4">
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      {/* Mode Toggle */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Search Mode</h3>
-        <div className="flex gap-4">
-          {['live', 'manual'].map(m => (
-            <label key={m} className={`flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border-2 transition-colors ${
-              mode === m
-                ? 'border-primary-500 bg-primary-50 text-primary-700'
-                : 'border-gray-200 text-gray-600 hover:border-gray-300'
-            }`}>
-              <input
-                type="radio"
-                name="mode"
-                value={m}
-                checked={mode === m}
-                onChange={e => setMode(e.target.value)}
-                className="text-primary-500 focus:ring-primary-500"
-              />
-              <span className="font-medium capitalize">{m}</span>
-            </label>
-          ))}
+      <div className="card space-y-4">
+        <h3 className="text-sm font-semibold text-gray-900">Vacant Room Lookup</h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[auto_auto_auto] gap-3 items-end">
+          <div>
+            <span className="label">Day</span>
+            <select id="vr-day" className="select-field" value={day} onChange={(e) => setDay(e.target.value)}>
+              <option value="">Select day</option>
+              {DAYS.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <span className="label">Time</span>
+            <input
+              id="vr-hour"
+              type="time"
+              className="input-field"
+              value={hour}
+              onChange={(e) => setHour(e.target.value)}
+            />
+          </div>
+          <button type="button" onClick={search} className="btn-primary text-sm" disabled={!day || !hour || loading}>
+            {loading ? <Spinner size={16} className="text-white" /> : 'Find Vacant Rooms'}
+          </button>
         </div>
 
-        {mode === 'manual' && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Day</label>
-              <select
-                value={manualDay}
-                onChange={e => setManualDay(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              >
-                {days.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hour (24h)</label>
-              <input
-                type="time"
-                value={manualHour}
-                onChange={e => setManualHour(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
+        {result && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-gray-500">
+              {result.day} at {formatTime(result.time)}
+            </span>
+            {/* The backend already explains a missing timetable, so show it once. */}
+            {result.message && <span className="text-primary-600">{result.message}</span>}
           </div>
         )}
       </div>
 
-      {/* Results */}
-      {data && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Vacant Rooms */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-success-500" />
-                Vacant Rooms ({data.vacant_rooms?.length || 0})
-              </h3>
-              {getStatusBadge(data.occupied_rooms)}
-            </div>
-            <div className="p-4 max-h-96 overflow-y-auto">
-              {data.vacant_rooms?.length > 0 ? (
-                <ul className="space-y-2">
-                  {data.vacant_rooms.map(room => (
-                    <li key={room} className="flex items-center justify-between p-3 bg-success-50 border border-success-100 rounded-lg">
-                      <span className="font-mono text-gray-900">{room}</span>
-                      <span className="text-xs text-success-600 font-medium">Available</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-center text-gray-500 py-8">No vacant rooms</p>
-              )}
-            </div>
+      {result && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="card">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              Vacant ({result.vacant_rooms?.length || 0})
+            </h3>
+            {result.vacant_rooms?.length ? (
+              <div className="flex flex-wrap gap-2">
+                {result.vacant_rooms.map((room) => (
+                  <span key={room} className="px-2.5 py-1 rounded-lg bg-success-50 text-success-700 text-xs font-mono font-medium">
+                    {room}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No vacant rooms at this time.</p>
+            )}
           </div>
 
-          {/* Occupied Rooms */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-danger-500" />
-                Occupied Rooms ({data.occupied_rooms?.length || 0})
-              </h3>
-            </div>
-            <div className="p-4 max-h-96 overflow-y-auto">
-              {data.occupied_rooms?.length > 0 ? (
-                <ul className="space-y-2">
-                  {data.occupied_rooms.map((occ, i) => (
-                    <li key={i} className="p-3 bg-danger-50 border border-danger-100 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-gray-900">{occ.room}</span>
-                        <span className="text-xs text-danger-600 font-medium">Occupied</span>
-                      </div>
-                      <div className="mt-1 text-sm text-gray-600">
-                        <span className="font-medium">{occ.course_code}</span>
-                        <span className="mx-2 text-gray-400">|</span>
-                        <span>{occ.start_time} - {occ.end_time}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-center text-gray-500 py-8">No occupied rooms</p>
-              )}
-            </div>
+          <div className="card">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              Occupied ({result.occupied_rooms?.length || 0})
+            </h3>
+            {result.occupied_rooms?.length ? (
+              <div className="space-y-1.5">
+                {result.occupied_rooms.map((item) => (
+                  <div key={`${item.room}-${item.course_code}`} className="flex items-center justify-between text-sm">
+                    <span className="font-mono text-gray-900">{item.room}</span>
+                    <span className="text-xs text-gray-600">
+                      {item.course_code} &middot; {formatTime(item.start_time)} - {formatTime(item.end_time)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Nothing is scheduled.</p>
+            )}
           </div>
         </div>
       )}
 
-      {/* Info Banner */}
-      {data?.message && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 flex items-center gap-2">
-          <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-          </svg>
-          <span>{data.message}</span>
-        </div>
-      )}
-
-      {/* Debug Info */}
-      <details className="text-sm text-gray-500">
-        <summary className="cursor-pointer">Debug Info</summary>
-        <pre className="mt-2 p-4 bg-gray-100 rounded text-xs overflow-auto">
-          {JSON.stringify({ mode, day: data?.day, time: data?.time, in_college_hours: data?.in_college_hours, is_lunch: data?.is_lunch, is_weekend: data?.is_weekend }, null, 2)}
-        </pre>
-      </details>
+      <div className="card">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">All rooms ({allRooms.length})</h3>
+        {allRooms.length ? (
+          <div className="flex flex-wrap gap-2">
+            {allRooms.map((room) => (
+              <span key={room} className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs font-mono">
+                {room}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">
+            No rooms yet - upload the class timetable from the Live Schedule tab.
+          </p>
+        )}
+      </div>
     </div>
   )
 }

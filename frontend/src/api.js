@@ -1,141 +1,200 @@
 /**
- * API client for CampusPilot.
+ * API client.
  *
- * The JWT is stored in localStorage and attached to every request; a 401 clears
- * it so the app falls back to the login screen.
+ * Every request goes through the Vite proxy to the FastAPI backend on port 8001
+ * and carries the stored JWT.  A 401 is the *only* thing that clears the
+ * session: network failures must not sign the user out.
  */
-const API_BASE = import.meta.env.VITE_API_URL || ''
 
-const TOKEN_KEY = 'campuspilot_token'
+const API_BASE = ''
+
+const TOKEN_KEY = 'auth_token'
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY)
+  try {
+    return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
 }
 
 export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token)
-  else localStorage.removeItem(TOKEN_KEY)
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* storage unavailable (private mode) - the session simply won't persist */
+  }
+}
+
+export function clearSession() {
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem('pending_verification_email')
+  } catch {
+    /* ignore */
+  }
+}
+
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+/** True when the session should be dropped. */
+export function isUnauthorized(error) {
+  return error instanceof ApiError && error.status === 401
 }
 
 async function request(path, options = {}) {
-  const headers = { ...options.headers }
+  const { body, headers: optionHeaders, ...rest } = options
+  const headers = { ...optionHeaders }
+
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
-  // FormData and URLSearchParams must keep their own content type so the
-  // browser sets multipart/form-data or application/x-www-form-urlencoded.
-  const body = options.body
-  const isRawBody = body instanceof FormData || body instanceof URLSearchParams
-  if (body && !isRawBody) {
+
+  let payload = body
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+  const isUrlEncoded = typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams
+  if (body && !isForm && !isUrlEncoded) {
     headers['Content-Type'] = 'application/json'
+    payload = JSON.stringify(body)
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  let response
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...rest, headers, body: payload })
+  } catch {
+    throw new ApiError('Backend offline', 0)
+  }
 
-  if (res.status === 401 && !path.startsWith('/auth/login')) {
-    setToken(null)
+  if (response.status === 204) return null
+
+  const text = await response.text()
+  let data = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = text
+    }
   }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || `HTTP ${res.status}`)
+
+  if (!response.ok) {
+    const detail =
+      (data && typeof data === 'object' && (data.detail || data.message)) ||
+      (typeof data === 'string' && data) ||
+      `Request failed (${response.status})`
+    throw new ApiError(Array.isArray(detail) ? detail.join(', ') : detail, response.status)
   }
-  if (res.status === 204) return null
-  return res.json()
+
+  return data
 }
 
-async function upload(path, file) {
+function upload(path, file, extra = {}) {
   const form = new FormData()
   form.append('file', file)
-  const res = await request(path, { method: 'POST', body: form })
-  if (res && res.detail) throw new Error(res.detail)
-  return res
+  return request(path, { method: 'POST', body: form, ...extra })
 }
 
-// Health
-export const healthApi = {
-  check: () => request('/health'),
-}
-
-// Auth
+// ---------------------------------------------------------------- auth
 export const authApi = {
-  signup: (data) => request('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
-  verifyEmail: (email, code) =>
-    request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ email, code }) }),
-  resendCode: (email) =>
-    request('/auth/resend-code', { method: 'POST', body: JSON.stringify({ email }) }),
-  // The backend login is an OAuth2 password form, not JSON.
-  login: (username, password) =>
-    request('/auth/login', {
-      method: 'POST',
-      body: new URLSearchParams({ username, password }),
-    }),
+  signup: (data) => request('/auth/signup', { method: 'POST', body: data }),
+  verifyEmail: (data) => request('/auth/verify-email', { method: 'POST', body: data }),
+  // The backend exposes this as /auth/resend-code and expects an object body.
+  resendVerificationCode: (data) => request('/auth/resend-code', { method: 'POST', body: data }),
+  login: (username, password) => {
+    const form = new URLSearchParams()
+    form.append('username', username)
+    form.append('password', password)
+    return request('/auth/login', { method: 'POST', body: form })
+  },
   me: () => request('/auth/me'),
   logout: () => request('/auth/logout', { method: 'POST' }),
 }
 
-// Profile
+// ------------------------------------------------------------- profile
 export const profileApi = {
   get: () => request('/profile/'),
-  update: (data) => request('/profile/', { method: 'PUT', body: JSON.stringify(data) }),
+  update: (data) => request('/profile/', { method: 'PUT', body: data }),
   options: () => request('/profile/options'),
-  requestBranchChange: (data) =>
-    request('/profile/branch-change', { method: 'POST', body: JSON.stringify(data) }),
+  requestBranchChange: (data) => request('/profile/branch-change', { method: 'POST', body: data }),
   clearBranchChange: () => request('/profile/branch-change', { method: 'DELETE' }),
 }
 
-// Exam
-export const examApi = {
-  status: () => request('/exam/status'),
-  uploadSeating: (file) => upload('/exam/seating/upload', file),
-  uploadTimetable: (file) => upload('/exam/timetable/upload', file),
-  timetable: () => request('/exam/timetable'),
-  seating: () => request('/exam/seating'),
-  lookup: (roll) => request(`/exam/lookup?roll=${encodeURIComponent(roll)}`),
-  quickLookup: (roll) => request(`/exam/quick-lookup?roll=${encodeURIComponent(roll)}`),
-  pdfUrl: (roll) => `${API_BASE}/exam/pdf?roll=${encodeURIComponent(roll)}`,
-  pdf: async (roll) => {
-    const res = await fetch(`${API_BASE}/exam/pdf?roll=${encodeURIComponent(roll)}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
-    if (!res.ok) throw new Error('Could not generate the exam PDF')
-    return res.blob()
-  },
+// ------------------------------------------------------------ schedule
+export const scheduleApi = {
+  now: () => request('/schedule/now'),
+  listExtra: () => request('/schedule/courses/extra'),
+  addExtra: (data) => request('/schedule/courses/extra', { method: 'POST', body: data }),
+  removeExtra: (code) => request(`/schedule/courses/extra/${encodeURIComponent(code)}`, { method: 'DELETE' }),
 }
 
-// Timetable
+// ----------------------------------------------------------- timetable
 export const timetableApi = {
   upload: (file) => upload('/timetable/upload', file),
   options: () => request('/timetable/options'),
-  clear: () => request('/timetable', { method: 'DELETE' }),
   listSlots: () => request('/timetable/slots'),
+  clear: () => request('/timetable/', { method: 'DELETE' }),
 }
 
-// Attendance
-export const attendanceApi = {
-  subjects: () => request('/attendance/subjects'),
-  summary: () => request('/attendance/summary'),
-  course: (id) => request(`/attendance/course/${id}`),
-  mark: (data) => request('/attendance/', { method: 'POST', body: JSON.stringify(data) }),
-  records: (courseId) =>
-    request(`/attendance/records${courseId ? `?course_id=${courseId}` : ''}`),
-  delete: (id) => request(`/attendance/${id}`, { method: 'DELETE' }),
-  sync: () => request('/attendance/sync'),
+// --------------------------------------------------------------- exam
+export const examApi = {
+  status: () => request('/exam/status'),
+  uploadTimetable: (file) => upload('/exam/timetable/upload', file),
+  uploadSeating: (file) => upload('/exam/seating/upload', file),
+  getTimetable: () => request('/exam/timetable'),
+  getSeating: () => request('/exam/seating'),
+  lookup: (roll) => request(`/exam/lookup?roll=${encodeURIComponent(roll)}`),
+  clearTimetable: () => request('/exam/timetable', { method: 'DELETE' }),
+  clearSeating: () => request('/exam/seating', { method: 'DELETE' }),
 }
 
-// Rooms
+// -------------------------------------------------------------- rooms
 export const roomsApi = {
   vacant: (params = {}) => {
-    const query = new URLSearchParams(params).toString()
+    const query = new URLSearchParams(
+      Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+    ).toString()
     return request(`/rooms/vacant${query ? `?${query}` : ''}`)
   },
   all: () => request('/rooms/all'),
 }
 
-// Schedule
-export const scheduleApi = {
-  now: () => request('/schedule/now'),
-  listExtra: () => request('/schedule/courses/extra'),
-  addExtra: (data) =>
-    request('/schedule/courses/extra', { method: 'POST', body: JSON.stringify(data) }),
-  removeExtra: (code) =>
-    request(`/schedule/courses/extra/${encodeURIComponent(code)}`, { method: 'DELETE' }),
+// ---------------------------------------------------------- attendance
+// The backend serves subjects/summary/records/course and the sync trigger.
+// The banner, history, per-subject "today" state, calendar and attendance
+// target are derived on the client from these.
+export const attendanceApi = {
+  summary: () => request('/attendance/summary'),
+  subjects: () => request('/attendance/subjects'),
+  records: (courseId) =>
+    request(`/attendance/records${courseId ? `?course_id=${courseId}` : ''}`),
+  course: (id) => request(`/attendance/course/${id}`),
+  mark: (data) => request('/attendance/', { method: 'POST', body: data }),
+  remove: (id) => request(`/attendance/${id}`, { method: 'DELETE' }),
+  sync: () => request('/attendance/sync'),
+}
+
+// ------------------------------------------------------------- health
+export const healthApi = {
+  check: () => request('/health'),
+}
+
+/**
+ * Monotonic key the Exam page watches to refetch after profile edits.
+ * A same-tab event is dispatched too, since `storage` only fires elsewhere.
+ */
+export function bumpProfileVersion() {
+  let next = '1'
+  try {
+    next = String(Number(localStorage.getItem('profile_version') || 0) + 1)
+    localStorage.setItem('profile_version', next)
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new CustomEvent('profile-updated', { detail: { version: next } }))
 }

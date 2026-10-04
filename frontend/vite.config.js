@@ -2,33 +2,31 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 /**
- * Dev server proxy.
- *
- * Every backend prefix is forwarded to the FastAPI server so the frontend can
- * use same-origin paths (`/auth`, `/profile`, `/exam`, ...) and stay free of
- * CORS issues. Keep the target port in sync with the uvicorn command.
+ * Dev server on 5173 with every backend prefix proxied to FastAPI on 8001, so
+ * the app can use same-origin paths and stay free of CORS problems.
  */
-const BACKEND = 'http://localhost:8002'
+const BACKEND = 'http://localhost:8001'
 
 const proxied = [
   '/api',
   '/auth',
   '/profile',
-  '/timetable',
   '/schedule',
+  '/timetable',
   '/rooms',
-  '/exam',
   '/attendance',
-  '/ocr',
+  '/exam',
   '/health',
+  '/ocr',
 ]
 
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    strictPort: true,
     proxy: Object.fromEntries(
-      proxied.map((path) => [path, { target: BACKEND, changeOrigin: true }])
+      proxied.map((path) => [path, { target: BACKEND, changeOrigin: true }]),
     ),
   },
 })
