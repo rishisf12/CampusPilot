@@ -35,8 +35,9 @@ def health_check():
     return {"status": "ok"}
 
 
-from routes import attendance, timetable, schedule, profile, rooms, exam
+from routes import attendance, timetable, schedule, profile, rooms, exam, auth
 from ocr_engine import routes as ocr_routes
+app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
 app.include_router(timetable.router, prefix="/timetable", tags=["Timetable"])
 app.include_router(schedule.router, prefix="/schedule", tags=["Schedule"])
