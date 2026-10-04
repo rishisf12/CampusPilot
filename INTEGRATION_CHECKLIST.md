@@ -1,172 +1,163 @@
-# CampusPilot — Integration Checklist
+# Verification Checklist
 
-Verify each item before considering the project complete.
+What was verified against the running stack (backend on **8001**, frontend on
+**5173**), and how to re-run each check yourself.
 
----
-
-## Backend Verification
-
-### Phase 1: Skeleton
-- [ ] `pip install -r requirements.txt` succeeds
-- [ ] `python scripts/seed.py` creates database and seeds data
-- [ ] `uvicorn main:app --reload --port 8000` starts without errors
-- [ ] `curl http://localhost:8000/health` returns `{"status":"ok"}`
-- [ ] Database file exists at `database/classpilot.db`
-
-### Phase 2: Attendance
-- [ ] `python -m pytest tests/test_attendance.py -v` → 11 passed
-- [ ] `POST /attendance` creates record
-- [ ] `GET /attendance/summary` returns overall + per-course
-- [ ] `GET /attendance/course/{id}` returns course detail
-- [ ] `DELETE /attendance/{id}` removes record
-- [ ] Cancelled classes excluded from percentage
-- [ ] Status flags: Safe (≥75), Warning (65-74.99), Critical (<65)
-- [ ] `can_miss` and `must_attend` calculations correct
-
-### Phase 3: Timetable Parser
-- [ ] `python -m pytest tests/test_timetable_parser.py -v` → 12 passed
-- [ ] `POST /timetable/upload` accepts CSV → slots inserted
-- [ ] `POST /timetable/upload` accepts PDF → slots inserted (or warnings)
-- [ ] `POST /timetable/debug/parse-timetable` returns raw tables + parsed
-- [ ] `DELETE /timetable` clears all slots
-- [ ] `PUT /timetable/slot/{id}` edits slot
-- [ ] Room normalization: "L 201" → "L-201"
-- [ ] CSV fallback works with required columns
-
-### Phase 4: Profile & Schedule
-- [ ] `GET /profile` returns current profile
-- [ ] `PUT /profile` updates semester/branch/electives
-- [ ] `GET /schedule/now` returns current + next class
-- [ ] Current class detected correctly (start-inclusive, end-exclusive)
-- [ ] Next class found (same day, then next day)
-- [ ] Lunch break (13:00-14:00) handled
-- [ ] Before/after college hours messages shown
-- [ ] `POST /schedule/courses/extra` adds cross-semester course
-- [ ] Extra courses appear in schedule
-
-### Phase 5: Vacant Rooms
-- [ ] `python -m pytest tests/test_rooms.py -v` → 9 passed
-- [ ] `is_overlapping` boundaries: exact start ✓, exact end ✗, middle ✓
-- [ ] `GET /rooms/vacant?mode=live` uses server clock
-- [ ] `GET /rooms/vacant?mode=manual&day=Mon&hour=10:30` works
-- [ ] Vacant + occupied lists returned
-- [ ] Weekend message shown
-- [ ] Outside hours message shown
-- [ ] Lunch break message shown
-
-### Phase 6: Exam Seating
-- [ ] `python -m pytest tests/test_roll_parse.py -v` → 14 passed
-- [ ] `POST /exam/upload` accepts CSV → rows inserted
-- [ ] `POST /exam/upload` accepts PDF → rows inserted
-- [ ] `POST /exam/debug/parse-exam` returns raw + parsed
-- [ ] Roll parsing: "23BCS003" → ("23BCS", 3)
-- [ ] Range parsing: "23BCS001-23BCS050" and "23BCS001 to 23BCS050"
-- [ ] Room normalization: "L 201" → "L-201"
-- [ ] `GET /exam/lookup?roll=23BCS100` returns exams
-- [ ] 404 for roll not in any range
-- [ ] `GET /exam/pdf?roll=23BCS100` downloads valid PDF
+Legend: ✅ verified · ⬜ not yet possible (needs a real PDF)
 
 ---
 
-## Frontend Verification
+## 1. Stack boots
 
-### Build & Dev
-- [ ] `npm install` succeeds
-- [ ] `npm run dev` starts on port 5173
-- [ ] `npm run build` produces `dist/` without errors
-- [ ] Vite proxy forwards `/api`, `/attendance`, etc. to port 8000
+| # | Check | How | Result |
+|---|---|---|---|
+| 1.1 | Backend starts clean | `python -m uvicorn main:app --port 8001` | ✅ |
+| 1.2 | Health responds | `curl http://127.0.0.1:8001/health` → `{"status":"ok"}` | ✅ |
+| 1.3 | Tables auto-created on a fresh database | delete `database/classpilot.db`, boot, inspect `PRAGMA table_info` | ✅ |
+| 1.4 | Old schema migrated in place | `exam_date` renamed to `seating_date`; `branch`/`semester`/`is_extra` added; existing users preserved | ✅ |
+| 1.5 | Frontend builds | `npm run build` | ✅ 46 modules |
+| 1.6 | Dev server on 5173 | `npm run dev` | ✅ |
+| 1.7 | Proxy reaches 8001 | `curl http://localhost:5173/health` | ✅ |
 
-### Tab: Live Schedule
-- [ ] Profile form loads current profile
-- [ ] Profile updates persist (semester, branch, electives)
-- [ ] Timetable upload (CSV) works → schedule refreshes
-- [ ] Current class card shows when in class
-- [ ] Next class card shows upcoming
-- [ ] "No class right now" message when appropriate
-- [ ] Auto-refresh toggle works (60s)
-- [ ] Extra courses form adds course → appears in schedule
-- [ ] Clear timetable button works
+## 2. Authentication
 
-### Tab: Vacant Room Lookup
-- [ ] Live mode shows current vacant/occupied rooms
-- [ ] Manual mode: day dropdown + hour picker work
-- [ ] Vacant rooms list shows green "Available" badges
-- [ ] Occupied rooms list shows course, time, red "Occupied"
-- [ ] Weekend/outside hours/lunch messages display
-- [ ] Debug details expandable
+| # | Check | Result |
+|---|---|---|
+| 2.1 | Signup rejects non-`@iiitdmj.ac.in` domains (422) | ✅ |
+| 2.2 | Signup rejects passwords under 8 characters (422) | ✅ |
+| 2.3 | Duplicate email / username / roll rejected (400) | ✅ |
+| 2.4 | Signup emails a 6-digit code | ✅ (SMTP stubbed in tests) |
+| 2.5 | Wrong code → 400 `Invalid verification code` | ✅ |
+| 2.6 | Code expires after 10 minutes | ✅ |
+| 2.7 | Resend replaces the previous code | ✅ |
+| 2.8 | Login blocked (403) until verified | ✅ |
+| 2.9 | Login is an OAuth2 form, not JSON | ✅ |
+| 2.10 | Token works on `/auth/me` | ✅ |
+| 2.11 | Unauthenticated request → 401 | ✅ |
+| 2.12 | Bad token → 401, session cleared | ✅ |
+| 2.13 | Network error keeps the user signed in (offline dot) | ✅ |
+| 2.14 | Verification screen resumes after tab close | ✅ pending-email in `localStorage` |
+| 2.15 | Resend cooldown persists across reload | ✅ |
 
-### Tab: Attendance
-- [ ] Overall summary cards: percentage, status, totals
-- [ ] Per-course cards with color-coded status badges
-- [ ] Progress bar reflects percentage (green/yellow/red)
-- [ ] Present/Absent/Cancelled buttons work
-- [ ] Buttons show loading spinner during request
-- [ ] `can_miss` and `must_attend` displayed
-- [ ] Summary refreshes after marking
+## 3. Profile and branch change
 
-### Tab: Exam Seating
-- [ ] File upload (PDF/CSV) works
-- [ ] Roll number input with auto-uppercase
-- [ ] Lookup returns exam table with date, day, time, room
-- [ ] "Download PDF" button downloads personalized timetable
-- [ ] PDF contains roll, generated date, exam table, footer
-- [ ] 404 shows friendly "no exams found" message
+| # | Check | Result |
+|---|---|---|
+| 3.1 | Branch list is exactly `CSE A, CSE B, DS, ECE, ME, SM, PG, MDes` | ✅ no bare `CSE`, no duplicates |
+| 3.2 | From/To dropdowns use the placeholder "Select branch" | ✅ |
+| 3.3 | Branch Change block sits inside the Profile card | ✅ |
+| 3.4 | "No branch change" checkbox sits beside the button | ✅ |
+| 3.5 | Branch change records From → To | ✅ `CSE A -> ECE` |
+| 3.6 | `original_branch` preserved across later changes | ✅ |
+| 3.7 | Making a change auto-unticks "No branch change" | ✅ |
+| 3.8 | Ticking the box clears the pending request | ✅ `No branch change recorded (cleared pending request for ECE)` |
+| 3.9 | Unknown branch rejected (400) | ✅ |
+| 3.10 | Same source and target rejected (400) | ✅ |
+| 3.11 | Profile change bumps `profile_version` (2 → 3) | ✅ |
+| 3.12 | Semester options follow the programme | ✅ MTech → I–IV |
+
+## 4. Timetable
+
+| # | Check | Result |
+|---|---|---|
+| 4.1 | CSV upload → slots inserted, zero warnings | ✅ 6 slots |
+| 4.2 | Malformed rows reported as warnings, not fatal | ✅ 2 inserted, 2 warnings |
+| 4.3 | Missing columns → 400 with a clear message | ✅ |
+| 4.4 | Re-upload replaces previous slots | ✅ |
+| 4.5 | `Clear All` handles an empty 204 response | ✅ no crash |
+| 4.6 | `/timetable/slots` serialises times as `HH:MM` strings | ✅ regression test |
+| 4.7 | `/timetable/options` reports discovered branches/semesters/courses | ✅ |
+| 4.8 | Upload triggers attendance course sync | ✅ 5 courses |
+| 4.9 | Latest selected file persists across reloads | ✅ |
+| 4.10 | Real class-timetable PDF parses | ⬜ source PDF is 0 bytes |
+
+## 5. Rooms and schedule
+
+| # | Check | Result |
+|---|---|---|
+| 5.1 | `/rooms/vacant` live mode with no timetable → 200 | ✅ regression test (was a 500) |
+| 5.2 | `/rooms/vacant` manual mode → 200 | ✅ |
+| 5.3 | `/rooms/vacant` reports `has_timetable` | ✅ |
+| 5.4 | Vacant/occupied split correct for a known slot | ✅ L-101 busy 09:00 Mon |
+| 5.5 | Weekend / lunch / after-hours messaging | ✅ `Weekend - no regular classes` |
+| 5.6 | `/schedule/now` → current + next + server time | ✅ regression test (was a 500) |
+| 5.7 | Other classes in the same slot listed | ✅ |
+| 5.8 | Course code shown once; `(CODE)` only when name differs | ✅ |
+
+## 6. Attendance
+
+| # | Check | Result |
+|---|---|---|
+| 6.1 | Subjects sync from the timetable | ✅ 3 for CSE A sem 5 |
+| 6.2 | Other branches' subjects excluded | ✅ ME/SM filtered out |
+| 6.3 | Daily banner shows live IST clock | ✅ `20:53:51 IST` |
+| 6.4 | Classes-today and unmarked counts correct | ✅ `2 classes today / All marked` |
+| 6.5 | At-risk list with "attend next N" | ✅ |
+| 6.6 | Subject grid is 2-up mobile / 3-up desktop | ✅ |
+| 6.7 | Colour thresholds vs target | ✅ |
+| 6.8 | P/A disabled with tooltip "No class scheduled today" | ✅ faded + disabled |
+| 6.9 | C always enabled | ✅ |
+| 6.10 | Optimistic mark updates the UI immediately | ✅ |
+| 6.11 | Toast with one-tap Undo | ✅ `CS5031 marked Present Undo` |
+| 6.12 | Undo actually deletes the record | ✅ records back to `[]`, 0/0 |
+| 6.13 | Calendar modal: prev/next, month grid | ✅ October 2026, 31 cells |
+| 6.14 | Today highlighted with a ring | ✅ `ring-2 ring-primary-500` |
+| 6.15 | Colour legend for present/absent/cancelled/not marked/extra | ✅ |
+| 6.16 | Only past dates are editable | ✅ 3 editable, 28 disabled |
+| 6.17 | History sub-tab lists records with course codes | ✅ |
+| 6.18 | Target % editable and drives colouring | ✅ stored in `localStorage` |
+
+## 7. Exam
+
+| # | Check | Result |
+|---|---|---|
+| 7.1 | Seating index PDF parses | ✅ 705 rows, 0 unknown, 0 skipped |
+| 7.2 | Mid-sem timetable PDF parses | ✅ 75 rows, 0 unknown |
+| 7.3 | All dates resolved across table boundaries | ✅ |
+| 7.4 | No impossible time slots (`22:30 → 12:30`) | ✅ |
+| 7.5 | Hall codes not mistaken for course codes | ✅ `CR103` excluded |
+| 7.6 | Rooms joined onto timetable rows | ✅ regression tests |
+| 7.7 | Roll lookup returns date, room, course code, day, time | ✅ |
+| 7.8 | Duplicate rooms collapsed | ✅ |
+| 7.9 | Roll prefilled from the signed-in user | ✅ `23BCS125` |
+| 7.10 | Results restored after refresh | ✅ `exam_last_lookup` |
+| 7.11 | Rule reported per exam (2 = exact, 3 = estimated) | ✅ |
+| 7.12 | Profile-narrowed results labelled | ✅ `Filtered to your profile` |
+| 7.13 | Upload cards side by side while empty, stacked when populated | ✅ |
+| 7.14 | Each card shows "Uploaded (N entries)" + red Remove | ✅ 75 / 705 |
+| 7.15 | Remove asks for confirmation | ✅ |
+| 7.16 | Semester/branch filters default to the profile | ✅ |
+| 7.17 | "Synced with profile" badge | ✅ |
+| 7.18 | Hidden-row hint | ✅ `7 rows hidden by these filters.` |
+| 7.19 | Day-N grouping | ✅ `Day-1 Wednesday` |
+| 7.20 | Seating preview 20 rows + Show All | ✅ 126 entries |
+| 7.21 | Refetch on `profile_version` change | ✅ |
+| 7.22 | Today badge on lookup cards | ✅ code path, no exam today in seed data |
+
+## 8. Cross-cutting
+
+| # | Check | Result |
+|---|---|---|
+| 8.1 | Header flush at the top (`top === 0`), sticky | ✅ |
+| 8.2 | Margin/padding reset on html, body, #root | ✅ all `0px` |
+| 8.3 | Title and favicon | ✅ `logo-icon.svg` |
+| 8.4 | Exactly one header and one footer | ✅ |
+| 8.5 | Header shows only name, Logout and the live dot | ✅ |
+| 8.6 | Tabs do not wrap at desktop width | ✅ `whitespace-nowrap` |
+| 8.7 | Full Tailwind 50–900 palette | ✅ in `index.html` |
+| 8.8 | No unused exports | ✅ audited and removed |
+| 8.9 | No unhandled promise rejections in the console | ✅ |
+| 8.10 | Backend test suite green | ✅ 225 passed |
 
 ---
 
-## Cross-Cutting
+## Outstanding
 
-### Error Handling
-- [ ] All API errors show in red ErrorBanner (not just console)
-- [ ] Network errors caught and displayed
-- [ ] Loading spinners on all async actions
-- [ ] No unhandled promise rejections in console
-
-### CORS & Proxy
-- [ ] Frontend at 5173 calls backend at 8000 successfully
-- [ ] No CORS errors in browser console
-- [ ] Vite proxy config matches all API prefixes
-
-### Data Persistence
-- [ ] SQLite database survives server restart
-- [ ] Seed data reproducible
-- [ ] Uploaded timetables persist until cleared
-- [ ] Attendance records persist
-
-### Timezone
-- [ ] Server uses Asia/Kolkata (configurable via .env)
-- [ ] Live schedule uses system clock in correct TZ
-- [ ] Exam dates stored/displayed correctly
-
----
-
-## Performance & Quality
-
-- [ ] All backend files < 150 lines
-- [ ] Type hints on all functions
-- [ ] Logging at INFO level in services
-- [ ] No swallowed exceptions (all logged or raised)
-- [ ] No hardcoded secrets (all in .env)
-- [ ] Pinned versions in requirements.txt and package.json
-
----
-
-## Final Sign-Off
-
-| Check | Status |
-|-------|--------|
-| Backend starts on first try | ☐ |
-| Frontend builds on first try | ☐ |
-| All 63 backend tests pass | ☐ |
-| All 4 tabs functional | ☐ |
-| Error banners visible | ☐ |
-| PDF generation works | ☐ |
-| CSV fallback works | ☐ |
-| Debug endpoints expose raw data | ☐ |
-| README complete | ☐ |
-
----
-
-**Integration Complete** ✅
-
-*All phases verified. Ready for demo/deployment.*
+1. **Class timetable PDF is 0 bytes** in `Downloads` — re-download it. The whole
+   pipeline is proven with the CSV fixture in `test_timetable_flow.py`, so only
+   the file itself is missing. It gates checklist items 4.10 and the live-data
+   behaviour of 5.4, 5.7 and 6.1.
+2. **Attendance target is browser-local** — needs `GET`/`PUT /attendance/target`.
+3. **Instructor column is empty** — the exam rows carry no instructor field.
+4. **Exam profile filter is approximate** — branch and semester are inferred from
+   the roll prefix and course code.
