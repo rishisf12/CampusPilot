@@ -2,6 +2,7 @@
 from datetime import date, time, datetime
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON
+from sqlalchemy import Date, DateTime, func
 from enum import Enum
 
 
@@ -55,10 +56,16 @@ class User(SQLModel, table=True):
     username: str = Field(index=True, unique=True)
     roll_number: Optional[str] = Field(default=None, index=True)
     is_email_verified: bool = Field(default=False)
-    created_at: datetime = Field(default=None)
-    updated_at: datetime = Field(default=None)
-
-    profile: Optional["UserProfile"] = Relationship(back_populates="user")
+    #: Server-side defaults: SQLModel 0.0.22 cannot use `default_factory` under
+    #: Pydantic 2.10, so the timestamp is filled by the database instead.
+    created_at: datetime = Field(
+        default=None,
+        sa_column=Column("created_at", DateTime, nullable=False, server_default=func.now()),
+    )
+    updated_at: datetime = Field(
+        default=None,
+        sa_column=Column("updated_at", DateTime, nullable=False, server_default=func.now()),
+    )
 
 
 class UserProfile(SQLModel, table=True):
@@ -88,18 +95,41 @@ class UserProfile(SQLModel, table=True):
     requested_branch: Optional[str] = None
     branch_change_reason: Optional[str] = None
     branch_change_requested_at: Optional[datetime] = None
-    
-    user: Optional[User] = Relationship(back_populates="profile")
 
 
 class ExamSeating(SQLModel, table=True):
+    """Seating index row: a continuous roll range mapped to one exam slot."""
+
     __tablename__ = "exam_seating"
     id: Optional[int] = Field(default=None, primary_key=True)
     roll_start_prefix: str = Field(index=True)
     roll_start_num: int = Field(index=True)
     roll_end_num: int = Field(index=True)
     room: str
-    exam_date: date
+    #: `sa_column` avoids the collision with `datetime.date` in SA column naming.
+    seating_date: Optional[date] = Field(default=None, sa_column=Column("seating_date", Date, nullable=True))
     start_time: time
     end_time: time
-    course_code: str
+    course_code: str = Field(index=True)
+    #: Branch the row belongs to (inferred from roll prefix or explicit PDF column).
+    branch: Optional[str] = Field(default=None, index=True)
+    semester: Optional[int] = Field(default=None, index=True)
+    #: True for open-elective / extra-course rows that span other branches.
+    is_extra: bool = Field(default=False, index=True)
+
+
+class MidSemSchedule(SQLModel, table=True):
+    """Mid-sem examination timetable row (branch + course + slot)."""
+
+    __tablename__ = "mid_sem_schedule"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    #: `sa_column` avoids the collision with `datetime.date` in SA column naming.
+    schedule_date: Optional[date] = Field(default=None, sa_column=Column("schedule_date", Date, nullable=True))
+    start_time: time
+    end_time: time
+    course_code: str = Field(index=True)
+    room: str
+    branch: Optional[str] = Field(default=None, index=True)
+    semester: Optional[int] = Field(default=None, index=True)
+    #: OE group / elective group label when the PDF groups open electives.
+    group: Optional[str] = Field(default=None)

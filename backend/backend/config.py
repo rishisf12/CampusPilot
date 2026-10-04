@@ -35,8 +35,22 @@ class Settings(BaseSettings):
     lunch_end: str = Field(default="14:00", alias="LUNCH_END")
     attendance_safe: int = Field(default=75, alias="ATTENDANCE_SAFE")
     attendance_warning: int = Field(default=65, alias="ATTENDANCE_WARNING")
-    max_upload_mb: int = Field(default=10, alias="MAX_UPLOAD_MB")
-    allowed_extensions: str = Field(default=".pdf,.csv", alias="ALLOWED_EMAIL_DOMAIN")
+    max_upload_mb: int = Field(default=25, alias="MAX_UPLOAD_MB")
+    allowed_extensions: str = Field(default=".pdf,.csv", alias="ALLOWED_EXTENSIONS")
+
+    # Exam / branch inference
+    #: Canonical branch list used across profile dropdowns and exam filtering.
+    branch_options: str = Field(
+        default="CSE A,CSE B,DS,ECE,ME,SM,PG,MDes",
+        alias="BRANCH_OPTIONS",
+    )
+    #: Programme -> ordered semester count (drives the semester dropdown).
+    programme_semesters: str = Field(
+        default="BTech:8,BDes:8,MTech:4,MDes:4,PhD:2",
+        alias="PROGRAMME_SEMESTERS",
+    )
+    #: College admission year used to map a roll-number prefix to a semester.
+    admission_year: int = Field(default=21, alias="ADMISSION_YEAR")
 
     class Config:
         env_file = Path(__file__).resolve().parents[2] / ".env"
@@ -59,3 +73,12 @@ LUNCH_END_HOUR = int(settings.lunch_end.split(":")[0])
 
 DAYS_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 DAY_TO_INT = {d: i for i, d in enumerate(DAYS_ORDER)}
+
+BRANCH_OPTIONS = [b.strip() for b in settings.branch_options.split(",") if b.strip()]
+
+PROGRAMME_SEMESTERS = {
+    programme.strip(): int(count)
+    for programme, count in (
+        pair.split(":") for pair in settings.programme_semesters.split(",")
+    )
+}

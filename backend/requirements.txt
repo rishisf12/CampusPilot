@@ -12,8 +12,15 @@ pytest==8.3.0
 httpx==0.28.0
 python-multipart==0.0.9
 
+# Auth: JWT tokens, password hashing, email verification codes
+pyjwt==2.8.0
+passlib==1.7.4
+aiosmtplib==3.0.1
+email-validator==2.2.0
+
 # OCR + LLM dependencies
 pytesseract==0.3.10
 pdf2image==1.17.0
-pillow==10.3.0
 requests==2.31.0
+# pillow pinned without a version: 10.3.0 fails to build from source on 3.12+
+pillow

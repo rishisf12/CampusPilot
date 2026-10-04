@@ -1,15 +1,19 @@
-"""Timetable API routes: upload, debug, clear, edit slot."""
+"""Timetable API routes: upload, debug, clear, edit slot, options."""
 import logging
-from pathlib import Path
+from collections import OrderedDict
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
-from sqlmodel import Session, select
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
+from sqlmodel import Session, delete, select
 
 from database import get_session
-from models import TimetableSlot
-from services.timetable_parser import parse_timetable_file, extract_raw_text
-from utils.file_prompt import validate_upload, save_upload
+from models import TimetableSlot, User
+from routes.deps import get_current_user
+from services.attendance_service import sync_courses_from_timetable
+from services.exam_parser import normalize_branch
+from services.timetable_parser import parse_timetable_file
+from utils.file_prompt import save_upload, validate_upload
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +62,7 @@ async def upload_timetable(
         raise HTTPException(status_code=400, detail=f"Failed to parse timetable: {e}")
 
     # Clear existing slots (optional: could be separate endpoint)
-    session.exec(select(TimetableSlot)).delete(synchronize_session=False)
+    session.exec(delete(TimetableSlot))
 
     # Insert parsed slots
     inserted = 0
@@ -69,10 +73,14 @@ async def upload_timetable(
 
     session.commit()
 
+    # Attendance is driven by the timetable, so refresh the course list now.
+    new_courses = sync_courses_from_timetable(session)
+
     return {
-        "message": f"Timetable uploaded and parsed successfully",
+        "message": "Timetable uploaded and parsed successfully",
         "slots_inserted": inserted,
         "slots_found": result["stats"]["slots_found"],
+        "courses_synced": new_courses,
         "warnings": result["warnings"],
         "parse_report": result["stats"],
     }
@@ -124,10 +132,39 @@ async def debug_parse_timetable(
     }
 
 
+@router.get("/options")
+def timetable_options(session: Session = Depends(get_session)):
+    """
+    Branch / semester / course options discovered in the uploaded timetable.
+
+    The profile dropdowns use this so branch choices reflect the real timetable.
+    """
+    slots = session.exec(select(TimetableSlot)).all()
+
+    branches = OrderedDict()
+    for slot in slots:
+        branch = normalize_branch(slot.branch_or_program)
+        if branch and branch not in branches:
+            branches[branch] = 0
+        if branch:
+            branches[branch] += 1
+
+    semesters = sorted({slot.semester for slot in slots if slot.semester})
+    courses = sorted({(slot.course_code or "").upper() for slot in slots if slot.course_code})
+
+    return {
+        "branches": list(branches),
+        "branch_counts": branches,
+        "semesters": semesters,
+        "courses": courses,
+        "total_slots": len(slots),
+    }
+
+
 @router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
 def clear_timetable(session: Session = Depends(get_session)):
     """Clear all timetable slots."""
-    session.exec(select(TimetableSlot)).delete(synchronize_session=False)
+    session.exec(delete(TimetableSlot))
     session.commit()
     return None
 

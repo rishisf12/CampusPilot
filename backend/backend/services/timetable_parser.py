@@ -3,7 +3,7 @@ import logging
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from datetime import time
+from datetime import date, datetime, time, timedelta
 import pdfplumber
 import pandas as pd
 
@@ -38,8 +38,8 @@ def parse_time_range(s: str) -> tuple[Optional[time], Optional[time]]:
     # Fallback: single time means 1-hour slot
     t = parse_time_str(s)
     if t:
-        from datetime import timedelta
-        end = (time(t.hour, t.minute) + timedelta(hours=1)).replace(tzinfo=None)
+        dt = datetime.combine(date.today(), t)
+        end = (dt + timedelta(hours=1)).time()
         return t, end
     return None, None
 

@@ -89,21 +89,24 @@ def generate_exam_pdf(roll: str, exams: List[Dict[str, Any]]) -> bytes:
     ]
 
     for exam in exams:
-        exam_date = exam["exam_date"]
+        raw_date = exam.get("exam_date") or exam.get("date")
+        exam_date = raw_date
         if isinstance(exam_date, str):
-            exam_date = datetime.strptime(exam_date, "%Y-%m-%d").date()
-        
-        day_name = exam_date.strftime("%A")
-        time_str = f"{exam['start_time']} - {exam['end_time']}"
-        if isinstance(exam['start_time'], str):
-            time_str = f"{exam['start_time']} - {exam['end_time']}"
-        
+            try:
+                exam_date = datetime.strptime(exam_date, "%Y-%m-%d").date()
+            except ValueError:
+                exam_date = None
+
+        start = exam.get("start_time") or ""
+        end = exam.get("end_time") or ""
+        time_str = f"{start} - {end}" if start or end else "-"
+
         table_data.append([
-            exam_date.strftime("%d %b %Y"),
-            day_name,
+            exam_date.strftime("%d %b %Y") if exam_date else "-",
+            exam_date.strftime("%A") if exam_date else "-",
             time_str,
-            exam["course_code"],
-            exam["room"],
+            exam.get("course_code") or "-",
+            exam.get("room") or "-",
         ])
 
     # Create table

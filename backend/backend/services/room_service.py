@@ -4,7 +4,15 @@ from datetime import time, datetime
 from typing import List, Dict, Any, Optional
 from sqlmodel import Session, select
 
-from config import settings, DAY_TO_INT, DAYS_ORDER
+from config import (
+    COLLEGE_END_HOUR,
+    COLLEGE_START_HOUR,
+    DAYS_ORDER,
+    DAY_TO_INT,
+    LUNCH_END_HOUR,
+    LUNCH_START_HOUR,
+    settings,
+)
 from models import TimetableSlot
 
 logger = logging.getLogger(__name__)
@@ -57,6 +65,9 @@ def get_vacant_rooms(
 ) -> Dict[str, Any]:
     """
     Get vacant and occupied rooms for a given day and time.
+
+    Returns an empty result with ``has_timetable: False`` when no timetable has
+    been uploaded yet, instead of raising.
     """
     all_rooms = get_all_rooms(session)
     occupied = get_occupied_rooms_at(session, day, query_time)
@@ -67,17 +78,19 @@ def get_vacant_rooms(
     time_window = f"{query_time.strftime('%H:%M')}"
 
     # Check if within college hours
-    college_start = time(settings.COLLEGE_START_HOUR, 0)
-    college_end = time(settings.COLLEGE_END_HOUR, 0)
-    lunch_start = time(settings.LUNCH_START_HOUR, 0)
-    lunch_end = time(settings.LUNCH_END_HOUR, 0)
+    college_start = time(COLLEGE_START_HOUR, 0)
+    college_end = time(COLLEGE_END_HOUR, 0)
+    lunch_start = time(LUNCH_START_HOUR, 0)
+    lunch_end = time(LUNCH_END_HOUR, 0)
 
     in_college_hours = college_start <= query_time < college_end
     in_lunch = lunch_start <= query_time < lunch_end
     is_weekend = day in ("Sat", "Sun")
 
     message = None
-    if is_weekend:
+    if not all_rooms:
+        message = "No timetable uploaded yet - upload the class timetable to see vacant rooms."
+    elif is_weekend:
         message = "Weekend - no regular classes"
     elif not in_college_hours:
         message = f"Outside college hours ({college_start.strftime('%H:%M')}-{college_end.strftime('%H:%M')})"
@@ -93,6 +106,7 @@ def get_vacant_rooms(
         "in_college_hours": in_college_hours,
         "is_lunch": in_lunch,
         "is_weekend": is_weekend,
+        "has_timetable": bool(all_rooms),
         "message": message,
     }
 

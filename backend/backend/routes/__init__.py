@@ -1,5 +1,5 @@
 # Routes package initialization
-from . import auth, attendance, timetable, schedule, profile, rooms, exam
+from . import auth, attendance, timetable, schedule, profile, rooms, exam, deps
 
 __all__ = [
     "auth",
@@ -9,4 +9,5 @@ __all__ = [
     "profile",
     "rooms",
     "exam",
+    "deps",
 ]
