@@ -7,7 +7,8 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Security
-    SECRET_KEY: str = "dev-secret-change-in-production"
+    #: Must be >= 32 bytes for HS256 (RFC 7518); override via the environment.
+    SECRET_KEY: str = "dev-secret-change-in-production-0123456789abcdef"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 7 * 24 * 60  # 7 days
 

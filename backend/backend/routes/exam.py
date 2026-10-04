@@ -12,7 +12,7 @@ from sqlmodel import Session, delete, select
 from database import get_session
 from models import ExamSeating, MidSemSchedule, User
 from routes.deps import get_current_user
-from services.exam_lookup import lookup_roll
+from services.exam_lookup import fill_rooms_from_seating, lookup_roll
 from services.exam_parser import (
     exam_row_visible,
     parse_mid_sem_file,
@@ -177,6 +177,9 @@ def list_exam_timetable(
         }
         if exam_row_visible(row, profile_filter, extras):
             rows.append(row)
+
+    # The timetable PDF has no hall column; borrow rooms from the seating index.
+    fill_rooms_from_seating(session, rows)
 
     grouped = _group_by_day(rows, "schedule_date")
     return {

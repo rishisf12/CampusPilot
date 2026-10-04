@@ -171,9 +171,13 @@ def is_continuous_range_dict(row: Dict[str, Any]) -> bool:
 
     A single-roll row (``start == end``) still counts as a range, but a span
     wider than 400 students is treated as a scattered list rather than a range.
+    Rows missing either bound are never continuous.
     """
-    span = (row.get("roll_end_num") or 0) - (row.get("roll_start_num") or 0)
-    return 0 <= span <= 400
+    start = row.get("roll_start_num")
+    end = row.get("roll_end_num")
+    if start is None or end is None:
+        return False
+    return 0 <= (end - start) <= 400
 
 
 def _build_result_dict(
@@ -204,6 +208,48 @@ def _build_result_dict(
 def _restore_obj(row: Dict[str, Any]) -> ExamSeating:
     """Rebuild a transient (unsaved) ORM object from a row dict."""
     return ExamSeating(**row)
+
+
+def fill_rooms_from_seating(
+    session: Session,
+    rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Fill in rooms for timetable rows that have none.
+
+    The mid-sem timetable PDF lists only date/time/course, while the seating
+    index is the document that names the hall.  Matching on course code and date
+    therefore gives each exam its room without a second upload step.
+    """
+    missing = [r for r in rows if not r.get("room") and r.get("course_code")]
+    if not missing:
+        return rows
+
+    codes = {r["course_code"] for r in missing}
+    seatings = session.exec(
+        select(ExamSeating).where(ExamSeating.course_code.in_(codes))
+    ).all()
+
+    # course code -> date -> {room: count}
+    by_course: Dict[str, Dict[str, Dict[str, int]]] = {}
+    for seating in seatings:
+        if not seating.room or not seating.seating_date:
+            continue
+        per_date = by_course.setdefault(seating.course_code, {})
+        per_date.setdefault(seating.seating_date.isoformat(), {})
+        counts = per_date[seating.seating_date.isoformat()]
+        counts[seating.room] = counts.get(seating.room, 0) + 1
+
+    for row in missing:
+        per_date = by_course.get(row["course_code"])
+        if not per_date:
+            continue
+        # Prefer the hall used on the same date; fall back to the most common one.
+        counts = per_date.get(row.get("schedule_date")) or max(
+            per_date.values(), key=lambda c: max(c.values())
+        )
+        row["room"] = max(counts.items(), key=lambda kv: kv[1])[0]
+    return rows
 
 
 def lookup_roll_quick(session: Session, roll: str) -> List[Dict[str, Any]]:

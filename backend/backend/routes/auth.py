@@ -15,6 +15,7 @@ import random
 from database import get_session
 from models import User, UserProfile
 from config import get_settings
+from routes.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])
@@ -281,22 +282,14 @@ async def login(form: OAuth2PasswordRequestForm = Depends(), session: Session = 
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(session: Session = Depends(get_session), authorization: str = None):
-    """Get current user profile from JWT token."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
+async def me(user: User = Depends(get_current_user)):
+    """
+    Return the signed-in user.
 
-    token = authorization.split(" ")[1]
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id = int(payload.get("sub"))
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    user = session.exec(select(User).where(User.id == user_id)).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
+    Uses the bearer-token dependency so the token is read from the
+    ``Authorization`` header (previously it was treated as a query parameter,
+    which made every session look unauthenticated).
+    """
     return UserResponse(
         id=user.id,
         email=user.email,

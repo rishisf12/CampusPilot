@@ -4,11 +4,19 @@ import ErrorBanner from './ErrorBanner'
 import StatusCard from './StatusCard'
 import Spinner from './Spinner'
 
+const STATUS_BADGE = {
+  Present: 'bg-success-100 text-success-700',
+  Absent: 'bg-danger-100 text-danger-700',
+  Cancelled: 'bg-gray-100 text-gray-600',
+}
+
 export default function Attendance() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [marking, setMarking] = useState({})
+  const [openCalendar, setOpenCalendar] = useState(null)
+  const [calendar, setCalendar] = useState({})
 
   useEffect(() => {
     loadSummary()
@@ -26,6 +34,22 @@ export default function Attendance() {
     }
   }
 
+  /** Fetch the date-by-date calendar for one course, on demand. */
+  const toggleCalendar = async (courseId) => {
+    if (openCalendar === courseId) {
+      setOpenCalendar(null)
+      return
+    }
+    setOpenCalendar(courseId)
+    if (calendar[courseId]) return
+    try {
+      const data = await attendanceApi.course(courseId)
+      setCalendar(prev => ({ ...prev, [courseId]: data.calendar || [] }))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
   const handleMark = async (courseId, status) => {
     const key = `${courseId}-${status}`
     setMarking(prev => ({ ...prev, [key]: true }))
@@ -36,6 +60,8 @@ export default function Attendance() {
         status,
       })
       setError(null)
+      // The calendar for this course is now stale.
+      setCalendar(prev => ({ ...prev, [courseId]: undefined }))
       await loadSummary()
     } catch (e) {
       setError(e.message)
@@ -180,6 +206,47 @@ export default function Attendance() {
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1 text-right">{course.percentage}%</p>
+                </div>
+
+                {/* Course calendar */}
+                <div className="mt-3">
+                  <button
+                    onClick={() => toggleCalendar(course.course_id)}
+                    className="text-xs font-medium text-primary-600 hover:underline"
+                  >
+                    {openCalendar === course.course_id
+                      ? 'Hide calendar'
+                      : `Show calendar (${course.present + course.absent + course.cancelled} entries)`}
+                  </button>
+
+                  {openCalendar === course.course_id && (
+                    <div className="mt-2">
+                      {!calendar[course.course_id] ? (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
+                          <Spinner size={14} /> Loading calendar…
+                        </div>
+                      ) : calendar[course.course_id].length === 0 ? (
+                        <p className="text-xs text-gray-500 py-2">
+                          No attendance recorded yet for {course.course_code}.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {calendar[course.course_id].map((entry) => (
+                            <span
+                              key={entry.id}
+                              title={entry.day}
+                              className={`px-2 py-1 rounded-md text-xs font-medium ${
+                                STATUS_BADGE[entry.status] || 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {new Date(entry.date).toLocaleDateString('en-IN',
+                                { day: '2-digit', month: 'short' })}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))

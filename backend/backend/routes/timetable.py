@@ -198,4 +198,18 @@ def edit_slot(slot_id: int, payload: SlotEdit, session: Session = Depends(get_se
 def list_slots(session: Session = Depends(get_session)):
     """List all timetable slots (for debugging)."""
     slots = session.exec(select(TimetableSlot)).all()
-    return slots
+    # `SlotResponse` declares times as strings, so format them explicitly
+    # rather than handing back `datetime.time` objects.
+    return [
+        SlotResponse(
+            id=slot.id,
+            day=slot.day,
+            start_time=slot.start_time.strftime("%H:%M") if slot.start_time else "",
+            end_time=slot.end_time.strftime("%H:%M") if slot.end_time else "",
+            room=slot.room,
+            course_code=slot.course_code,
+            branch_or_program=slot.branch_or_program,
+            semester=slot.semester,
+        )
+        for slot in slots
+    ]

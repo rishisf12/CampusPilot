@@ -148,8 +148,9 @@ def get_current_and_next_class(session: Session) -> Dict[str, Any]:
         }
 
     # Check if within college hours
-    college_start = time(settings.college_start_hour, 0) if isinstance(settings.college_start_hour, int) else time(COLLEGE_START_HOUR, 0)
-    college_end = time(settings.college_end_hour, 0) if isinstance(settings.college_end_hour, int) else time(COLLEGE_END_HOUR, 0)
+    # The hours live as module-level constants in config, not on `settings`.
+    college_start = time(COLLEGE_START_HOUR, 0)
+    college_end = time(COLLEGE_END_HOUR, 0)
 
     # Handle lunch break
     lunch_start = time(LUNCH_START_HOUR, 0)
