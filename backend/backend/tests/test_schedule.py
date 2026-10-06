@@ -1,7 +1,7 @@
 """Unit tests for schedule service."""
 import pytest
 from datetime import time
-from services.schedule_service import (
+from features.schedule.service import (
     time_to_minutes,
     minutes_to_time,
     is_time_between,

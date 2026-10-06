@@ -5,15 +5,16 @@ import Spinner from './Spinner'
  * Compact uploader.
  *
  * One click selects the file, a second click uploads it - the file picker is
- * never re-opened automatically.  The chosen file name is mirrored into
- * localStorage so the latest pick survives a reload and can be re-uploaded
- * without browsing again.  Progress and errors are shown inline.
+ * never re-opened automatically. Progress and errors are shown inline.
+ *
+ * Nothing is remembered between reloads: the uploaded file itself lives on the
+ * server, and only its *name* could be cached here, which would mislead - the
+ * bytes are gone, so it could never actually be re-uploaded.
  */
 export default function FileUpload({
   label,
   accept = '.pdf,.csv',
   onUpload,
-  storageKey,
   hint,
   children,
 }) {
@@ -24,38 +25,13 @@ export default function FileUpload({
   const [error, setError] = useState(null)
   const [done, setDone] = useState(null)
   const inputRef = useRef(null)
-  const inputId = `upload-${storageKey || label.replace(/\W+/g, '-').toLowerCase()}`
-
-  // Restore the previously chosen file name (the File itself cannot persist).
-  useEffect(() => {
-    if (!storageKey) return
-    try {
-      const saved = localStorage.getItem(storageKey)
-      if (saved) {
-        setFile({ name: saved, size: 0, restored: true })
-        setDone('Re-selected. Click Upload to send it.')
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [storageKey])
-
-  const remember = (name) => {
-    if (!storageKey) return
-    try {
-      if (name) localStorage.setItem(storageKey, name)
-      else localStorage.removeItem(storageKey)
-    } catch {
-      /* ignore */
-    }
-  }
+  const inputId = `upload-${label.replace(/\W+/g, '-').toLowerCase()}`
 
   const pick = (selected) => {
     if (!selected) return
     setFile(selected)
     setError(null)
     setDone(null)
-    remember(selected.name)
   }
 
   const onDrop = (event) => {
@@ -69,7 +45,6 @@ export default function FileUpload({
     setError(null)
     setDone(null)
     setProgress(0)
-    remember(null)
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -85,7 +60,6 @@ export default function FileUpload({
       setProgress(100)
       setDone(result?.message || 'Uploaded')
       // The pick has been consumed; clear it so the next upload starts clean.
-      remember(null)
       setFile(null)
       if (inputRef.current) inputRef.current.value = ''
     } catch (err) {
@@ -134,7 +108,7 @@ export default function FileUpload({
                 </svg>
                 <span className="text-sm text-gray-800 truncate">{file.name}</span>
                 {file.restored && (
-                  <span className="text-[10px] text-gray-400 shrink-0">(re-selected)</span>
+                  <span className="text-[10px] text-gray-400 shrink-0">(not re-selectable)</span>
                 )}
               </div>
               <button type="button" onClick={clear} disabled={busy}
@@ -168,10 +142,11 @@ export default function FileUpload({
         )}
 
         <div className="flex items-center gap-2">
-          <button type="submit" className="btn-primary text-sm" disabled={busy || !file}>
+          <button type="submit" className="btn-primary text-sm" disabled={busy || !file || file.restored}>
             {busy ? <Spinner size={16} className="text-white" /> : 'Upload'}
           </button>
-          {!file && (
+          {/* A restored stub holds no bytes, so keep the picker reachable. */}
+          {(!file || file.restored) && (
             <label htmlFor={inputId} className="btn-secondary text-sm cursor-pointer">
               Choose file
             </label>

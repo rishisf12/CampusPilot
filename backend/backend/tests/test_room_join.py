@@ -5,9 +5,9 @@ import pytest
 from sqlmodel import Session, delete
 
 # The database URL is set by tests/conftest.py before any import of the app.
-from database import create_db_and_tables, engine  # noqa: E402
+from core.database import create_db_and_tables, engine  # noqa: E402
 from models import ExamSeating  # noqa: E402
-from services.exam_lookup import fill_rooms_from_seating  # noqa: E402
+from features.exam.lookup import fill_rooms_from_seating  # noqa: E402
 
 
 @pytest.fixture(scope="module")

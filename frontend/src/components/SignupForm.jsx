@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { authApi } from '../api'
 import {
-  ALLOWED_EMAIL_DOMAIN,
   BRANCH_OPTIONS,
   GENDERS,
   PROGRAMMES,
@@ -27,7 +26,15 @@ function scorePassword(value) {
 const STRENGTH_LABELS = ['Too short', 'Weak', 'Fair', 'Good', 'Strong']
 const STRENGTH_BARS = ['bg-danger-500', 'bg-danger-500', 'bg-warning-500', 'bg-success-500', 'bg-success-500']
 
-export default function SignupForm({ onSwitchToLogin, onSwitchToVerify }) {
+/**
+ * Registration step 3: the account details.
+ *
+ * The email is not typed here. It arrives already proven from step 1, and is
+ * shown read-only, because the address that owns the account has to be the one
+ * that was verified - letting it be edited at this point would let someone prove
+ * one mailbox and claim another.
+ */
+export default function SignupForm({ verifiedEmail, onSwitchToLogin, onRegistered, onStartOver }) {
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
@@ -37,7 +44,6 @@ export default function SignupForm({ onSwitchToLogin, onSwitchToVerify }) {
     branch: 'CSE A',
     username: '',
     roll_number: '',
-    email: '',
     password: '',
     confirm_password: '',
   })
@@ -63,8 +69,7 @@ export default function SignupForm({ onSwitchToLogin, onSwitchToVerify }) {
       found.username = '3-30 characters: letters, numbers, dot, dash or underscore'
     const roll = form.roll_number.trim().toUpperCase()
     if (!ROLL_PATTERN.test(roll)) found.roll_number = 'Use YYBBBNNN, e.g. 23BCS125'
-    if (!form.email.trim().toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN))
-      found.email = `Must use your college email (${ALLOWED_EMAIL_DOMAIN})`
+    // No email check here: the address was proven in step 1 and is not editable.
     if (form.password.length < 8) found.password = 'At least 8 characters'
     if (form.password !== form.confirm_password) found.confirm_password = 'Passwords do not match'
     if (showBranchChange && branchTo && branchTo === branchFrom)
@@ -105,10 +110,11 @@ export default function SignupForm({ onSwitchToLogin, onSwitchToVerify }) {
         branch: showBranchChange && branchTo ? branchTo : form.branch,
         username: form.username.trim(),
         roll_number: form.roll_number.trim().toUpperCase(),
-        email: form.email.trim().toLowerCase(),
+        // The proven address, not anything typed here.
+        email: verifiedEmail,
         password: form.password,
       })
-      onSwitchToVerify(form.email.trim().toLowerCase())
+      onRegistered()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -294,18 +300,26 @@ export default function SignupForm({ onSwitchToLogin, onSwitchToVerify }) {
               </Field>
             </div>
 
-            {/* Email */}
-            <Field label="College email" error={invalid('email')} hint={`Must use your college email (${ALLOWED_EMAIL_DOMAIN})`}>
+            {/* Already verified in step 1, so shown but not editable. */}
+            <Field
+              label="College email"
+              hint="Verified in the previous step."
+            >
               <input
                 id="su-email"
                 type="email"
-                className="input-field"
-                value={form.email}
-                onChange={(e) => update('email', e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, email: true }))}
-                placeholder={`you${ALLOWED_EMAIL_DOMAIN}`}
-                required
+                className="input-field bg-gray-50 text-gray-600"
+                value={verifiedEmail}
+                readOnly
+                aria-readonly="true"
               />
+              <button
+                type="button"
+                onClick={onStartOver}
+                className="mt-1 text-xs text-primary-600 hover:underline"
+              >
+                Use a different email
+              </button>
             </Field>
 
             {/* Password + strength */}

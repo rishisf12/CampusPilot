@@ -13,10 +13,10 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete, select
 
 # The database URL is set by tests/conftest.py before any import of the app.
-from database import create_db_and_tables, engine  # noqa: E402
+from core.database import create_db_and_tables, engine  # noqa: E402
 from main import app  # noqa: E402
 from models import Course, TimetableSlot, User, UserProfile  # noqa: E402
-from routes.auth import create_access_token  # noqa: E402
+from features.auth.routes import create_access_token  # noqa: E402
 
 TIMETABLE_CSV = """day,start_time,end_time,room,course_code,branch_or_program,semester
 Monday,09:00,10:00,L-101,CS5031,BTech CSE,5
@@ -73,9 +73,39 @@ class TestTimetableUpload:
         assert body["slots_found"] == 6
         assert body["warnings"] == []
 
+    def test_unreadable_upload_keeps_the_existing_timetable(self, context):
+        """
+        A file that yields no usable rows must be refused, not silently accepted.
+
+        The handler replaces the stored slots, so accepting an empty parse wiped
+        the timetable and still answered "parsed successfully" - the user saw a
+        success message and an empty schedule with no explanation.
+        """
+        client, token = context
+        assert upload(client, token).status_code == 200
+        before = client.get("/timetable/slots", headers=auth(token)).json()
+        assert len(before) == 6
+
+        # Correct headers, but no row has a day the parser recognises.
+        unusable = (
+            "day,start_time,end_time,room,course_code,branch_or_program,semester\n"
+            "Funday,09:00,10:00,L-101,CS5031,BTech CSE,5\n"
+            "Funday,11:00,12:00,L-102,ME5011,BTech ME,5\n"
+        )
+        res = upload(client, token, body=unusable, filename="unusable.csv")
+        assert res.status_code == 400, res.text
+
+        # The old timetable is still there, and the reason is spelled out.
+        assert client.get("/timetable/slots", headers=auth(token)).json() == before
+        detail = res.json()["detail"]
+        assert "no timetable rows" in detail.lower()
+        assert "Funday" in detail
+
     def test_upload_syncs_courses_for_attendance(self, context):
         """Attendance is driven by the timetable, so courses appear immediately."""
         client, token = context
+        # Put the good fixture back, since the refusal test leaves it untouched.
+        assert upload(client, token).status_code == 200
         with Session(engine) as session:
             codes = {c.code for c in session.exec(select(Course)).all()}
         assert {"CS5031", "ME5011", "CS5032", "OE3E33", "SM2002"} <= codes

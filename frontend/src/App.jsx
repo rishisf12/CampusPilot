@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import AuthWrapper, { useAuth } from './components/AuthWrapper'
-import LiveSchedule from './components/LiveSchedule'
-import VacantRoomLookup from './components/VacantRoomLookup'
-import Attendance from './components/Attendance'
-import ExamSeating from './components/ExamSeating'
+import LiveSchedule from './features/classroom/LiveSchedule'
+import VacantRoomLookup from './features/classroom/VacantRoomLookup'
+import Attendance from './features/classroom/Attendance'
+import ExamSeating from './features/classroom/ExamSeating'
+import AdminPanel from './features/admin/AdminPanel'
+import Feedback from './features/feedback/Feedback'
+import Teams from './features/myteam/Teams'
 import ErrorBanner from './components/ErrorBanner'
 import { healthApi } from './api'
 import { NAV_TABS } from './constants'
+import { ProfileProvider } from './hooks/useProfile.jsx'
 
 /** Poll the backend so the header dot reflects real connectivity. */
 function useBackendStatus() {
@@ -33,6 +37,7 @@ function useBackendStatus() {
 
 function Shell() {
   const { user, logout, offline } = useAuth()
+  const [section, setSection] = useState('classroom') // 'classroom' | 'my-team' | 'feedback'
   const [tab, setTab] = useState(() => {
     const requested = new URLSearchParams(window.location.search).get('tab')
     return NAV_TABS.some((item) => item.id === requested) ? requested : 'live'
@@ -51,11 +56,79 @@ function Shell() {
   const displayName =
     user?.full_name?.trim() || user?.username || user?.email?.split('@')[0] || 'Student'
 
+  // Classroom sub-tabs
+  const CLASSROOM_TABS = NAV_TABS
+
+  // An admin sees the developer panel instead of the student sections.
+  if ((user?.role || 'student') === 'admin') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between gap-4 h-16">
+              <div className="flex items-center gap-3 shrink-0">
+                <img src="/logo-icon.svg" alt="Essential" className="w-12 h-12" />
+                <div className="leading-tight">
+                  <p className="text-lg font-bold text-primary-500">essential</p>
+                  <p className="text-[10px] tracking-widest font-semibold text-cyan-600 whitespace-nowrap">
+                    YOUR CAMPUS ASSISTANT
+                  </p>
+                </div>
+              </div>
+
+              <span className="px-3 py-1.5 text-sm font-semibold text-primary-600 bg-primary-50 rounded-lg whitespace-nowrap">
+                Admin
+              </span>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="hidden sm:inline text-sm font-medium text-gray-700 max-w-[160px] truncate">
+                  {displayName}
+                </span>
+                <button type="button" onClick={logout} className="btn-ghost">
+                  Logout
+                </button>
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${online ? 'bg-success-500' : 'bg-danger-500'}`}
+                  title={online ? 'Backend connected' : 'Backend offline'}
+                  aria-label={online ? 'Backend connected' : 'Backend offline'}
+                />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {offline && !online && (
+            <ErrorBanner
+              message="Backend offline - start it with: uvicorn main:app --port 8001"
+              onDismiss={() => setConnectionError(null)}
+              className="mb-4"
+            />
+          )}
+          {connectionError && (
+            <ErrorBanner message={connectionError} onDismiss={() => setConnectionError(null)} className="mb-4" />
+          )}
+
+          <ProfileProvider>
+            <AdminPanel onError={setConnectionError} />
+          </ProfileProvider>
+        </main>
+
+        <footer className="bg-white border-t border-gray-200 py-4">
+          <div className="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500">
+            essential &mdash; your campus assistant
+          </div>
+        </footer>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Single static header, flush at the top, never scrolls away */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Top row: brand + main nav (Classroom, My Team, Feedback) + user/status */}
           <div className="flex items-center justify-between gap-4 h-16">
             {/* Brand */}
             <div className="flex items-center gap-3 shrink-0">
@@ -68,23 +141,32 @@ function Shell() {
               </div>
             </div>
 
-            {/* Tabs live directly in the header */}
-            <nav className="hidden lg:flex items-center gap-1 shrink-0" aria-label="Main">
-              {NAV_TABS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => selectTab(item.id)}
-                  aria-current={tab === item.id ? 'page' : undefined}
-                  className={`px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                    tab === item.id
-                      ? 'bg-primary-500 text-white'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+            {/* Main navigation: Classroom | My Team | Feedback */}
+            <nav className="flex items-center gap-1 shrink-0" aria-label="Main sections">
+              {['classroom', 'my-team', 'feedback'].map((id) => {
+                const label = id === 'classroom' ? 'Classroom' : id === 'my-team' ? 'My Team' : 'Feedback'
+                const isActive = section === id
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => {
+                      setSection(id)
+                      // When switching to classroom, reset tab to live if not already a classroom tab
+                      if (id === 'classroom' && !CLASSROOM_TABS.some(t => t.id === tab)) {
+                        selectTab('live')
+                      }
+                    }}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`px-3 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors ${
+                      isActive
+                        ? 'bg-primary-50 text-primary-600'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}>
+                    {label}
+                  </button>
+                )
+              })}
             </nav>
 
             {/* User, logout and the live dot */}
@@ -103,24 +185,28 @@ function Shell() {
             </div>
           </div>
 
-          {/* Tabs wrap onto their own row on small screens */}
-          <nav className="lg:hidden flex items-center gap-1 pb-2 overflow-x-auto" aria-label="Main mobile">
-            {NAV_TABS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => selectTab(item.id)}
-                aria-current={tab === item.id ? 'page' : undefined}
-                className={`px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-full transition-colors ${
-                  tab === item.id
-                    ? 'bg-primary-500 text-white'
-                    : 'bg-gray-100 text-gray-600 border border-gray-200'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
+          {/* Second row: Classroom sub-tabs (only when Classroom is active) */}
+          {section === 'classroom' && (
+            <div className="flex items-center justify-center gap-1 py-2 border-t border-gray-100 overflow-x-auto">
+              <nav className="flex items-center gap-1" aria-label="Classroom">
+                {CLASSROOM_TABS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => selectTab(item.id)}
+                    aria-current={tab === item.id ? 'page' : undefined}
+                    className={`px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-full transition-colors ${
+                      tab === item.id
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+          )}
         </div>
       </header>
 
@@ -137,10 +223,20 @@ function Shell() {
           <ErrorBanner message={connectionError} onDismiss={() => setConnectionError(null)} className="mb-4" />
         )}
 
-        {tab === 'live' && <LiveSchedule onError={setConnectionError} />}
-        {tab === 'vacant' && <VacantRoomLookup onError={setConnectionError} />}
-        {tab === 'attendance' && <Attendance onError={setConnectionError} />}
-        {tab === 'exam' && <ExamSeating onError={setConnectionError} />}
+        <ProfileProvider>
+          {section === 'classroom' && (
+            <>
+              {tab === 'live' && <LiveSchedule onError={setConnectionError} />}
+              {tab === 'vacant' && <VacantRoomLookup onError={setConnectionError} />}
+              {tab === 'attendance' && <Attendance onError={setConnectionError} />}
+              {tab === 'exam' && <ExamSeating onError={setConnectionError} />}
+            </>
+          )}
+
+          {section === 'my-team' && <Teams />}
+
+          {section === 'feedback' && <Feedback />}
+        </ProfileProvider>
       </main>
 
       {/* Single footer */}

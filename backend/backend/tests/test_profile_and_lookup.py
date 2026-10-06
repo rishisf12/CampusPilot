@@ -2,8 +2,8 @@
 import pytest
 from datetime import date, time
 
-from services.exam_lookup import is_continuous_range_dict
-from services.profile_service import profile_to_filter
+from features.exam.lookup import is_continuous_range_dict
+from features.profile.service import profile_to_filter
 from models import UserProfile
 
 
@@ -70,7 +70,7 @@ class TestContinuousRange:
     ],
 )
 def test_roll_prefix_split(roll, expected):
-    from services.exam_parser import parse_roll
+    from features.exam.parser import parse_roll
 
     assert parse_roll(roll) == expected
 

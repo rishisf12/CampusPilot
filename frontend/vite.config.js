@@ -18,6 +18,9 @@ const proxied = [
   '/exam',
   '/health',
   '/ocr',
+  '/feedback',
+  '/teams',
+  '/hackathons',
 ]
 
 export default defineConfig({

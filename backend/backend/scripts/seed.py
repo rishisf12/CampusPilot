@@ -7,7 +7,7 @@ from datetime import date, time
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from database import session_scope
+from core.database import session_scope
 from models import (
     Course, AttendanceRecord, AttendanceStatus,
     TimetableSlot, UserProfile, ExamSeating
@@ -109,7 +109,7 @@ def seed_exams(session):
 
 
 def main():
-    from database import create_db_and_tables
+    from core.database import create_db_and_tables
     create_db_and_tables()
     with session_scope() as session:
         course_ids = seed_courses(session)

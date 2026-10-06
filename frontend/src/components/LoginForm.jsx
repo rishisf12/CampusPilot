@@ -1,25 +1,35 @@
 import { useEffect, useState } from 'react'
+import { clearEmailJustVerified, readEmailJustVerified } from '../lib/storage'
 import ErrorBanner from './ErrorBanner'
 import Spinner from './Spinner'
 
-const VERIFIED_KEY = 'email_just_verified'
-
-/** Sign in. Username and password only - email is not accepted. */
-export default function LoginForm({ onSwitchToSignup, onLogin, offline }) {
+/**
+ * Sign in. Username and password only - email is not accepted.
+ *
+ * "Forgot password?" opens the passkey recovery screen rather than a reset:
+ * a reset would change the password, and the point is to get back in without
+ * doing that.
+ */
+export default function LoginForm({
+  onSwitchToSignup,
+  onLogin,
+  onForgotPassword,
+  onChangeRole,
+  resetNotice,
+  onDismissResetNotice,
+  offline,
+}) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
 
+  // Acknowledge a just-completed verification once, then clear the flag.
   useEffect(() => {
-    try {
-      if (localStorage.getItem(VERIFIED_KEY) === '1') {
-        setNotice('Email verified. Sign in to continue.')
-        localStorage.removeItem(VERIFIED_KEY)
-      }
-    } catch {
-      /* ignore */
+    if (readEmailJustVerified()) {
+      setNotice('Email verified. Sign in to continue.')
+      clearEmailJustVerified()
     }
   }, [])
 
@@ -62,6 +72,19 @@ export default function LoginForm({ onSwitchToSignup, onLogin, offline }) {
           {notice && (
             <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm">
               {notice}
+            </div>
+          )}
+          {resetNotice && (
+            <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm flex items-start justify-between gap-2">
+              <span>{resetNotice}</span>
+              <button
+                type="button"
+                onClick={onDismissResetNotice}
+                className="text-success-600 hover:text-success-700 shrink-0"
+                aria-label="Dismiss"
+              >
+                x
+              </button>
             </div>
           )}
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
@@ -109,6 +132,17 @@ export default function LoginForm({ onSwitchToSignup, onLogin, offline }) {
             </button>
           </form>
 
+          {/* Below the button, as a secondary route rather than competing with it. */}
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="text-sm text-primary-600 hover:text-primary-500"
+            >
+              Forgot password?
+            </button>
+          </div>
+
           <p className="text-sm text-gray-600 text-center pt-1">
             No account?{' '}
             <button
@@ -119,6 +153,19 @@ export default function LoginForm({ onSwitchToSignup, onLogin, offline }) {
               Create one
             </button>
           </p>
+
+          {/* Back to the role choice, for anyone in the wrong place. */}
+          {onChangeRole && (
+            <p className="text-center">
+              <button
+                type="button"
+                onClick={onChangeRole}
+                className="text-xs text-gray-500 hover:text-gray-700"
+              >
+                Not a student? Change role
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>

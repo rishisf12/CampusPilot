@@ -1,7 +1,7 @@
 """Unit tests for room service (vacant room finder)."""
 import pytest
 from datetime import time
-from services.room_service import is_overlapping
+from features.rooms.service import is_overlapping
 
 
 class TestIsOverlapping:

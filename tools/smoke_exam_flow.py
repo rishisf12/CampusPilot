@@ -22,11 +22,11 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlmodel import Session, select  # noqa: E402
 
 import jwt  # noqa: E402
-from config import get_settings  # noqa: E402
-from database import create_db_and_tables, engine  # noqa: E402
+from core.config import get_settings  # noqa: E402
+from core.database import create_db_and_tables, engine  # noqa: E402
 from main import app  # noqa: E402
 from models import User, UserProfile  # noqa: E402
-from services.exam_parser import BRANCH_OPTIONS  # noqa: E402
+from features.exam.parser import BRANCH_OPTIONS  # noqa: E402
 
 settings = get_settings()
 DOWNLOADS = Path.home() / "Downloads"

@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 # The database URL is set by tests/conftest.py before any import of the app.
-from config import get_settings  # noqa: E402
-from database import create_db_and_tables, engine  # noqa: E402
+from core.config import get_settings  # noqa: E402
+from core.database import create_db_and_tables, engine  # noqa: E402
 from main import app  # noqa: E402
 from models import User, UserProfile  # noqa: E402
 

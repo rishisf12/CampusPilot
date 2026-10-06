@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend" / "backend"))
 
-from services.exam_parser import parse_seating_index_file, parse_mid_sem_file  # noqa: E402
+from features.exam.parser import parse_seating_index_file, parse_mid_sem_file  # noqa: E402
 
 DOWNLOADS = Path.home() / "Downloads"
 

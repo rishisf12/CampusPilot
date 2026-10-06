@@ -2,7 +2,7 @@
 import pytest
 from datetime import date, time
 
-from services.exam_parser import (
+from features.exam.parser import (
     branch_matches,
     exam_row_visible,
     extract_roll_tokens,

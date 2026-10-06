@@ -1,6 +1,6 @@
 """Unit tests for attendance calculations."""
 import pytest
-from services.attendance_service import (
+from features.attendance.service import (
     calculate_percentage,
     get_status,
     classes_can_miss,

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 # The database URL is set by tests/conftest.py before any import of the app.
-from database import create_db_and_tables, engine  # noqa: E402
+from core.database import create_db_and_tables, engine  # noqa: E402
 from main import app  # noqa: E402
 from models import (  # noqa: E402
     AttendanceRecord,
@@ -23,7 +23,7 @@ from models import (  # noqa: E402
     User,
     UserProfile,
 )
-from routes.auth import create_access_token  # noqa: E402
+from features.auth.routes import create_access_token  # noqa: E402
 
 SEED_ROWS = [
     TimetableSlot(
@@ -110,6 +110,8 @@ GET_ENDPOINTS = [
     "/attendance/records",
     "/attendance/course/1",
     "/attendance/sync",
+    "/feedback/mine",
+    # /feedback/responses is admin-only; covered in test_feedback.py.
 ]
 
 

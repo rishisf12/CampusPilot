@@ -1,7 +1,7 @@
 """Unit tests for timetable parser."""
 import pytest
 from datetime import time
-from services.timetable_parser import (
+from features.timetable.parser import (
     parse_time_str,
     parse_time_range,
     normalize_room,

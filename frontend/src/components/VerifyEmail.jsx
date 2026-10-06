@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { authApi } from '../api'
+import { RESEND_COOLDOWN_SECONDS } from '../constants'
+import { readPendingVerification, writePendingVerification } from '../lib/storage'
 import ErrorBanner from './ErrorBanner'
 import Spinner from './Spinner'
-import { readPendingEmail, writePendingEmail } from './AuthWrapper'
+import { readPendingEmail } from './AuthWrapper'
 
-const RESEND_KEY = 'resend_available_at'
-const COOLDOWN_SECONDS = 60
+// AuthWrapper starts this clock when a signup completes, so the two must agree.
+const COOLDOWN_SECONDS = RESEND_COOLDOWN_SECONDS
 
 /** Remaining whole seconds on the resend cooldown. */
 function secondsLeft(timestamp) {
@@ -16,14 +18,16 @@ function secondsLeft(timestamp) {
 /**
  * 6-digit email verification.
  *
- * The pending address lives in localStorage so closing and reopening the tab
- * returns to this screen with the email prefilled, and the resend cooldown
- * timestamp is persisted so it survives a reload too.
+ * The pending address and its resend cooldown are stored together in
+ * localStorage, so closing and reopening the tab returns to this screen with the
+ * email prefilled and the cooldown still counting.
  */
 export default function VerifyEmail({ onVerified, onStartOver }) {
   const [email, setEmail] = useState(() => readPendingEmail())
   const [code, setCode] = useState('')
-  const [cooldown, setCooldown] = useState(() => secondsLeft(localStorage.getItem(RESEND_KEY)))
+  const [cooldown, setCooldown] = useState(() =>
+    secondsLeft(readPendingVerification()?.resendAvailableAt),
+  )
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
   const [error, setError] = useState(null)
@@ -31,12 +35,16 @@ export default function VerifyEmail({ onVerified, onStartOver }) {
 
   useEffect(() => {
     if (cooldown <= 0) return undefined
-    const timer = setInterval(() => setCooldown(secondsLeft(localStorage.getItem(RESEND_KEY))), 1000)
+    const timer = setInterval(
+      () => setCooldown(secondsLeft(readPendingVerification()?.resendAvailableAt)),
+      1000,
+    )
     return () => clearInterval(timer)
   }, [cooldown])
 
+  // Persist the address, keeping any cooldown already recorded.
   useEffect(() => {
-    writePendingEmail(email)
+    writePendingVerification(email, readPendingVerification()?.resendAvailableAt || 0)
   }, [email])
 
   const verify = useCallback(
@@ -50,12 +58,7 @@ export default function VerifyEmail({ onVerified, onStartOver }) {
       setError(null)
       try {
         await authApi.verifyEmail({ email: email.trim().toLowerCase(), code: code.trim() })
-        writePendingEmail('')
-        try {
-          localStorage.setItem('email_just_verified', '1')
-        } catch {
-          /* ignore */
-        }
+        writePendingVerification('')
         onVerified()
       } catch (err) {
         setError(err.message)
@@ -72,12 +75,8 @@ export default function VerifyEmail({ onVerified, onStartOver }) {
     try {
       // Sent as an object body, as the endpoint expects.
       await authApi.resendVerificationCode({ email: email.trim().toLowerCase() })
-      const until = String(Date.now() + COOLDOWN_SECONDS * 1000)
-      try {
-        localStorage.setItem(RESEND_KEY, until)
-      } catch {
-        /* ignore */
-      }
+      const until = Date.now() + COOLDOWN_SECONDS * 1000
+      writePendingVerification(email, until)
       setCooldown(COOLDOWN_SECONDS)
       setNotice('A new code is on its way.')
     } catch (err) {
@@ -88,12 +87,8 @@ export default function VerifyEmail({ onVerified, onStartOver }) {
   }
 
   const startOver = () => {
-    writePendingEmail('')
-    try {
-      localStorage.removeItem(RESEND_KEY)
-    } catch {
-      /* ignore */
-    }
+    // Clears the address and the cooldown together.
+    writePendingVerification('')
     setCode('')
     onStartOver()
   }
