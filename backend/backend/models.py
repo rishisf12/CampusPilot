@@ -341,6 +341,8 @@ class Feedback(SQLModel, table=True):
     name: str = ""
     phone: Optional[str] = Field(default=None)
     email: str = ""
+    #: Subject/title (from email subject or web form).
+    subject: Optional[str] = Field(default=None)
     message: str = ""
     #: Stored filename inside ``uploads/`` (``feedback_<timestamp>_<uuid>.<ext>``).
     attachment_filename: Optional[str] = Field(default=None)

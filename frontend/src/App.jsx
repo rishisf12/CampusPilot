@@ -8,6 +8,7 @@ import AdminPanel from './features/admin/AdminPanel'
 import Feedback from './features/feedback/Feedback'
 import Teams from './features/myteam/Teams'
 import ErrorBanner from './components/ErrorBanner'
+import { SECTION_ICONS, SECTION_LABELS } from './components/NavIcons'
 import { healthApi } from './api'
 import { NAV_TABS } from './constants'
 import { ProfileProvider } from './hooks/useProfile.jsx'
@@ -141,11 +142,15 @@ function Shell() {
               </div>
             </div>
 
-            {/* Main navigation: Classroom | My Team | Feedback */}
-            <nav className="flex items-center gap-1 shrink-0" aria-label="Main sections">
+            {/* Main navigation: Classroom | My Team | Feedback.
+                Each glyph is a self-contained silhouette, but the caption under
+                it means nobody has to guess on first use. `aria-label` repeats
+                the name for screen readers, since the caption is a sibling. */}
+            <nav className="flex items-center gap-2 shrink-0" aria-label="Main sections">
               {['classroom', 'my-team', 'feedback'].map((id) => {
-                const label = id === 'classroom' ? 'Classroom' : id === 'my-team' ? 'My Team' : 'Feedback'
                 const isActive = section === id
+                const Icon = SECTION_ICONS[id]
+                const label = SECTION_LABELS[id]
                 return (
                   <button
                     key={id}
@@ -158,12 +163,18 @@ function Shell() {
                       }
                     }}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`px-3 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors ${
+                    aria-label={label}
+                    className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
                       isActive
                         ? 'bg-primary-50 text-primary-600'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}>
-                    {label}
+                    <Icon />
+                    <span className={`text-[11px] leading-none whitespace-nowrap ${
+                      isActive ? 'font-semibold' : 'font-medium'
+                    }`}>
+                      {label}
+                    </span>
                   </button>
                 )
               })}

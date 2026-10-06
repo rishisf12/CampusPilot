@@ -88,3 +88,29 @@ def read_csv_fallback(path: Path) -> list[dict]:
     with path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         return list(reader)
+
+
+def save_upload_from_bytes(data: bytes, original_filename: str, prefix: str = "upload") -> Path:
+    """
+    Save raw bytes to /uploads with a safe filename.
+    Returns the saved Path.
+    """
+    import uuid
+    from datetime import datetime
+
+    ext = Path(original_filename).suffix.lower()
+    safe_name = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
+    dest = UPLOAD_DIR / safe_name
+
+    with dest.open("wb") as out:
+        out.write(data)
+
+    size = dest.stat().st_size
+    if size == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Empty attachment")
+    if size > MAX_BYTES:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Attachment exceeds size limit")
+
+    return dest

@@ -1,0 +1,78 @@
+# Local development with Docker Compose
+# Usage: docker compose up --build
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production-min-32-chars}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=10080
+      - DATABASE_URL=sqlite:///./database/classpilot.db
+      - ALLOWED_EMAIL_DOMAIN=@iiitdmj.ac.in
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - EMAIL_FROM=noreply@iiitdmj.ac.in
+      - FRONTEND_URL=http://localhost:5173
+      - TIMEZONE=Asia/Kolkata
+      - COLLEGE_START=09:00
+      - COLLEGE_END=17:00
+      - LUNCH_START=13:00
+      - LUNCH_END=14:00
+      - ATTENDANCE_SAFE=75
+      - ATTENDANCE_WARNING=65
+      - MAX_UPLOAD_MB=25
+      - ALLOWED_EXTENSIONS=.pdf,.csv
+      - BRANCH_OPTIONS=CSE A,CSE B,DS,ECE,ME,SM,PG,MDes
+      - ADMISSION_YEAR=21
+    volumes:
+      - ./database:/app/database
+      - ./backend/backend/uploads:/app/backend/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Optional: IMAP poller for email-to-feedback
+  # Uncomment and configure IMAP_* env vars to enable
+  # imap-poller:
+  #   build:
+  #     context: .
+  #     dockerfile: backend/Dockerfile
+  #   command: python tools/imap_feedback_poller.py
+  #   environment:
+  #     - IMAP_HOST=imap.gmail.com
+  #     - IMAP_USER=${IMAP_USER:-}
+  #     - IMAP_PASS=${IMAP_PASS:-}
+  #     - IMAP_FOLDER=INBOX
+  #     - INGEST_URL=http://backend:8001/feedback/ingest
+  #     - INGEST_SECRET=${INGEST_SECRET:-}
+  #     - PROCESSED_LABEL=Processed/Feedback
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+volumes:
+  database:
+  uploads:

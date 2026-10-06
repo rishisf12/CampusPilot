@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from core.config import settings
@@ -23,7 +23,7 @@ from core.database import get_session
 from models import Feedback, FeedbackReply, User, UserProfile
 from core.deps import get_current_admin, get_current_user
 from features.profile.service import get_profile_for_user
-from core.files import save_upload
+from core.files import save_upload, save_upload_from_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ class FeedbackResponse(BaseModel):
     name: str
     phone: Optional[str] = None
     email: str
+    subject: Optional[str] = None
     message: str
     attachment_original: Optional[str] = None
     attachment_size: Optional[int] = None
@@ -70,9 +71,11 @@ def _replies_for(session: Session, feedback_id: int) -> List[dict]:
 def _to_response(session: Session, item: Feedback) -> dict:
     return {
         "id": item.id,
+        "user_id": item.user_id,
         "name": item.name,
         "phone": item.phone,
         "email": item.email,
+        "subject": item.subject,
         "message": item.message,
         "attachment_original": item.attachment_original,
         "attachment_size": item.attachment_size,
@@ -93,6 +96,7 @@ async def submit_feedback(
     name: Optional[str] = Form(default=None),
     phone: Optional[str] = Form(default=None),
     email: Optional[str] = Form(default=None),
+    subject: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
@@ -112,6 +116,7 @@ async def submit_feedback(
 
     clean_name = (name or "").strip() or _display_name(profile, user)
     clean_email = (email or "").strip() or user.email
+    clean_subject = (subject or "").strip() or None
 
     stored_name: Optional[str] = None
     original_name: Optional[str] = None
@@ -139,6 +144,7 @@ async def submit_feedback(
         name=clean_name,
         phone=clean_phone,
         email=clean_email,
+        subject=clean_subject,
         message=clean_message,
         attachment_filename=stored_name,
         attachment_original=original_name,
@@ -176,6 +182,19 @@ def all_feedback(
     return [_to_response(session, item) for item in items]
 
 
+@router.get("/ingest/status")
+def ingest_status():
+    """Check if email ingestion is configured."""
+    from core.config import settings
+    imap_user = getattr(settings, "feed_imap_user", None)
+    imap_pass = getattr(settings, "feed_imap_password", None)
+    configured = bool(imap_user and imap_pass)
+    return {
+        "configured": configured,
+        "message": "Mail ingestion is off. Set FEED_IMAP_USER and FEED_IMAP_PASSWORD in .env (repo root) to switch it on. Items already in the feed still show."
+    }
+
+
 @router.post("/{feedback_id}/reply", status_code=status.HTTP_201_CREATED)
 def reply_to_feedback(
     feedback_id: int,
@@ -204,3 +223,104 @@ def reply_to_feedback(
         "message": reply.message,
         "created_at": reply.created_at.isoformat() if reply.created_at else None,
     }
+
+
+class IngestBody(BaseModel):
+    """Email ingestion payload from a mail webhook (SendGrid, Mailgun, etc.)."""
+    from_email: str
+    from_name: Optional[str] = None
+    subject: Optional[str] = None
+    text: Optional[str] = None
+    html: Optional[str] = None
+    attachments: List[dict] = Field(default=[])
+
+
+@router.post("/ingest", status_code=status.HTTP_201_CREATED)
+async def ingest_feedback_email(
+    payload: IngestBody,
+    session: Session = Depends(get_session),
+):
+    """
+    Ingest an email as feedback.
+
+    Expected webhook payload (SendGrid parse, Mailgun routes, etc.):
+    {
+      "from_email": "student@iiitdmj.ac.in",
+      "from_name": "Student Name",
+      "subject": "Feedback about timetable",
+      "text": "The timetable upload is broken...",
+      "html": "<p>The timetable upload is broken...</p>",
+      "attachments": [
+        {"filename": "screenshot.png", "content": "base64...", "content_type": "image/png"}
+      ]
+    }
+
+    Creates a feedback entry linked to the user if their email matches an account,
+    otherwise creates an anonymous entry (user_id = NULL).
+    """
+    # Prefer text, fall back to stripped HTML
+    message = (payload.text or "").strip()
+    if not message and payload.html:
+        # Very light HTML strip; webhook providers usually give clean text anyway.
+        import re
+        message = re.sub(r"<[^>]+>", "", payload.html).strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Email body is empty.")
+
+    # Find user by email
+    user = session.exec(select(User).where(User.email == payload.from_email.lower())).first()
+
+    # Handle attachments: save each one, but Feedback only stores one attachment.
+    # For multiple, we concatenate filenames in attachment_original and save the first.
+    stored_name: Optional[str] = None
+    original_names: List[str] = []
+    size_bytes: Optional[int] = None
+
+    for att in payload.attachments:
+        fname = att.get("filename") or "attachment"
+        content_b64 = att.get("content") or ""
+        ctype = att.get("content_type") or "application/octet-stream"
+        ext = Path(fname).suffix.lower()
+        if ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
+            logger.warning("Skipping attachment with disallowed extension: %s", ext)
+            continue
+        if not content_b64:
+            continue
+        import base64
+        try:
+            data = base64.b64decode(content_b64)
+        except Exception:
+            logger.warning("Failed to decode base64 attachment: %s", fname)
+            continue
+        if len(data) > settings.max_upload_mb * 1024 * 1024:
+            logger.warning("Attachment too large: %s", fname)
+            continue
+
+        saved = save_upload_from_bytes(data, fname, "feedback")
+        original_names.append(fname)
+        if stored_name is None:
+            stored_name = saved.name
+            size_bytes = len(data)
+
+    clean_name = (payload.from_name or "").strip() or (user.username if user else payload.from_email)
+    clean_email = payload.from_email.lower()
+    clean_subject = (payload.subject or "").strip() or None
+
+    item = Feedback(
+        user_id=user.id if user else None,
+        name=clean_name,
+        phone=None,
+        email=clean_email,
+        subject=clean_subject,
+        message=message,
+        attachment_filename=stored_name,
+        attachment_original=", ".join(original_names) if original_names else None,
+        attachment_size=size_bytes,
+    )
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    logger.info("Feedback ingested from email %s", payload.from_email)
+    return _to_response(session, item)
+
+# reload trigger

@@ -314,12 +314,13 @@ export const feedbackApi = {
    * Name/phone/email fall back to the profile on the server, so only the
    * message is required here.
    */
-  submit: ({ message, name, phone, email, file }) => {
+  submit: ({ message, name, phone, email, subject, file }) => {
     const form = new FormData()
     form.append('message', message)
     if (name) form.append('name', name)
     if (phone) form.append('phone', phone)
     if (email) form.append('email', email)
+    if (subject) form.append('subject', subject)
     if (file) form.append('file', file)
     return request('/feedback/', { method: 'POST', body: form })
   },
@@ -330,6 +331,8 @@ export const feedbackApi = {
   /** Answer one feedback as admin. Appears under the student's entry. */
   reply: (id, message) =>
     request(`/feedback/${id}/reply`, { method: 'POST', body: { message } }),
+  /** Check if mail ingestion is configured. */
+  ingestStatus: () => request('/feedback/ingest/status'),
 }
 
 // ------------------------------------------------------------- health

@@ -146,22 +146,23 @@ CampusPilot/
 │   ├── requirements.txt
 │   └── backend/
 │       ├── main.py               # App, CORS, lifespan, router registration
-│       ├── config.py             # Settings + derived constants
-│       ├── database.py           # Engine, session, schema creation & migration
+│       ├── core/                 # Shared infrastructure
+│       │   ├── config.py         # Settings + derived constants
+│       │   ├── database.py       # Engine, session, schema creation & migration
+│       │   ├── deps.py           # FastAPI dependencies (auth, session)
+│       │   └── files.py          # Upload validation & storage
 │       ├── models.py             # SQLModel tables
-│       ├── routes/               # auth, profile, schedule, timetable, rooms,
-│       │                         # attendance, exam, deps (bearer auth)
-│       ├── services/             # Business logic
-│       │   ├── exam_parser.py    # Seating-index + mid-sem PDF parsers
-│       │   ├── exam_lookup.py    # Three-rule roll lookup
-│       │   ├── exam_pdf.py       # ReportLab PDF generation
-│       │   ├── attendance_service.py
-│       │   ├── timetable_parser.py
-│       │   ├── schedule_service.py
-│       │   ├── room_service.py
-│       │   └── profile_service.py
-│       ├── ocr_engine/           # Optional OCR extraction
-│       ├── utils/file_prompt.py  # Upload validation
+│       ├── features/             # Feature packages (routes + service)
+│       │   ├── attendance/       # Attendance tracking
+│       │   ├── auth/             # Login, signup, passkeys, password reset
+│       │   ├── exam/             # Exam timetable, seating, clash, PDF
+│       │   ├── feedback/         # Student feedback + admin replies
+│       │   ├── profile/          # Programme, semester, branch, electives
+│       │   ├── rooms/            # Vacant room lookup
+│       │   ├── schedule/         # Live schedule (current/next class)
+│       │   ├── teams/            # Hackathon teams & matching
+│       │   └── timetable/        # Class timetable upload & parsing
+│       ├── ocr/                  # Optional OCR extraction
 │       ├── scripts/seed.py       # Demo data
 │       ├── tests/                # 225 tests
 │       └── uploads/              # Runtime uploads (git-ignored)
@@ -177,19 +178,40 @@ CampusPilot/
 │       ├── api.js                # fetch wrapper + all endpoints
 │       ├── constants.js          # Branches, programmes, semesters
 │       ├── index.css             # Component classes
-│       └── components/
-│           ├── AuthWrapper.jsx   # Session context, /auth/me retry
-│           ├── LoginForm.jsx
-│           ├── SignupForm.jsx
-│           ├── VerifyEmail.jsx   # 6-digit OTP + resend cooldown
-│           ├── LiveSchedule.jsx  # Schedule | Profile | Timetable
-│           ├── Attendance.jsx    # Banner, subject grid, calendar, history
-│           ├── ExamSeating.jsx   # Lookup, uploads, timetable + seating views
-│           ├── VacantRoomLookup.jsx
-│           ├── FileUpload.jsx
-│           ├── StatusCard.jsx
-│           ├── ErrorBanner.jsx
-│           └── Spinner.jsx
+│       ├── components/           # Shared UI components
+│       │   ├── AuthWrapper.jsx   # Session context, /auth/me retry
+│       │   ├── LoginForm.jsx
+│       │   ├── SignupForm.jsx
+│       │   ├── VerifyEmail.jsx   # 6-digit OTP + resend cooldown
+│       │   ├── FileUpload.jsx
+│       │   ├── ErrorBanner.jsx
+│       │   ├── Spinner.jsx
+│       │   ├── StatusCard.jsx
+│       │   ├── StartScreen.jsx
+│       │   ├── SignupEmail.jsx
+│       │   ├── PasswordReset.jsx
+│       │   ├── PasskeyPrompt.jsx
+│       │   ├── PasskeyRecovery.jsx
+│       │   ├── ManagePasskeys.jsx
+│       │   └── UploadPreview.jsx
+│       ├── features/             # Feature-specific UI
+│       │   ├── admin/            # AdminLogin, AdminPanel
+│       │   ├── classroom/        # Attendance, ExamSeating, LiveSchedule, VacantRoomLookup
+│       │   ├── feedback/         # Feedback form + history
+│       │   └── myteam/           # Teams, Hackathons, CreateTeam, MatchScore
+│       ├── hooks/                # React hooks
+│       │   ├── useLiveDay.js
+│       │   ├── useProfile.jsx
+│       │   ├── useProfileCourses.js
+│       │   └── useProfileVersion.js
+│       ├── lib/                  # Utilities
+│       │   ├── normalise.js
+│       │   ├── passkey.js
+│       │   ├── storage.js
+│       │   ├── sync.js
+│       │   └── time.js
+│       └── tests/
+│           └── passkey.test.js
 └── tools/                        # Maintenance scripts (not part of the app)
 ```
 
@@ -365,6 +387,16 @@ All paths are relative to `http://127.0.0.1:8001`. 🔒 requires
 | 🔒 `DELETE` | `/exam/timetable` · `/exam/seating` | Clear |
 | 🔒 `POST` | `/exam/debug/parse-exam` | Raw extraction + parsed result |
 
+### Feedback
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| 🔒 `POST` | `/feedback/` | User | `{message, name?, phone?, email?, subject?, file?}` |
+| 🔒 `GET` | `/feedback/mine` | User | Own submissions + admin replies |
+| 🔒 `GET` | `/feedback/responses` | Admin | All submissions + admin replies |
+| 🔒 `POST` | `/feedback/{id}/reply` | Admin | `{message}` — appears under student's entry |
+| `POST` | `/feedback/ingest` | Webhook | Email ingestion — see [Email-to-Feedback](#email-to-feedback) |
+
 ### OCR (optional)
 
 `POST /ocr/extract/timetable`, `POST /ocr/extract/exam`,
@@ -526,6 +558,55 @@ date,time,course_code,semester,branch
 
 Roll format is `YYBBBNNN` — `23BCS003` is prefix `23BCS` plus the number `3`.
 Ranges are compared numerically within the same prefix.
+
+---
+
+## Email-to-Feedback
+
+Students can send feedback by emailing `feedback@your-domain` (or any address
+configured with your mail provider). The app includes:
+
+- **`POST /feedback/ingest`** — Webhook endpoint for SendGrid, Mailgun, Postmark,
+  etc. Payload:
+  ```json
+  {
+    "from_email": "student@iiitdmj.ac.in",
+    "from_name": "Student Name",
+    "subject": "Timetable issue",
+    "text": "The timetable upload fails...",
+    "html": "<p>The timetable upload fails...</p>",
+    "attachments": [
+      {"filename": "screenshot.png", "content": "base64...", "content_type": "image/png"}
+    ]
+  }
+  ```
+- **IMAP poller** (`tools/imap_feedback_poller.py`) — polls a Gmail/IMAP folder
+  every 5 minutes via systemd timer, marks processed mail with a label, and
+  posts to `/feedback/ingest`.
+- **UI**: Subject shown as title, 📎 badge for attachments, click to expand for
+  full message, metadata, and admin replies.
+
+### Setup (SendGrid example)
+
+1. In SendGrid → Settings → Inbound Parse → add hostname `feedback.your-domain`
+2. URL: `https://your-api/feedback/ingest`
+3. Configure DNS MX for `feedback.your-domain` → SendGrid
+4. Emails sent to `anything@feedback.your-domain` arrive as feedback
+
+### Setup (Gmail IMAP)
+
+1. Enable IMAP in Gmail settings
+2. Create an App Password (Google Account → Security → App Passwords)
+3. Configure `.env` or systemd EnvironmentFile:
+   ```
+   IMAP_HOST=imap.gmail.com
+   IMAP_USER=your-email@gmail.com
+   IMAP_PASS=your-app-password
+   INGEST_URL=http://localhost:8001/feedback/ingest
+   ```
+4. Run once: `python tools/imap_feedback_poller.py`
+5. For production: `sudo cp deploy/campuspilot-imap-poller.* /etc/systemd/system/`
+   `sudo systemctl enable --now campuspilot-imap-poller.timer`
 
 ---
 

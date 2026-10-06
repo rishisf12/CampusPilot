@@ -151,6 +151,26 @@ Legend: ✅ verified · ⬜ not yet possible (needs a real PDF)
 
 ---
 
+## 9. Feedback & Email Ingestion
+
+| # | Check | Result |
+|---|---|---|
+| 9.1 | Web form submits text + optional file | ✅ |
+| 9.2 | Subject field in web form | ✅ |
+| 9.3 | Feedback list shows subject as title | ✅ |
+| 9.4 | Click feedback → dropdown expands with details | ✅ |
+| 9.5 | Attachment badge (📎) shown inline | ✅ |
+| 9.6 | Admin replies appear inside dropdown | ✅ |
+| 9.7 | POST /feedback/ingest accepts email webhook | ✅ |
+| 9.8 | Email from known user → user_id linked | ✅ |
+| 9.9 | Email from unknown sender → anonymous entry | ✅ |
+| 9.10 | Attachments saved and filenames shown | ✅ |
+| 9.11 | Multiple attachments → concatenated filenames | ✅ |
+| 9.12 | IMAP poller script exists (`tools/imap_feedback_poller.py`) | ✅ |
+| 9.13 | Systemd service + timer for production | ✅ |
+
+---
+
 ## Outstanding
 
 1. **Class timetable PDF is 0 bytes** in `Downloads` — re-download it. The whole
