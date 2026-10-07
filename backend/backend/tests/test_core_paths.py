@@ -15,19 +15,56 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def test_database_lives_in_repo_database_dir():
-    """Pin the *default* URL construction (the test env overrides it)."""
+def test_database_default_is_postgres():
+    """Pin the *default* URL (the test env overrides it).
+
+    Changed deliberately: SQLite serialises all writers for the whole database,
+    so a student submitting feedback while the IMAP poller ingests a message can
+    hit "database is locked". PostgreSQL also gives the monitoring stack real
+    introspection - pg_stat_statements, per-table statistics, EXPLAIN ANALYZE.
+
+    SQLite is still supported by pointing DATABASE_URL at a file, which is what
+    the fast unit tests do; only the default moved.
+    """
     import os
 
     from core.config import Settings
 
     override = os.environ.pop("DATABASE_URL", None)
     try:
-        url = Settings().database_url
+        fresh = Settings()
     finally:
         if override is not None:
             os.environ["DATABASE_URL"] = override
-    assert url == f"sqlite:///{repo_root() / 'database' / 'classpilot.db'}"
+
+    url = fresh.database_url
+    assert url.startswith("postgresql+psycopg://"), (
+        f"default database_url must be PostgreSQL, got {url!r}"
+    )
+    # The driver name must be psycopg 3, not a bare "postgresql://" which would
+    # resolve to psycopg2 - a package that is not installed.
+    assert "+psycopg" in url
+    # Assert on `fresh`, built while DATABASE_URL was unset. The module-level
+    # `settings` singleton was constructed from the test environment's URL and
+    # will correctly report is_sqlite=True on a SQLite run.
+    assert fresh.is_sqlite is False
+
+
+def test_sqlite_is_still_reachable():
+    """Pointing DATABASE_URL at a file must still produce a SQLite engine config.
+
+    The test suite depends on this, so it is worth pinning rather than assuming.
+    """
+    import os
+
+    from core.config import Settings
+
+    os.environ["DATABASE_URL"] = f"sqlite:///{repo_root() / 'x.db'}"
+    try:
+        s = Settings()
+        assert s.is_sqlite is True
+    finally:
+        del os.environ["DATABASE_URL"]
 
 
 def test_env_file_is_repo_root_dotenv():

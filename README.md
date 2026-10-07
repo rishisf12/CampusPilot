@@ -8,7 +8,7 @@ three questions that matter every semester:
 - **Where is my exam, and when?** Roll-number lookup with rooms and halls.
 - **Am I safe on attendance?** Per-subject tracking against your target.
 
-Backend: FastAPI + SQLModel + SQLite. Frontend: React 18 + Vite.
+Backend: FastAPI + SQLModel + PostgreSQL 16. Frontend: React 18 + Vite.
 
 ---
 
@@ -114,7 +114,10 @@ Backend reads `backend/backend/.env` (see `.env.example`).
 | `SECRET_KEY` | dev placeholder | JWT signing key. **Must be ≥ 32 bytes for HS256.** Set your own. |
 | `ALGORITHM` | `HS256` | JWT algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (7 days) | Token lifetime |
-| `DATABASE_URL` | `sqlite:///…/database/classpilot.db` | SQLite location |
+| `DATABASE_URL` | `postgresql+psycopg://campuspilot:campuspilot@localhost:5432/campuspilot` | Database. Must be `postgresql+psycopg` — a bare `postgresql://` resolves to psycopg2, which is not installed. Pointing this at a `sqlite:///` file still works and is what the unit tests do. |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `10` / `10` | Connection pool. Ignored on SQLite. |
+| `DB_POOL_RECYCLE` | `1800` | Recycle a pooled connection after N seconds, before a NAT/firewall can drop it. |
+| `DB_SSLMODE` | `prefer` | TLS to the database. Use `require` off-host. |
 | `ALLOWED_EMAIL_DOMAIN` | `@iiitdmj.ac.in` | Only this domain may register |
 | `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `587` | Outgoing mail |
 | `SMTP_USER` / `SMTP_PASSWORD` | empty | Mail credentials (Gmail needs an app password) |
@@ -141,9 +144,13 @@ CampusPilot/
 ├── .env.example                  # Backend environment template
 ├── INTEGRATION_CHECKLIST.md
 ├── database/
-│   └── classpilot.db             # SQLite (created on first boot)
+│   └── classpilot.db             # Legacy SQLite file — kept only for the one-shot migration
 ├── backend/
 │   ├── requirements.txt
+│   ├── alembic.ini               # Migrations. No sqlalchemy.url: it carries a password
+│   ├── alembic/
+│   │   ├── env.py                # Wired to SQLModel.metadata + the app's own engine
+│   │   └── versions/             # Revision history, newest last
 │   └── backend/
 │       ├── main.py               # App, CORS, lifespan, router registration
 │       ├── core/                 # Shared infrastructure
@@ -513,8 +520,54 @@ python -m pytest tests/ -q          # 225 passed
 | `test_profile_and_lookup.py` | Profile normalisation, continuous-range rule |
 | `test_attendance.py` `test_overlap.py` `test_rooms.py` `test_schedule.py` `test_roll_parse.py` `test_timetable_parser.py` | Service-level units |
 
-Tests use a scratch SQLite file configured in `tests/conftest.py`, so they never
-touch your development database.
+Tests default to a scratch SQLite file, so they never touch your development
+database. **Run them against PostgreSQL too** — SQLite is permissive where
+Postgres is not, and a SQLite-only suite cannot catch a migration that breaks
+production:
+
+```bash
+# fast loop, no service needed
+cd backend/backend && python -m pytest -q
+
+# the job that actually gates a database change
+docker run -d --name cp-test -e POSTGRES_USER=campuspilot \
+  -e POSTGRES_PASSWORD=campuspilot -e POSTGRES_DB=campuspilot_test \
+  -p 5432:5432 postgres:16-alpine
+cd backend/backend
+set TEST_DATABASE_URL=postgresql+psycopg://campuspilot:campuspilot@localhost:5432/campuspilot_test
+python -m pytest -q
+```
+
+Tests that only mean something on PostgreSQL (constraint enforcement, dialect
+DDL) carry the `postgres` marker and are skipped on the SQLite run. CI runs
+both, plus an `alembic downgrade/upgrade` round-trip and `alembic check` for
+model/migration drift.
+
+### Migrating an existing SQLite database
+
+One-shot, and deliberately explicit — a data migration should never be something
+you can do by accident.
+
+```bash
+docker compose up -d postgres
+docker compose run --rm backend python -m alembic -c /app/backend/alembic.ini upgrade head
+
+# read this output before writing anything
+docker compose run --rm backend python tools/migrate_sqlite_to_postgres.py \
+  --source /app/database/classpilot.db --dry-run
+
+docker compose run --rm backend python tools/migrate_sqlite_to_postgres.py \
+  --source /app/database/classpilot.db
+
+docker compose up -d
+```
+
+The script preserves primary keys (so foreign keys stay valid), advances the
+SERIAL sequences afterwards (or the first signup dies with a duplicate key),
+copies parents-first, and verifies every table's row count at the end. It also
+reports any NULL it filled from a model default — the existing SQLite file has
+rows that violate the current schema, because the old `ADD COLUMN` repair path
+dropped `NOT NULL`, and Postgres correctly refuses them.
 
 Frontend:
 

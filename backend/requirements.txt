@@ -18,6 +18,16 @@ passlib==1.7.4
 aiosmtplib==3.0.1
 email-validator==2.2.0
 
+# --- Database: PostgreSQL ---------------------------------------------------
+# psycopg 3 (not psycopg2): SQLAlchemy 2.x supports it natively via the
+# "postgresql+psycopg" driver name, and it is the actively developed line.
+# [binary] ships the libpq wheel, so no libpq-dev at build time - which is why
+# the Dockerfile keeps libpq-dev only as a belt-and-braces fallback.
+psycopg[binary]==3.2.3
+# Schema migrations. Replaces the ad-hoc ALTER TABLE pass that only ever worked
+# on SQLite; see core/database.py for why that mattered.
+alembic==1.14.0
+
 # Passkeys (WebAuthn): attestation/assertion verification and CBOR decoding of
 # the credential payloads. cryptography is pulled in by this package.
 webauthn==3.0.1

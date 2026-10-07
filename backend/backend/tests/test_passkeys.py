@@ -55,7 +55,7 @@ def _purge(db: Session) -> None:
 @pytest.fixture()
 def session():
     """A session against the scratch test database, tables created once."""
-    engine = create_engine(database.engine.url, connect_args={"check_same_thread": False})
+    engine = create_engine(database.engine.url, **database.engine_kwargs())
     SQLModel.metadata.create_all(engine)
     with Session(engine) as db:
         # The scratch database is shared with every other test module, so clear

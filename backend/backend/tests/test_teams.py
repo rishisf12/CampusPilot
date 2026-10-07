@@ -177,20 +177,40 @@ class TestMatching:
     def test_gap_filler_outranks_duplicator(self, client):
         """The behaviour the whole section exists for: `tm_mate` (nodejs,
         docker) closes Team Alpha's gap better than `tm_stranger` who merely
-        duplicates its react/python stack."""
+        duplicates its react/python stack.
+
+        The team is created here rather than borrowed from an earlier test in this
+        module. That coupling is what made this fail on PostgreSQL while passing
+        on SQLite: neither dialect guarantees another test left a team behind,
+        SQLite just happened to do it reliably. Each test owning its fixtures is
+        the fix; changing the assertion would have hidden a real ordering
+        dependency.
+        """
         test_client, tokens = client
-        test_client.put(
-            f"/teams/{test_client.get('/teams', headers=auth(tokens['owner'])).json()['data'][0]['id']}",
+        alpha = create_team(
+            test_client, tokens["owner"], name="Team Alpha Match"
+        ).json()["id"]
+
+        updated = test_client.put(
+            f"/teams/{alpha}",
             json={"wanted": ["nodejs", "docker"]},
             headers=auth(tokens["owner"]),
         )
+        assert updated.status_code == 200, updated.text[:300]
+
         mate_ranked = test_client.get("/teams/match", headers=auth(tokens["mate"])).json()
         stranger_ranked = test_client.get(
             "/teams/match", headers=auth(tokens["stranger"])
         ).json()
-        mate_best = max(m["score"] for m in mate_ranked["matches"])
-        stranger_best = max(m["score"] for m in stranger_ranked["matches"])
-        assert mate_best > stranger_best
+        assert mate_ranked["matches"], "no matches returned to score"
+        assert stranger_ranked["matches"], "no matches returned to score"
+
+        # Compare the score for *this* team, not the global maximum, so the
+        # assertion cannot pass or fail because of an unrelated team's score.
+        def score_for(body, team_id):
+            return next(m["score"] for m in body["matches"] if m["id"] == team_id)
+
+        assert score_for(mate_ranked, alpha) > score_for(stranger_ranked, alpha)
 
 
 class TestHackathons:

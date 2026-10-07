@@ -28,7 +28,7 @@ PASSWORD = "Original@123"
 
 @pytest.fixture()
 def session():
-    engine = create_engine(database.engine.url, connect_args={"check_same_thread": False})
+    engine = create_engine(database.engine.url, **database.engine_kwargs())
     SQLModel.metadata.create_all(engine)
     with Session(engine) as db:
         _purge(db)

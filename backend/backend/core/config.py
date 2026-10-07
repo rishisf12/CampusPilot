@@ -12,8 +12,58 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 7 * 24 * 60  # 7 days
 
-    # Database
-    database_url: str = Field(default="sqlite:///" + str(Path(__file__).resolve().parents[3] / "database" / "classpilot.db"), alias="DATABASE_URL")
+    # --- Database -----------------------------------------------------------
+    # PostgreSQL is the default now. SQLite is still reachable by pointing
+    # DATABASE_URL at a file, which is what the fast unit tests do - but anything
+    # resembling production wants Postgres, for three concrete reasons:
+    #
+    #   1. Concurrent writes. SQLite serialises writers for the whole database.
+    #      One student submitting feedback while the IMAP poller ingests a
+    #      message while an admin edits a timetable row is enough to hit
+    #      "database is locked".
+    #   2. Row-level locking. The observability stack needs to read aggregate
+    #      rollups while the app writes. On SQLite a long read blocks every
+    #      write; on Postgres a plain SELECT takes no exclusive table lock.
+    #   3. Real introspection. pg_stat_statements, per-table statistics and
+    #      proper EXPLAIN ANALYZE - which is what "DB performance" in the
+    #      monitoring Health subsection actually needs to report.
+    #
+    # The driver name is "postgresql+psycopg" (psycopg 3). Do not write a bare
+    # "postgresql://" URL - that resolves to psycopg2, which is not installed.
+    database_url: str = Field(
+        default="postgresql+psycopg://campuspilot:campuspilot@localhost:5432/campuspilot",
+        alias="DATABASE_URL",
+    )
+
+    #: Connection pool. Ignored for SQLite (see core/database.py). Sized for a
+    #: 2-4 GB VPS: 10 persistent connections is ample for campus scale, while
+    #: uvicorn's worker defaults can open far more and exhaust Postgres'
+    #: default max_connections=100 under load.
+    db_pool_size: int = Field(default=10, alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(default=10, alias="DB_MAX_OVERFLOW")
+    db_pool_timeout: int = Field(default=30, alias="DB_POOL_TIMEOUT")
+    #: Seconds before a pooled connection is recycled. Postgres' own idle timeout
+    #: and any upstream NAT/firewall will silently drop long-idle connections.
+    #: Recycle first: 1800s sits under the usual 3600s firewall cap.
+    db_pool_recycle: int = Field(default=1800, alias="DB_POOL_RECYCLE")
+    #: Seconds to wait for the first connection. Lets the app tolerate Postgres
+    #: still initialising on a cold `docker compose up`.
+    db_connect_timeout: int = Field(default=10, alias="DB_CONNECT_TIMEOUT")
+    #: TLS to the database. "prefer" because compose talks over the internal
+    #: bridge network; use "require" for anything outside the host.
+    db_sslmode: str = Field(default="prefer", alias="DB_SSLMODE")
+
+    @property
+    def is_sqlite(self) -> bool:
+        """True when DATABASE_URL points at a file, not a server.
+
+        Two places genuinely need this: the engine options (SQLite takes
+        ``check_same_thread=False`` and rejects ``pool_size``), and the schema
+        migration path (Postgres gets Alembic, SQLite keeps the legacy
+        ALTER TABLE pass). Everywhere else, code should be dialect-agnostic and
+        branch on nothing at all.
+        """
+        return self.database_url.startswith("sqlite")
 
     # Email
     SMTP_HOST: str = "smtp.gmail.com"

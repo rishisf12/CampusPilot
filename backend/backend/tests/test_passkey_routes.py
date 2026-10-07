@@ -25,7 +25,7 @@ from test_passkeys import SoftwareAuthenticator, _purge  # noqa: E402
 
 @pytest.fixture()
 def client():
-    engine = create_engine(database.engine.url, connect_args={"check_same_thread": False})
+    engine = create_engine(database.engine.url, **database.engine_kwargs())
     SQLModel.metadata.create_all(engine)
     with TestClient(app) as test_client:
         _purge(Session(engine))

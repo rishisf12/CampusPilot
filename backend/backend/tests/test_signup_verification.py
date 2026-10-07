@@ -72,7 +72,7 @@ def accounts_on(db: Session, email: str) -> list:
 
 @pytest.fixture()
 def db():
-    engine = create_engine(database.engine.url, connect_args={"check_same_thread": False})
+    engine = create_engine(database.engine.url, **database.engine_kwargs())
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         _purge(session)
