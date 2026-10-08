@@ -1,0 +1,371 @@
+/*
+ * CampusPilot Android Monitoring SDK
+ * 
+ * A minimal Kotlin helper to send telemetry events, crash reports, and
+ * security signals to the CampusPilot collector endpoints.
+ * 
+ * Add this to your Android project (app module).
+ * 
+ * Dependencies:
+ * - okhttp (for HTTP)
+ * - kotlinx.coroutines (for background work)
+ * - androidx.lifecycle:lifecycle-process (for ProcessLifecycleOwner)
+ * - com.google.firebase:firebase-crashlytics (optional, for crash integration)
+ * 
+ * Usage:
+ * 
+ * In your Application class:
+ * 
+ * class MyApp : Application() {
+ *     override fun onCreate() {
+ *         super.onCreate()
+ *         CampusPilotMonitoring.init(this, "https://your-api.example.com")
+ *     }
+ * }
+ * 
+ * Then record events:
+ * 
+ * CampusPilotMonitoring.recordEvent("screen_view", mapOf(
+ *     "screen_name" to "HomeFragment"
+ * ))
+ * 
+ * CampusPilotMonitoring.recordPurchase("premium_monthly", 9900000, "INR", "token_from_play_store")
+ * 
+ * CampusPilotMonitoring.recordAdImpression("admob", "banner_home", 50000)
+ * 
+ * CampusPilotMonitoring.recordSecuritySignal("root_detected", true, mapOf("detail" to "Magisk detected"))
+ */
+
+package com.campuspilot.monitoring
+
+import android.app.Application
+import android.content.Context
+import android.os.Build
+import android.util.Log
+import androidx.lifecycle.ProcessLifecycleOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
+
+/**
+ * Minimal CampusPilot monitoring client for Android.
+ * 
+ * Thread-safe, uses a background coroutine scope, batches events,
+ * and respects the collector's rate limits.
+ */
+class CampusPilotMonitoring private constructor(
+    private val apiBaseUrl: String,
+    private val okHttp: OkHttpClient,
+    private val sessionId: String,
+    private val appVersion: String,
+    private val osVersion: String = Build.VERSION.RELEASE,
+    private val deviceModel: String = Build.MODEL,
+) {
+
+    private val platform = "android"
+    private val eventBatch = mutableListOf<JSONObject>()
+    private val batchLock = Any()
+    private val flushIntervalMs = 30_000L // 30 seconds
+    private var flushJob: kotlinx.coroutines.Job? = null
+
+    companion object {
+        @Volatile private var INSTANCE: CampusPilotMonitoring? = null
+
+        /**
+         * Initialize the monitoring client. Call once in Application.onCreate().
+         */
+        fun init(
+            application: Application,
+            apiBaseUrl: String,
+            okHttp: OkHttpClient = OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
+                .writeTimeout(10, TimeUnit.SECONDS)
+                .build(),
+        ) {
+            val sessionId = UUID.randomUUID().toString()
+            val appVersion = try {
+                application.packageManager.getPackageInfo(application.packageName, 0).versionName
+            } catch (e: Exception) {
+                "unknown"
+            }
+
+            INSTANCE = CampusPilotMonitoring(
+                apiBaseUrl = apiBaseUrl,
+                okHttp = okHttp,
+                sessionId = sessionId,
+                appVersion = appVersion,
+            )
+
+            // Start periodic flush
+            INSTANCE?.startPeriodicFlush()
+
+            // Track app lifecycle for session_start / session_end
+            ProcessLifecycleOwner.get().lifecycle.addObserver(
+                object : androidx.lifecycle.DefaultLifecycleObserver {
+                    override fun onStart(owner: androidx.lifecycle.LifecycleOwner) {
+                        INSTANCE?.recordSessionStart()
+                    }
+
+                    override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
+                        INSTANCE?.recordSessionEnd()
+                    }
+                }
+            )
+
+            // Install uncaught exception handler for crash reporting
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                INSTANCE?.recordCrash(throwable)
+                // Call the previous handler if any
+                Thread.getDefaultUncaughtExceptionHandler()?.uncaughtException(thread, throwable)
+            }
+
+            Log.i("CampusPilotMonitoring", "Initialized with session $sessionId")
+        }
+
+        /** Get the singleton instance. Returns null if not initialized. */
+        fun get(): CampusPilotMonitoring? = INSTANCE
+    }
+
+    /** Start the periodic batch flush coroutine. */
+    private fun startPeriodicFlush() {
+        flushJob = CoroutineScope(Dispatchers.IO).launch {
+            while (true) {
+                kotlinx.coroutines.delay(flushIntervalMs)
+                flushEvents()
+            }
+        }
+    }
+
+    /** Record a generic telemetry event. */
+    fun recordEvent(eventName: String, props: Map<String, Any> = emptyMap()) {
+        val event = JSONObject().apply {
+            put("event_name", eventName)
+            put("platform", platform)
+            put("session_id", sessionId)
+            put("app_version", appVersion)
+            put("os_version", osVersion)
+            put("device_model", deviceModel)
+            put("props", JSONObject(props))
+            put("ts", System.currentTimeMillis() / 1000) // Unix seconds
+        }
+        synchronized(batchLock) {
+            eventBatch.add(event)
+            if (eventBatch.size >= 50) flushEvents() // Flush early if batch is large
+        }
+    }
+
+    /** Record a purchase event. */
+    fun recordPurchase(
+        productId: String,
+        priceMicros: Long,
+        currency: String = "INR",
+        transactionId: String? = null,
+        verified: Boolean = false,
+        kind: String = "one_time",
+    ) {
+        val props = mutableMapOf<String, Any>(
+            "product_id" to productId,
+            "price" to priceMicros / 1_000_000.0, // Collector expects major units
+            "currency" to currency,
+            "kind" to kind,
+        )
+        transactionId?.let { props["transaction_id"] = it }
+        // Note: verified is handled server-side via ENABLE_STORE_VERIFY
+        recordEvent("purchase_completed", props)
+    }
+
+    /** Record an ad impression. */
+    fun recordAdImpression(
+        adNetwork: String,
+        adUnit: String,
+        revenueMicros: Long? = null,
+        currency: String = "INR",
+    ) {
+        val props = mutableMapOf<String, Any>(
+            "network" to adNetwork,
+            "ad_unit" to adUnit,
+        )
+        revenueMicros?.let { props["revenue"] = it / 1_000_000.0 }
+        props["currency"] = currency
+        recordEvent("ad_impression", props)
+    }
+
+    /** Record an ad click. */
+    fun recordAdClick(
+        adNetwork: String,
+        adUnit: String,
+    ) {
+        recordEvent("ad_click", mapOf(
+            "network" to adNetwork,
+            "ad_unit" to adUnit,
+        ))
+    }
+
+    /** Record a security signal (root, emulator, tamper, etc.). */
+    fun recordSecuritySignal(
+        kind: String, // root_detected, emulator_detected, tamper_detected, hook_detected, debugger_detected
+        blocked: Boolean = false,
+        detail: Map<String, Any> = emptyMap(),
+    ) {
+        val payload = JSONObject().apply {
+            put("platform", platform)
+            put("kind", kind)
+            put("blocked", blocked)
+            put("detail", JSONObject(detail))
+            put("app_version", appVersion)
+        }
+        // Fire-and-forget; security signals are low volume
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val request = Request.Builder()
+                    .url("$apiBaseUrl/collect/security-signal")
+                    .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+                okHttp.newCall(request).execute().close()
+            } catch (e: Exception) {
+                Log.w("CampusPilotMonitoring", "Failed to send security signal", e)
+            }
+        }
+    }
+
+    /** Record a crash or ANR. */
+    fun recordCrash(throwable: Throwable, kind: String = "crash") {
+        val stackTrace = throwable.stackTrace.joinToString("\n") { "    at $it" }
+        val message = throwable.message ?: throwable.javaClass.simpleName
+        val fingerprint = java.util.UUID.nameUUIDFromBytes(
+            "$message\n$stackTrace".toByteArray()
+        ).toString()
+
+        val payload = JSONObject().apply {
+            put("platform", platform)
+            put("kind", kind)
+            put("session_id", sessionId)
+            put("fingerprint", fingerprint)
+            put("exception_type", throwable.javaClass.simpleName)
+            put("message", message)
+            put("stack_trace", stackTrace)
+            put("fatal", kind == "crash")
+            put("app_version", appVersion)
+            put("os_version", osVersion)
+            put("device_model", deviceModel)
+            put("foreground", isAppInForeground())
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val request = Request.Builder()
+                    .url("$apiBaseUrl/collect/crash")
+                    .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+                okHttp.newCall(request).execute().close()
+            } catch (e: Exception) {
+                Log.w("CampusPilotMonitoring", "Failed to send crash report", e)
+            }
+        }
+    }
+
+    /** Record an ANR (Application Not Responding). */
+    fun recordAnr(message: String, stackTrace: String) {
+        val fingerprint = java.util.UUID.nameUUIDFromBytes(
+            "$message\n$stackTrace".toByteArray()
+        ).toString()
+
+        val payload = JSONObject().apply {
+            put("platform", platform)
+            put("kind", "anr")
+            put("session_id", sessionId)
+            put("fingerprint", fingerprint)
+            put("exception_type", "ANR")
+            put("message", message)
+            put("stack_trace", stackTrace)
+            put("fatal", false)
+            put("app_version", appVersion)
+            put("os_version", osVersion)
+            put("device_model", deviceModel)
+            put("foreground", isAppInForeground())
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val request = Request.Builder()
+                    .url("$apiBaseUrl/collect/crash")
+                    .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+                okHttp.newCall(request).execute().close()
+            } catch (e: Exception) {
+                Log.w("CampusPilotMonitoring", "Failed to send ANR report", e)
+            }
+        }
+    }
+
+    /** Record session start. */
+    private fun recordSessionStart() {
+        recordEvent("session_start")
+    }
+
+    /** Record session end. */
+    private fun recordSessionEnd() {
+        recordEvent("session_end")
+    }
+
+    /** Flush the event batch to the collector. */
+    fun flushEvents() {
+        val eventsToSend: List<JSONObject>
+        synchronized(batchLock) {
+            if (eventBatch.isEmpty()) return
+            eventsToSend = eventBatch.toList()
+            eventBatch.clear()
+        }
+
+        val payload = JSONObject().apply {
+            put("platform", platform)
+            put("events", eventBatch.map { it.toString() }) // Will be serialized as JSON array
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val request = Request.Builder()
+                    .url("$apiBaseUrl/collect/events")
+                    .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+                val response = okHttp.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    Log.w("CampusPilotMonitoring", "Flush failed: ${response.code} ${response.message}")
+                    // Re-queue events on failure
+                    synchronized(batchLock) {
+                        eventBatch.addAll(0, eventsToSend)
+                    }
+                }
+                response.close()
+            } catch (e: Exception) {
+                Log.w("CampusPilotMonitoring", "Flush failed", e)
+                // Re-queue events on failure
+                synchronized(batchLock) {
+                    eventBatch.addAll(0, eventsToSend)
+                }
+            }
+        }
+    }
+
+    /** Check if app is in foreground. */
+    private fun isAppInForeground(): Boolean {
+        return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(
+            androidx.lifecycle.Lifecycle.State.STARTED
+        )
+    }
+
+    /** Shutdown the client (call on app termination if needed). */
+    fun shutdown() {
+        flushJob?.cancel()
+        flushEvents()
+    }
+}

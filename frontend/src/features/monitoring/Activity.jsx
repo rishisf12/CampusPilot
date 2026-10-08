@@ -8,7 +8,7 @@
  */
 import { Panel, StatTile, EmptyState, AwaitingData, MiniBars, num, pctChange } from './components'
 
-export function ActivityPanel({ data, loading, awaiting }) {
+export function ActivityPanel({ data, monetisation, loading, awaiting }) {
   if (awaiting) {
     return (
       <div className="space-y-4">
@@ -114,6 +114,40 @@ export function ActivityPanel({ data, loading, awaiting }) {
           </>
         )}
       </Panel>
+
+      {/* Monetization summary (inline in Activity panel) */}
+      {monetisation && (
+        <Panel title="Monetization summary" subtitle="Verified = store-validated. Unverified = client-claimed.">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatTile
+              label="Verified revenue"
+              value={num(monetisation.current?.revenue_verified_micros || 0, 0, 1e6)}
+              delta={monetisation.changes?.verified_revenue_pct}
+              deltaLabel="vs previous period"
+              hint="store-validated only"
+            />
+            <StatTile
+              label="Ad revenue"
+              value={num(monetisation.current?.ad_revenue_micros || 0, 0, 1e6)}
+              delta={monetisation.changes?.ad_revenue_pct}
+              deltaLabel="vs previous period"
+            />
+            <StatTile
+              label="Active subscriptions"
+              value={num(monetisation.current?.active_subscriptions || 0)}
+              delta={monetisation.changes?.subscriptions_pct}
+              deltaLabel="vs previous period"
+            />
+            <StatTile
+              label="Total revenue"
+              value={num(monetisation.current?.total_revenue_micros || 0, 0, 1e6)}
+              delta={monetisation.changes?.total_revenue_pct}
+              deltaLabel="vs previous period"
+            />
+          </div>
+        </Panel>
+      )}
+
     </div>
   )
 }

@@ -25,6 +25,7 @@ import { ActivityPanel } from './Activity'
 import { FeedbackPanel } from './Feedback'
 import { HealthPanel } from './Health'
 import { HistoryPanel } from './History'
+import { MonetisationPanel } from './Monetisation'
 import { SecurityPanel } from './Security'
 import { StatusPill } from './components'
 
@@ -92,6 +93,8 @@ export default function Monitoring({ platformGroup }) {
     }
   }, [platformGroup, subsections, selected])
 
+  const [monetisation, setMonetisation] = useState(null)
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -104,11 +107,13 @@ export default function Monitoring({ platformGroup }) {
       monitoringApi.health(days, platform),
       monitoringApi.feedback(days),
       monitoringApi.history(selected),
+      monitoringApi.monetisation(days),
     ])
     if (results[0].status === 'fulfilled') setOverview(results[0].value)
     if (results[1].status === 'fulfilled') setHealth(results[1].value)
     if (results[2].status === 'fulfilled') setFeedback(results[2].value)
     if (results[3].status === 'fulfilled') setHistory(results[3].value)
+    if (results[4].status === 'fulfilled') setMonetisation(results[4].value)
 
     const failures = results.filter((r) => r.status === 'rejected')
     if (failures.length === results.length) {
@@ -253,6 +258,7 @@ export default function Monitoring({ platformGroup }) {
             health={health}
             feedback={feedback}
             history={history}
+            monetisation={monetisation}
             loading={loading}
           />
         </div>
@@ -261,7 +267,7 @@ export default function Monitoring({ platformGroup }) {
   )
 }
 
-function PanelBody({ current, selected, overview, health, feedback, history, loading }) {
+function PanelBody({ current, selected, overview, health, feedback, history, monetisation, loading }) {
   // Scan history is dispatched on `selected`, not `current`.
   //
   // `current` is the server-provided subsection matching the selection, so it is
@@ -280,7 +286,7 @@ function PanelBody({ current, selected, overview, health, feedback, history, loa
       return <HealthPanel data={health} loading={loading} awaiting={awaiting} />
     case 'B_W_ACTIVITY':
     case 'B_A_ACTIVITY':
-      return <ActivityPanel data={overview} loading={loading} awaiting={awaiting} />
+      return <ActivityPanel data={overview} monetisation={monetisation} loading={loading} awaiting={awaiting} />
     case 'C_W_SECURITY':
     case 'C_A_SECURITY':
       return <SecurityPanel data={overview} loading={loading} awaiting={awaiting} />
