@@ -6,6 +6,7 @@ evidence with a metric key that the reconciler can verify.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from typing import Any, Literal, Optional
 
@@ -97,3 +98,51 @@ class ScanResult(BaseModel):
     root_causes: list[str] = Field(default_factory=list, max_length=6)
     recommended_actions: list[Recommendation] = Field(default_factory=list, max_length=6)
     confidence: Confidence
+
+
+class ScanRequest(BaseModel):
+    """Request body for triggering a scan."""
+    window_days: int = Field(default=7, ge=1, le=90)
+    model: Optional[str] = Field(default=None, description="Override model (e.g. 'qwen2.5:7b')")
+
+
+class ScanResponse(BaseModel):
+    """Response from a scan trigger."""
+    scan_id: str
+    subsection: str
+    status: str
+    summary: str
+    findings: list[dict[str, Any]]
+    root_causes: list[str]
+    actions: list[dict[str, Any]]
+    confidence: dict[str, Any]
+    window_start: datetime
+    window_end: datetime
+    duration_ms: int
+    model: str
+    created_at: datetime
+
+
+class SubsectionInfo(BaseModel):
+    id: str
+    platform: str
+    group: str
+    title: str
+
+
+class SubsectionsResponse(BaseModel):
+    subsections: list[SubsectionInfo]
+
+
+class ScanHistoryResponse(BaseModel):
+    scans: list[dict[str, Any]]
+    incidents: list[dict[str, Any]]
+    tool_calls: list[dict[str, Any]]
+
+
+class RollupResponse(BaseModel):
+    start: str
+    end: str
+    buckets: int
+    rows_written: int
+    events_scanned: int

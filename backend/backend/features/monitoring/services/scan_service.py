@@ -21,7 +21,7 @@ from typing import Any, Optional
 
 from sqlmodel import Session, select, func
 
-from features.monitoring.models import (
+from features.monitoring.domain.models import (
     ScanResult,
     StatusTransition,
     ToolCallAudit,
@@ -34,10 +34,10 @@ from features.monitoring.models import (
     EventHourly,
     Session as MonitorSession,
 )
-from features.monitoring import queries, thresholds
-from features.monitoring.thresholds import ScanStatus, ScanVerdict, run_stage1_scan
-from features.monitoring.schemas import ScanResult as ScanResultSchema
-from features.monitoring.llm_client import (
+from features.monitoring.services import queries
+from features.monitoring.domain.thresholds import ScanStatus, ScanVerdict, run_stage1_scan
+from features.monitoring.api.schemas import ScanResult as ScanResultSchema
+from features.monitoring.services.llm_client import (
     OllamaClient,
     OllamaConfig,
     load_system_prompt,

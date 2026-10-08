@@ -23,8 +23,9 @@ from sqlmodel import Session, delete, select
 
 from core.config import get_settings
 from core.database import create_db_and_tables, engine  # noqa: F401
-from features.monitoring import collector, queries, rollup as rollup_mod
-from features.monitoring.models import (
+from features.monitoring.infrastructure import collector
+from features.monitoring.services import queries, rollup, prune, _aggregate_stmt, _hour_bucket_expr, _coalesce_dim
+from features.monitoring.domain.models import (
     AdEvent,
     CrashReport,
     Event,
@@ -35,7 +36,7 @@ from features.monitoring.models import (
     Session as MonitorSession,
     StatusTransition,
 )
-from features.monitoring.ratelimit import SlidingWindowLimiter
+from features.monitoring.infrastructure.ratelimit import SlidingWindowLimiter
 from main import app  # noqa: F401
 
 UTC = timezone.utc
@@ -321,7 +322,7 @@ class TestRollup:
         _ev(db, name="app_open", ts=NOW.replace(minute=50))
         _ev(db, name="page_view", ts=NOW.replace(minute=50))
 
-        summary = rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        summary = rollup(db, lookback_hours=48, now=NOW)
         rows = db.exec(select(EventHourly)).all()
         assert len(rows) == 2
         assert sum(r.n for r in rows) == 3
@@ -329,7 +330,7 @@ class TestRollup:
 
     def test_buckets_on_the_hour_boundary(self, db):
         _ev(db, name="app_open", ts=NOW.replace(minute=37, second=12, microsecond=0))
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         row = db.exec(select(EventHourly)).first()
         assert (row.bucket_hour.minute, row.bucket_hour.second) == (0, 0)
 
@@ -339,28 +340,28 @@ class TestRollup:
         that error permanently."""
         _ev(db, name="app_open")
         _ev(db, name="app_open")
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         first = {(r.event_name): r.n for r in db.exec(select(EventHourly)).all()}
 
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         second = {(r.event_name): r.n for r in db.exec(select(EventHourly)).all()}
         assert first == second == {"app_open": 2}
 
     def test_three_runs_are_still_stable(self, db):
         _ev(db, name="app_open")
         for _ in range(3):
-            rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+            rollup(db, lookback_hours=48, now=NOW)
         assert db.exec(select(EventHourly)).first().n == 1
 
     def test_stale_buckets_outside_the_window_are_dropped(self, db):
         """A bucket that used to be correct and is no longer backed by any raw
         event must disappear, or a chart keeps drawing a line into the past."""
         _ev(db, name="app_open", ts=NOW)
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
 
         db.exec(delete(Event))             # the raw data was pruned
         db.commit()
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         assert db.exec(select(EventHourly)).all() == []
 
     def test_a_missing_dimension_is_stored_as_empty_string(self, db):
@@ -368,27 +369,27 @@ class TestRollup:
         NULL here would let the same bucket be inserted twice on Postgres while
         SQLite silently prevented it."""
         _ev(db, name="app_open", version=None, country=None)
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         row = db.exec(select(EventHourly)).first()
         assert row.app_version == "" and row.country == ""
 
     def test_same_bucket_twice_with_missing_dimensions_stays_one_row(self, db):
         _ev(db, name="app_open", version=None)
         _ev(db, name="app_open", version=None)
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         rows = db.exec(select(EventHourly)).all()
         assert len(rows) == 1 and rows[0].n == 2
 
     def test_distinct_versions_are_separate_rows(self, db):
         _ev(db, name="app_open", version="1.4.0")
         _ev(db, name="app_open", version="1.5.0")
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         assert len(db.exec(select(EventHourly)).all()) == 2
 
     def test_prune_removes_old_raw_events_but_keeps_recent_ones(self, db):
         _ev(db, name="app_open", ts=NOW - timedelta(days=200))
         _ev(db, name="app_open", ts=NOW - timedelta(days=2))
-        result = rollup_mod.prune(db, now=NOW, retention_days=90)
+        result = prune(db, now=NOW, retention_days=90)
         assert result["raw_events_deleted"] == 1
         assert len(db.exec(select(Event)).all()) == 1
 
@@ -399,7 +400,7 @@ class TestRollup:
                         currency="INR", user_hash=None, app_version=None,
                         verified=True, kind="one_time"))
         db.commit()
-        rollup_mod.prune(db, now=NOW, retention_days=90)
+        prune(db, now=NOW, retention_days=90)
         assert len(db.exec(select(Purchase)).all()) == 1
 
 
@@ -427,8 +428,8 @@ class TestRollupSql:
         from sqlalchemy.dialects import postgresql, sqlite
 
         dialect_obj = postgresql.dialect() if dialect == "postgresql" else sqlite.dialect()
-        return rollup_mod._aggregate_stmt(
-            NOW - timedelta(days=2), NOW, rollup_mod._hour_bucket_expr(dialect)
+        return _aggregate_stmt(
+            NOW - timedelta(days=2), NOW, _hour_bucket_expr(dialect)
         ).compile(dialect=dialect_obj)
 
     @pytest.mark.parametrize("dialect", ["postgresql", "sqlite"])
@@ -496,7 +497,7 @@ class TestRollupSql:
         """
         with Session(engine) as session:
             _ev(session, name="app_open", ts=NOW)
-            summary = rollup_mod.rollup(session, lookback_hours=48, now=NOW)
+            summary = rollup(session, lookback_hours=48, now=NOW)
         assert summary["events_scanned"] >= 1
         with Session(engine) as session:
             rows = session.exec(select(EventHourly)).all()
@@ -810,7 +811,7 @@ class TestFunnel:
         for _ in range(2):
             _ev(db, name="sign_in", ts=NOW)
         _ev(db, name="purchase_completed", ts=NOW)
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         start, end = queries.window(1)
         f = queries.funnel(db, ["app_open", "sign_in", "purchase_completed"], start, end)
         assert f[0]["count"] == 3
@@ -824,14 +825,14 @@ class TestFunnel:
         _ev(db, name="app_open", ts=NOW)
         _ev(db, name="sign_in", ts=NOW)
         _ev(db, name="sign_in", ts=NOW)
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         start, end = queries.window(1)
         f = queries.funnel(db, ["app_open", "sign_in"], start, end)
         assert f[1]["drop_off_pct"] == -100.0
 
     def test_the_first_step_has_no_conversion_rate(self, db):
         _ev(db, name="app_open", ts=NOW)
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         start, end = queries.window(1)
         f = queries.funnel(db, ["app_open"], start, end)
         assert "conversion_pct" not in f[0]
@@ -849,7 +850,7 @@ class TestDimensions:
         for _ in range(3):
             _ev(db, name="app_open", country="IN")
         _ev(db, name="app_open", country="US")
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         start, end = queries.window(1)
         top = queries.top_dimensions(db, start, end, "country")
         assert top[0] == {"value": "IN", "events": 3}
@@ -857,7 +858,7 @@ class TestDimensions:
 
     def test_an_absent_dimension_renders_as_unknown(self, db):
         _ev(db, name="app_open", country=None)
-        rollup_mod.rollup(db, lookback_hours=48, now=NOW)
+        rollup(db, lookback_hours=48, now=NOW)
         start, end = queries.window(1)
         assert queries.top_dimensions(db, start, end, "country")[0]["value"] == "unknown"
 
@@ -1031,7 +1032,7 @@ class TestCollectorRoutes:
         assert r.status_code == 400
 
     def test_rate_limits_repeat_batches(self, anon_client, telemetry_on, db):
-        from features.monitoring.ratelimit import COLLECT_BATCH_LIMIT
+        from features.monitoring.infrastructure.ratelimit import COLLECT_BATCH_LIMIT
 
         COLLECT_BATCH_LIMIT.reset()
         codes = [anon_client.post("/collect/events", json={"events": [_event()]}).status_code

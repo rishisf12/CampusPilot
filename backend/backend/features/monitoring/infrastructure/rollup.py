@@ -24,7 +24,7 @@ from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.sql import expression
 
 from core.config import get_settings
-from features.monitoring.models import Event, EventHourly
+from features.monitoring.domain.models import Event, EventHourly
 
 
 def _now_utc() -> datetime:

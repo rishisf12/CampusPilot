@@ -26,9 +26,9 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from features.monitoring.metrics import COLLECTOR_EVENTS
-from features.monitoring.ratelimit import COLLECT_BATCH_LIMIT, CRASH_LIMIT
-from features.monitoring.models import (
+from features.monitoring.infrastructure.metrics import COLLECTOR_EVENTS
+from features.monitoring.infrastructure.ratelimit import COLLECT_BATCH_LIMIT, CRASH_LIMIT
+from features.monitoring.domain.models import (
     AdEvent,
     Event,
     Platform,
@@ -331,7 +331,7 @@ def record_security_event(
 
     Called from middleware/auth code, not from the public collector endpoint.
     """
-    from features.monitoring.models import SecurityEvent
+    from features.monitoring.domain.models import SecurityEvent
     from datetime import datetime, timezone
 
     client_ip_hash = ip_hash(pepper, ip) if ip else None

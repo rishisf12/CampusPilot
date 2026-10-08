@@ -19,8 +19,9 @@ from sqlmodel import Session, func, select
 from core.config import get_settings
 from core.database import get_session
 from core.deps import get_current_admin
-from features.monitoring import collector, queries, rollup as rollup_mod, scan_service
-from features.monitoring.models import (
+from features.monitoring.infrastructure import collector
+from features.monitoring.services import queries, rollup, scan_service
+from features.monitoring.domain.models import (
     AdEvent,
     CrashReport,
     EventHourly,
@@ -790,7 +791,7 @@ def trigger_rollup(
     _admin=Depends(get_current_admin),
 ):
     lookback_hours = max(1, min(lookback_hours, 24 * 31))
-    summary = rollup_mod.rollup(session, lookback_hours=lookback_hours)
+    summary = rollup(session, lookback_hours=lookback_hours)
     return RollupResponse(**summary)
 
 

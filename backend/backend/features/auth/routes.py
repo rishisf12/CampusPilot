@@ -18,7 +18,7 @@ from core.config import get_settings
 from core.deps import get_current_user
 from features.auth import passkeys as passkey_service, password_reset as password_reset_service, signup as signup_verification_service
 from features.monitoring import collector as monitoring_collector
-from features.monitoring.ratelimit import AUTH_LIMIT, BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT
+from features.monitoring.infrastructure.ratelimit import AUTH_LIMIT, BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])

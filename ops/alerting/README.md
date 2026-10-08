@@ -34,7 +34,7 @@
 # Format: email://user:password@host:port/from_email/to_email1,to_email2
 # Supports TLS/SSL
 # Example:
-# NOTIFY_EMAIL=email://user:YOUR_PASSWORD@smtp.gmail.com:587/noreply@iiitdmj.ac.in/admin@iiitdmj.ac.in,security@iiitdmj.ac.in
+# NOTIFY_EMAIL=email://user:YOUR_PASSWORD@smtp.gmail.com:587/noreply@yourdomain.com/admin@yourdomain.com,security@yourdomain.com
 
 # ================================================================
 # Generic Webhook

@@ -14,7 +14,7 @@ from typing import Any, Optional
 from sqlmodel import Session, select, func, Column, text, JSON
 from sqlalchemy.dialects import postgresql, sqlite
 
-from features.monitoring.models import (
+from features.monitoring.domain.models import (
     AdEvent,
     CrashReport,
     DependencyVulnerability,

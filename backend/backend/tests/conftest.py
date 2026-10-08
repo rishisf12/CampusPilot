@@ -101,7 +101,7 @@ def _schema():
     yield
 
     # Reset rate limiters between test runs
-    from features.monitoring.ratelimit import (
+    from features.monitoring.infrastructure.ratelimit import (
         COLLECT_BATCH_LIMIT, CRASH_LIMIT, AUTH_LIMIT,
         BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT
     )
@@ -111,7 +111,7 @@ def _schema():
 @pytest.fixture(autouse=True)
 def _reset_rate_limiters():
     """Reset in-memory rate limiters before each test."""
-    from features.monitoring.ratelimit import (
+    from features.monitoring.infrastructure.ratelimit import (
         COLLECT_BATCH_LIMIT, CRASH_LIMIT, AUTH_LIMIT,
         BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT
     )

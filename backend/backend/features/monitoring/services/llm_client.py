@@ -20,7 +20,7 @@ from typing import Any, Optional
 import httpx
 from pydantic import BaseModel
 
-from features.monitoring.schemas import ScanResult
+from features.monitoring.api.schemas import ScanResult
 
 logger = logging.getLogger(__name__)
 

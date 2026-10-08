@@ -26,7 +26,7 @@ def _start_rollup_loop(interval_s: int = 3600) -> threading.Thread:
     admin to ignore the alerts.
     """
     from core.database import session_scope
-    from features.monitoring import rollup as rollup_mod
+    from features.monitoring.infrastructure import rollup as rollup_mod
 
     def loop() -> None:
         while True:
@@ -85,7 +85,7 @@ def _metrics_middleware():
     """
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-    from features.monitoring.metrics import (
+    from features.monitoring.infrastructure.metrics import (
         REGISTRY, REQUESTS, REQUEST_DURATION, REQUEST_IN_FLIGHT,
         route_template, status_class,
     )
@@ -138,7 +138,7 @@ from features.exam import routes as exam
 from features.auth import routes as auth
 from features.feedback import routes as feedback
 from features.teams import routes as teams
-from features.monitoring.routes import collect_router, monitoring_router
+from features.monitoring.api.routes import collect_router, monitoring_router
 from ocr import routes as ocr_routes
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
