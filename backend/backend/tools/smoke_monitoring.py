@@ -19,7 +19,7 @@ from core.config import get_settings
 from core.database import create_db_and_tables, engine
 from features.auth.routes import create_access_token
 from features.monitoring import collector, rollup as rollup_mod
-from features.monitoring.models import (
+from features.monitoring.domain.models import (
     AdEvent,
     CrashReport,
     Event,
@@ -27,7 +27,7 @@ from features.monitoring.models import (
     Purchase,
     SecurityEvent,
 )
-from features.monitoring.models import Session as MonitoringSessionModel
+from features.monitoring.domain.models import Session as MonitoringSessionModel
 from main import app
 
 #: `monitoring_session` is exported as `Session` from the models module because

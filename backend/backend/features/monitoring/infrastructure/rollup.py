@@ -36,18 +36,18 @@ def _hour_bucket(dt: datetime) -> datetime:
 def _hour_bucket_expr(dialect: str):
     """Return a SQL expression that truncates Event.ts to hour bucket.
 
-    Uses date_trunc for PostgreSQL, strftime for SQLite.
+    PostgreSQL uses date_trunc.
     """
     if dialect == "postgresql":
         return func.date_trunc("hour", Event.ts)
-    # SQLite: strftime('%Y-%m-%d %H:00:00', ts)
-    return func.strftime("%Y-%m-%d %H:00:00", Event.ts)
+    # Other dialects not supported
+    raise ValueError(f"Unsupported dialect: {dialect}")
 
 
 def _coalesce_dim(col: Column, dialect: str = ""):
     """Return COALESCE(col, '') for empty-string dimensions.
 
-    Works the same on both dialects.
+    Works the same on PostgreSQL.
     """
     return func.coalesce(col, "")
 
@@ -100,8 +100,10 @@ def rollup(session: Session, lookback_hours: int = 48, now: datetime | None = No
     end = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
     start = end - timedelta(hours=lookback_hours)
 
-    # Detect dialect
-    dialect_name = session.bind.dialect.name  # "postgresql" or "sqlite"
+    # PostgreSQL dialect only
+    dialect_name = session.bind.dialect.name
+    if dialect_name != "postgresql":
+        raise ValueError(f"Unsupported dialect: {dialect_name}. Only PostgreSQL is supported.")
     bucket_expr = _hour_bucket_expr(dialect_name)
 
     # First, delete ALL EventHourly rows in the window
@@ -137,28 +139,37 @@ def rollup(session: Session, lookback_hours: int = 48, now: datetime | None = No
     total_events = 0
     rows_written = 0
 
+    # Build reusable coalesce expressions so SELECT and GROUP BY share the same
+    # expression objects (critical for PostgreSQL GROUP BY semantics).
+    platform_coalesce = _coalesce_dim(Event.platform)
+    event_name_coalesce = _coalesce_dim(Event.event_name)
+    app_version_coalesce = _coalesce_dim(Event.app_version)
+    os_version_coalesce = _coalesce_dim(Event.os_version)
+    country_coalesce = _coalesce_dim(Event.country)
+
     for bucket, _event_count in raw:
-        # bucket may be a string (SQLite strftime) or datetime (PostgreSQL date_trunc)
-        bucket_dt = datetime.fromisoformat(bucket) if isinstance(bucket, str) else bucket
+        # bucket is a datetime (PostgreSQL date_trunc)
+        bucket_dt = bucket
 
         # Get all dimension combinations for this hour
         # Use the same bucket expression comparison as the raw query
+        # Use the SAME coalesce expressions so PostgreSQL matches SELECT and GROUP BY
         details = session.exec(
             select(
                 func.count().label("n"),
-                func.coalesce(Event.platform, "").label("platform"),
-                func.coalesce(Event.event_name, "").label("event_name"),
-                func.coalesce(Event.app_version, "").label("app_version"),
-                func.coalesce(Event.os_version, "").label("os_version"),
-                func.coalesce(Event.country, "").label("country"),
+                platform_coalesce.label("platform"),
+                event_name_coalesce.label("event_name"),
+                app_version_coalesce.label("app_version"),
+                os_version_coalesce.label("os_version"),
+                country_coalesce.label("country"),
             )
             .where(bucket_expr == bucket)
             .group_by(
-                func.coalesce(Event.platform, ""),
-                func.coalesce(Event.event_name, ""),
-                func.coalesce(Event.app_version, ""),
-                func.coalesce(Event.os_version, ""),
-                func.coalesce(Event.country, ""),
+                platform_coalesce,
+                event_name_coalesce,
+                app_version_coalesce,
+                os_version_coalesce,
+                country_coalesce,
             )
         ).all()
 

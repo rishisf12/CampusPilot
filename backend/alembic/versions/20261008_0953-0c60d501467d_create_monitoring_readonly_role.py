@@ -16,6 +16,8 @@ down_revision: Union[str, None] = '27f44ac2c78b'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# Tables that should exist in the monitoring schema. Some may not exist yet
+# depending on which model modules have been imported and migrated.
 MONITORING_TABLES = [
     "event",
     "event_hourly",
@@ -43,6 +45,13 @@ def _is_postgres() -> bool:
     return op.get_context().dialect.name == "postgresql"
 
 
+def _table_exists(table_name: str) -> bool:
+    """Check if a table exists in the current database."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+
 def upgrade() -> None:
     if not _is_postgres():
         # SQLite doesn't support roles; skip in tests
@@ -52,9 +61,10 @@ def upgrade() -> None:
     op.execute("CREATE ROLE monitoring_ro NOINHERIT")
     op.execute("ALTER ROLE monitoring_ro SET default_transaction_read_only = on")
 
-    # Grant SELECT on all monitoring tables
+    # Grant SELECT on all monitoring tables that actually exist
     for table in MONITORING_TABLES:
-        op.execute(f"GRANT SELECT ON {table} TO monitoring_ro")
+        if _table_exists(table):
+            op.execute(f"GRANT SELECT ON {table} TO monitoring_ro")
 
     # Grant USAGE on sequences for any serial/identity columns
     op.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO monitoring_ro")
@@ -64,9 +74,10 @@ def downgrade() -> None:
     if not _is_postgres():
         return
 
-    # Revoke grants
+    # Revoke grants only on tables that exist
     for table in MONITORING_TABLES:
-        op.execute(f"REVOKE SELECT ON {table} FROM monitoring_ro")
+        if _table_exists(table):
+            op.execute(f"REVOKE SELECT ON {table} FROM monitoring_ro")
     op.execute("REVOKE USAGE ON ALL SEQUENCES IN SCHEMA public FROM monitoring_ro")
 
     # Drop role

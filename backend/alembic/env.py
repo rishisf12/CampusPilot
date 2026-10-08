@@ -116,7 +116,8 @@ def run_migrations_offline() -> None:
         compare_type=True,
         # SQLite has no ALTER COLUMN, so Alembic has to copy the table to change
         # it. Harmless on Postgres, so set always rather than branching.
-        render_as_batch=settings.is_sqlite,
+        # render_as_batch is not needed for PostgreSQL
+        render_as_batch=False,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -148,7 +149,8 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
-            render_as_batch=settings.is_sqlite,
+            # render_as_batch is not needed for PostgreSQL
+        render_as_batch=False,
         )
         with context.begin_transaction():
             context.run_migrations()

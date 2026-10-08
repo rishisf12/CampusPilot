@@ -22,9 +22,9 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete, select
 
 from core.config import get_settings
-from core.database import engine
+from core.database import create_db_and_tables, engine  # noqa: F401
 from features.monitoring.infrastructure import collector
-from features.monitoring.services import queries, rollup, prune, _aggregate_stmt, _hour_bucket_expr
+from features.monitoring.services import queries, rollup, prune, _aggregate_stmt, _hour_bucket_expr, _coalesce_dim
 from features.monitoring.domain.models import (
     AdEvent,
     CrashReport,
@@ -37,7 +37,7 @@ from features.monitoring.domain.models import (
     StatusTransition,
 )
 from features.monitoring.infrastructure.ratelimit import SlidingWindowLimiter
-from main import app
+from main import app  # noqa: F401
 
 UTC = timezone.utc
 NOW = datetime.now(UTC).replace(tzinfo=None, microsecond=0)
@@ -407,33 +407,30 @@ class TestRollup:
 class TestRollupSql:
     """Compiled-SQL assertions for the rollup's aggregate query.
 
-    These exist because of a real bug that the SQLite suite could not see. The
-    GROUP BY originally rebuilt `func.coalesce(col, "")` as new objects, so
+    These exist because of a real bug that was caught by the Postgres CI job.
+    The GROUP BY originally rebuilt `func.coalesce(col, "")` as new objects, so
     SQLAlchemy gave the SELECT and the GROUP BY separate bind parameters. The
     emitted SQL therefore read
 
         SELECT coalesce(event.app_version, $2) ... GROUP BY coalesce(event.app_version, $7)
 
     which PostgreSQL rejects outright ("column event.app_version must appear in
-    the GROUP BY clause") and SQLite accepts without complaint. Green on
-    SQLite, broken in production.
+    the GROUP BY clause").
 
-    Asserting on the compiled SQL catches a regression on *both* dialects, so
-    the bug cannot be reintroduced and simply wait for the Postgres job to find
-    it again.
+    Asserting on the compiled SQL catches a regression so the bug cannot be
+    reintroduced and simply wait for the Postgres job to find it again.
     """
 
     @staticmethod
-    def _compiled(dialect: str):
-        from sqlalchemy.dialects import postgresql, sqlite
+    def _compiled():
+        from sqlalchemy.dialects import postgresql
 
-        dialect_obj = postgresql.dialect() if dialect == "postgresql" else sqlite.dialect()
+        dialect_obj = postgresql.dialect()
         return _aggregate_stmt(
-            NOW - timedelta(days=2), NOW, _hour_bucket_expr(dialect)
+            NOW - timedelta(days=2), NOW, _hour_bucket_expr("postgresql")
         ).compile(dialect=dialect_obj)
 
-    @pytest.mark.parametrize("dialect", ["postgresql", "sqlite"])
-    def test_group_by_shares_the_select_bind_parameters(self, dialect):
+    def test_group_by_shares_the_select_bind_parameters(self, require_postgres):
         """The grouped dimension expressions must bind to the *same* parameters
         as the selected ones.
 
@@ -445,15 +442,10 @@ class TestRollupSql:
         ``coalesce(event.app_version, $2)`` selected against
         ``coalesce(event.app_version, $7)`` grouped, cannot match them, and
         raises "column event.app_version must appear in the GROUP BY clause".
-        SQLite does not care, which is why the whole SQLite suite was green
-        while production was broken.
 
-        Counted via ``compiled.params``, whose keys are named on both dialects
-        even though SQLite renders them positionally as ``?``. Two earlier
-        versions of this test compared parameter names inside the SQL text and
-        then normalised them away; both passed with the bug still in place.
+        Counted via ``compiled.params``, whose keys are named on PostgreSQL.
         """
-        params = self._compiled(dialect).params
+        params = self._compiled().params
         coalesce_params = sorted(k for k in params if "coalesce" in k)
         assert len(coalesce_params) == 3, (
             f"expected 3 shared bind parameters for the 3 dimensions, got "
@@ -461,9 +453,8 @@ class TestRollupSql:
             "distinct expression objects from the SELECT list."
         )
 
-    @pytest.mark.parametrize("dialect", ["postgresql", "sqlite"])
-    def test_every_dimension_is_actually_grouped(self, dialect):
-        sql = str(self._compiled(dialect))
+    def test_every_dimension_is_actually_grouped(self, require_postgres):
+        sql = str(self._compiled())
         select_part, _, group_part = sql.partition("GROUP BY")
         for column in ("event.platform", "event.event_name"):
             assert column in group_part, f"{column} is selected but not grouped"
@@ -471,30 +462,21 @@ class TestRollupSql:
         assert select_part.count("coalesce(") == 3
         assert group_part.count("coalesce(") == 3
 
-    @pytest.mark.parametrize("dialect", ["postgresql", "sqlite"])
-    def test_sqlite_uses_strftime_and_postgres_uses_date_trunc(self, dialect):
-        sql = str(self._compiled(dialect))
-        if dialect == "postgresql":
-            assert "date_trunc" in sql
-        else:
-            assert "strftime" in sql
-            assert "date_trunc" not in sql
+    def test_postgres_uses_date_trunc(self, require_postgres):
+        sql = str(self._compiled())
+        assert "date_trunc" in sql
+        assert "strftime" not in sql
 
-    def test_the_timestamp_truncation_is_itself_grouped(self):
+    def test_the_timestamp_truncation_is_itself_grouped(self, require_postgres):
         """The bucket is a computed expression too, so it has to appear in the
         GROUP BY or every row lands in one bucket."""
-        sql = str(self._compiled("postgresql"))
+        sql = str(self._compiled())
         _, _, group_part = sql.partition("GROUP BY")
         assert "date_trunc" in group_part
 
     def test_the_rollup_query_really_executes_on_postgres(self, require_postgres):
-        """End-to-end proof on the dialect that rejects the bug.
-
-        The compiled-SQL assertions above are dialect-independent and run
-        everywhere; this one only runs under PostgreSQL, and it is the test that
-        would have caught the original failure at CI time rather than at
-        deploy time.
-        """
+        """End-to-end proof on PostgreSQL, which rejects the bug that SQLite
+        would silently accept."""
         with Session(engine) as session:
             _ev(session, name="app_open", ts=NOW)
             summary = rollup(session, lookback_hours=48, now=NOW)
