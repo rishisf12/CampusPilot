@@ -151,13 +151,47 @@ def alembic_config():
     Import is local so that a process which never migrates (every request
     handler) does not pay Alembic's import cost, and so the test suite - which
     creates its schema with ``create_all`` - never has Alembic touch it.
+
+    **Why the script location is searched for rather than computed.** The two
+    places this code runs lay the tree out differently:
+
+    * A repository checkout has ``backend/alembic.ini`` and ``backend/alembic``
+      as siblings of the ``backend/backend`` package directory, so they are two
+      levels above this file.
+    * The container image installs the package at ``/app/backend`` and the
+      migrations at ``/app/backend/alembic``, because ``PYTHONPATH`` must
+      contain the package directory for the application's flat imports
+      (``from core.database import ...``) to resolve at all.
+
+    Computing a single depth picks the right one and silently picks the wrong
+    one in the other environment - and the failure, ``Path doesn't exist:
+    '/app/alembic'``, looks like a missing migrations directory rather than a
+    path bug. Checking both costs two `exists()` calls at startup.
     """
     from alembic.config import Config
 
-    # alembic.ini sits at backend/alembic.ini; this file is backend/backend/core/.
-    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
-    cfg = Config(str(ini_path)) if ini_path.exists() else Config()
-    cfg.set_main_option("script_location", str(Path(__file__).resolve().parents[2] / "alembic"))
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parents[2],   # repository checkout: backend/
+        here.parents[1],   # container image: /app/backend/
+    ]
+
+    script_dir = None
+    ini_path = None
+    for base in candidates:
+        if script_dir is None and (base / "alembic").is_dir():
+            script_dir = base / "alembic"
+            if (base / "alembic.ini").is_file():
+                ini_path = base / "alembic.ini"
+
+    if script_dir is None:
+        raise RuntimeError(
+            "Could not locate the Alembic migrations. Looked in: "
+            + ", ".join(str(b / "alembic") for b in candidates)
+        )
+
+    cfg = Config(str(ini_path)) if ini_path else Config()
+    cfg.set_main_option("script_location", str(script_dir))
     cfg.attributes["configure_logger"] = False
     return cfg
 

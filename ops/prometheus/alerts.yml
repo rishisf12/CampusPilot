@@ -1,0 +1,101 @@
+# Alerting rules.
+#
+# These are deliberately few. An alert set nobody trusts is worse than none,
+# because it teaches people to ignore the channel - and the cheapest way to get
+# there is twenty rules that fire on ordinary behaviour.
+#
+# Every rule below fires on a condition an on-call person can act on at 3am
+# without needing context. Anything more speculative belongs in a dashboard,
+# not in this file.
+#
+# The severities map onto the three states the UI already understands:
+#   critical -> Critical   warning -> Warning   info -> informational only
+
+groups:
+  - name: campuspilot-availability
+    rules:
+      - alert: ApiDown
+        expr: up{job="campuspilot-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The CampusPilot API is not answering /metrics"
+          description: >-
+            Prometheus has failed to scrape the API for 2 minutes. Either the
+            process is down or /metrics is returning an error. Students cannot
+            log in.
+
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus is not scraping itself"
+          description: >-
+            Monitoring has stopped collecting. Nothing else in this file will
+            fire, so treat every other alert as unverified until this is fixed.
+
+  - name: campuspilot-telemetry
+    rules:
+      # This is the rule that catches the most embarrassing failure mode: the
+      # dashboards look perfectly healthy because they are confidently
+      # reporting zero rows, and nobody notices for weeks.
+      - alert: TelemetryCollectorStalled
+        expr: absent(campuspilot_collector_events_total)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No telemetry events have been accepted"
+          description: >-
+            The /collect/events endpoint has accepted nothing for 30 minutes.
+            The monitoring dashboards will show zeros rather than an error, so
+            they look healthy while being meaningless.
+
+      - alert: DatabaseUnreachable
+        expr: absent(campuspilot_http_requests_total)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The API is up but serving nothing"
+          description: >-
+            The request counter has no samples. The process is running but
+            every request is failing before it reaches a handler - usually a
+            database connection failure at startup.
+
+  - name: campuspilot-capacity
+    rules:
+      # Saturation, not usage. A host at 85% memory is normal; a host that has
+      # been above 85% memory for ten minutes and is still climbing is a page.
+      - alert: HostMemoryPressure
+        expr: |
+          (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host memory above 85% for 10 minutes"
+
+      - alert: HostDiskWillFillSoon
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"}[6h], 24 * 3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk is projected to fill within 24 hours"
+          description: >-
+            Extrapolated from the last 6 hours. On this deployment the usual
+            cause is the Prometheus TSDB rather than application logs.
+
+      - alert: HostCpuSustained
+        expr: |
+          1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU above 90% for 15 minutes"

@@ -1,4 +1,5 @@
 """Configuration constants loaded from environment with sensible defaults."""
+import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import Field
@@ -64,6 +65,65 @@ class Settings(BaseSettings):
         branch on nothing at all.
         """
         return self.database_url.startswith("sqlite")
+
+    # --- Monitoring and AI scans ---------------------------------------------
+    #: HMAC pepper for pseudonymising user ids in the monitoring tables.
+    #: MUST be set in any deployment. The default below exists only so the test
+    #: suite and a first `docker compose up` work without extra setup, and
+    #: ``require_monitoring_pepper()`` refuses to let a scan or a production
+    #: collector run with it. A known pepper means every `user_hash` in the
+    #: database is reversible by anyone who can guess a user id - which is a
+    #: sequential integer in this schema, so that is not a stretch.
+    telemetry_pepper: str = Field(default="dev-only-telemetry-pepper", alias="TELEMETRY_PEPPER")
+
+    #: Accept events from the web beacon and the Android SDK at all. Off by
+    #: default because the collector is unauthenticated by necessity, and an
+    #: open ingestion endpoint is a write path anyone can find.
+    telemetry_enabled: bool = Field(default=False, alias="TELEMETRY_ENABLED")
+
+    #: Events per batch the collector will accept. Bounded because the endpoint
+    #: is unauthenticated: without a cap one client can send 200k events and
+    #: turn a monitoring feature into a denial-of-service primitive.
+    telemetry_max_batch: int = Field(default=100, alias="TELEMETRY_MAX_BATCH")
+
+    #: Enable the `/metrics` endpoint. Separate from telemetry because Prometheus
+    #: scrapes need no beacon and carry no personal data, but it does expose
+    #: internal route names and should not be public on an unproxied port.
+    metrics_enabled: bool = Field(default=True, alias="METRICS_ENABLED")
+
+    #: Run the hourly rollup inside the API process on a background timer.
+    #: Convenient for a single-VPS deployment where there is no separate worker.
+    #: Off by default so that running more than one API replica cannot produce
+    #: two rollup loops writing the same buckets - set this on exactly one
+    #: process, or run `python -m features.monitoring.rollup --loop` instead.
+    rollup_inline: bool = Field(default=False, alias="ROLLUP_INLINE")
+
+    #: Accept the LLM-driven scan subsystem. Requires a local model server; see
+    #: `docs/observability/ARCHITECTURE.md`. Off by default so an installation
+    #: without a model is not full of ERROR verdicts.
+    scan_enabled: bool = Field(default=False, alias="SCAN_ENABLED")
+
+    #: Verify Play Store receipts. Off by default: it needs the Google Play
+    #: Developer API credentials, and until then every purchase is honestly
+    #: labelled unverified rather than quietly assumed good.
+    enable_store_verify: bool = Field(default=False, alias="ENABLE_STORE_VERIFY")
+
+    def require_monitoring_pepper(self) -> str:
+        """Return the pepper, refusing the default outside tests.
+
+        The check is in code rather than in a `.env` file because a deployment
+        that forgets a variable should fail loudly at the point of use, not
+        quietly write reversible pseudonyms forever.
+        """
+        if self.telemetry_pepper == "dev-only-telemetry-pepper":
+            if os.environ.get("PYTEST_CURRENT_TEST"):
+                return self.telemetry_pepper
+            raise RuntimeError(
+                "TELEMETRY_PEPPER is unset. Generate one with "
+                "`python -c \"import secrets; print(secrets.token_hex(32))\"`. "
+                "The default value is for local development only."
+            )
+        return self.telemetry_pepper
 
     # Email
     SMTP_HOST: str = "smtp.gmail.com"

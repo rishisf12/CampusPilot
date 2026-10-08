@@ -339,3 +339,73 @@ export const feedbackApi = {
 export const healthApi = {
   check: () => request('/health'),
 }
+
+// --------------------------------------------------------- monitoring
+//
+// The admin reads behind both monitoring sections. Every call here is a GET
+// except `rollup` and the scan triggers, and the subsection list comes from
+// the server rather than being duplicated in the UI - a hardcoded copy would
+// eventually disagree with the backend's allowlist and produce a button that
+// always fails with no obvious cause.
+export const monitoringApi = {
+  subsections: () => request('/monitoring/subsections'),
+  /** Everything the panels need, one round trip, one consistent window. */
+  overview: (days = 7, platform = null) => {
+    const search = new URLSearchParams({ days: String(days) })
+    if (platform) search.set('platform', platform)
+    return request(`/monitoring/overview?${search}`)
+  },
+  health: (days = 7, platform = 'web') =>
+    request(`/monitoring/health?days=${days}&platform=${platform}`),
+  history: (subsection = null, limit = 50) => {
+    const search = new URLSearchParams({ limit: String(limit) })
+    if (subsection) search.set('subsection', subsection)
+    return request(`/monitoring/history?${search}`)
+  },
+  /** Subsection D: volume, sentiment and topic mix. Read-only. */
+  feedback: (days = 30) => request(`/monitoring/feedback?days=${days}`),
+  /** Purchases and ad revenue, with the verified/unverified split. */
+  monetisation: (days = 30) => request(`/monitoring/monetisation?days=${days}`),
+  /** Rebuild the hourly rollup now, instead of waiting for the timer. */
+  rollup: (lookbackHours = 48) =>
+    request(`/monitoring/rollup?lookback_hours=${lookbackHours}`, { method: 'POST' }),
+}
+
+// ------------------------------------------------------------ telemetry
+//
+// The client-side beacon. Fire-and-forget by design: nothing in the UI waits
+// on it, and a failure must never surface to a student. `navigator.sendBeacon`
+// is used where available because it survives the page unloading, which is
+// exactly when `session_end` and `page_view` fire and exactly when a normal
+// fetch would be cancelled mid-flight.
+export const telemetryApi = {
+  /** The beacon. Resolves either way; never throws. */
+  send(events) {
+    const payload = JSON.stringify({
+      platform: 'web',
+      events: events.slice(0, 20),
+    })
+    try {
+      if (navigator.sendBeacon) {
+        // sendBeacon returns false when the browser refuses the payload
+        // (usually a size cap). Falling back to fetch with keepalive covers
+        // that case; without the fallback, events over the cap are lost.
+        if (navigator.sendBeacon('/collect/events', new Blob([payload], {
+          type: 'application/json',
+        }))) return Promise.resolve(true)
+      }
+      fetch('/collect/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+        // The collector is deliberately open, so the beacon must never carry
+        // the JWT: a token on a beacon URL ends up in browser history and in
+        // any proxy log, and the endpoint does not need it.
+      }).catch(() => false)
+      return Promise.resolve(true)
+    } catch {
+      return Promise.resolve(false)
+    }
+  },
+}

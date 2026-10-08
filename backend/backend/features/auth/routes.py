@@ -17,6 +17,7 @@ from models import User, UserProfile
 from core.config import get_settings
 from core.deps import get_current_user
 from features.auth import passkeys as passkey_service, password_reset as password_reset_service, signup as signup_verification_service
+from features.monitoring import collector as monitoring_collector
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])
@@ -38,13 +39,6 @@ class SignupRequest(BaseModel):
     roll_number: str
     email: EmailStr
     password: str
-
-    @field_validator("email")
-    @classmethod
-    def validate_email_domain(cls, v):
-        if not v.endswith(ALLOWED_EMAIL_DOMAIN):
-            raise ValueError(f"Email must be from {ALLOWED_EMAIL_DOMAIN} domain")
-        return v
 
     @field_validator("password")
     @classmethod
@@ -266,7 +260,7 @@ async def verify_signup(
 
 
 @router.post("/signup", response_model=dict)
-async def signup(data: SignupRequest, session: Session = Depends(get_session)):
+async def signup(data: SignupRequest, session: Session = Depends(get_session), request: Request = None):
     """
     Step 3: create the account.
 
@@ -278,6 +272,24 @@ async def signup(data: SignupRequest, session: Session = Depends(get_session)):
     requester controls the address, so learning that it is taken does not hand
     them anything they could not already establish.
     """
+    settings = get_settings()
+    client_ip = request.client.host if request and request.client else None
+
+    # Validate email domain
+    if not data.email.lower().endswith(ALLOWED_EMAIL_DOMAIN):
+        monitoring_collector.record_security_event(
+            session,
+            "waf_blocked",
+            platform="web",
+            pepper=settings.telemetry_pepper,
+            ip=client_ip,
+            detail={"reason": "invalid_email_domain", "email": data.email},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Email must be from {ALLOWED_EMAIL_DOMAIN} domain",
+        )
+
     if not signup_verification_service.is_verified(session, data.email):
         raise HTTPException(
             status_code=400,
@@ -345,10 +357,12 @@ async def signup(data: SignupRequest, session: Session = Depends(get_session)):
 
 
 @router.post("/verify-email", response_model=dict)
-async def verify_email(data: VerifyEmailRequest, session: Session = Depends(get_session)):
+async def verify_email(data: VerifyEmailRequest, session: Session = Depends(get_session), request: Request = None):
     """Verify email with 6-digit code."""
     email = data.email.lower()
     record = verification_codes.get(email)
+    settings = get_settings()
+    client_ip = request.client.host if request and request.client else None
 
     if not record:
         raise HTTPException(status_code=400, detail="No verification code found. Request a new one.")
@@ -358,6 +372,16 @@ async def verify_email(data: VerifyEmailRequest, session: Session = Depends(get_
         raise HTTPException(status_code=400, detail="Verification code expired. Request a new one.")
 
     if record["code"] != data.code:
+        # Record OTP abuse attempt
+        monitoring_collector.record_security_event(
+            session,
+            "failed_login",
+            platform="web",
+            user_id=record.get("user_id"),
+            pepper=settings.telemetry_pepper,
+            ip=client_ip,
+            detail={"reason": "invalid_otp", "email": email},
+        )
         raise HTTPException(status_code=400, detail="Invalid verification code")
 
     # Mark user as verified
@@ -376,16 +400,29 @@ async def verify_email(data: VerifyEmailRequest, session: Session = Depends(get_
 
 
 @router.post("/resend-code", response_model=dict)
-async def resend_code(data: ResendCodeRequest, session: Session = Depends(get_session)):
+async def resend_code(data: ResendCodeRequest, session: Session = Depends(get_session), request: Request = None):
     """Resend verification code."""
     email = data.email.lower()
     user = session.exec(select(User).where(User.email == email)).first()
+    settings = get_settings()
+    client_ip = request.client.host if request and request.client else None
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.is_email_verified:
         raise HTTPException(status_code=400, detail="Email already verified")
+
+    # Record resend attempt (potential abuse)
+    monitoring_collector.record_security_event(
+        session,
+        "rate_limited",
+        platform="web",
+        user_id=user.id,
+        pepper=settings.telemetry_pepper,
+        ip=client_ip,
+        detail={"reason": "otp_resend", "email": email},
+    )
 
     # Generate new code
     code = generate_code()
@@ -401,11 +438,28 @@ async def resend_code(data: ResendCodeRequest, session: Session = Depends(get_se
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(form: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
+async def login(
+    form: OAuth2PasswordRequestForm = Depends(),
+    session: Session = Depends(get_session),
+    request: Request = None,
+):
     """OAuth2 password flow login."""
     user = session.exec(select(User).where(User.username == form.username)).first()
 
+    client_ip = request.client.host if request and request.client else None
+    settings = get_settings()
+
     if not user or not verify_password(form.password, user.password_hash):
+        # Record failed login attempt
+        monitoring_collector.record_security_event(
+            session,
+            "failed_login",
+            platform="web",
+            user_id=user.id if user else None,
+            pepper=settings.telemetry_pepper,
+            ip=client_ip,
+            detail={"username": form.username},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

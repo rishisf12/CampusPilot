@@ -7,8 +7,10 @@ import ExamSeating from './features/classroom/ExamSeating'
 import AdminPanel from './features/admin/AdminPanel'
 import Feedback from './features/feedback/Feedback'
 import Teams from './features/myteam/Teams'
+import Profile from './features/profile/Profile'
 import ErrorBanner from './components/ErrorBanner'
 import { SECTION_ICONS, SECTION_LABELS } from './components/NavIcons'
+import Monitoring from './features/monitoring/Monitoring'
 import { healthApi } from './api'
 import { NAV_TABS } from './constants'
 import { ProfileProvider } from './hooks/useProfile.jsx'
@@ -45,6 +47,17 @@ function Shell() {
   })
   const online = useBackendStatus()
   const [connectionError, setConnectionError] = useState(null)
+
+  // Admin sub-tabs. The default is deliberately the existing Feedback Responses
+  // panel, so nothing about current admin behaviour changes; monitoring is
+  // added alongside it rather than replacing it.
+  const ADMIN_TABS = [
+    { id: 'responses', label: 'Feedback Responses' },
+    { id: 'web-monitoring', label: 'Web App Monitoring' },
+    { id: 'android-monitoring', label: 'Android App Monitoring' },
+    { id: 'profile', label: 'Profile' },
+  ]
+  const [adminTab, setAdminTab] = useState('responses')
 
   // Keep the tab in the URL so a reload returns to the same view.
   const selectTab = (id) => {
@@ -98,7 +111,7 @@ function Shell() {
           </div>
         </header>
 
-        <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {offline && !online && (
             <ErrorBanner
               message="Backend offline - start it with: uvicorn main:app --port 8001"
@@ -110,8 +123,36 @@ function Shell() {
             <ErrorBanner message={connectionError} onDismiss={() => setConnectionError(null)} className="mb-4" />
           )}
 
+          {/* Admin sub-tabs */}
+          <div className="flex items-center justify-center gap-1 pb-4">
+            <nav className="flex items-center gap-1" aria-label="Admin sections">
+              {ADMIN_TABS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setAdminTab(item.id)}
+                  aria-current={adminTab === item.id ? 'page' : undefined}
+                  className={`px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-full transition-colors ${
+                    adminTab === item.id
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
           <ProfileProvider>
-            <AdminPanel onError={setConnectionError} />
+            {adminTab === 'responses' && <AdminPanel onError={setConnectionError} />}
+            {adminTab === 'web-monitoring' && (
+              <Monitoring platformGroup="Web App Monitoring" />
+            )}
+            {adminTab === 'android-monitoring' && (
+              <Monitoring platformGroup="Android App Monitoring" />
+            )}
+            {adminTab === 'profile' && <Profile />}
           </ProfileProvider>
         </main>
 
@@ -142,12 +183,12 @@ function Shell() {
               </div>
             </div>
 
-            {/* Main navigation: Classroom | My Team | Feedback.
+            {/* Main navigation: Classroom | My Team | Feedback | Profile.
                 Each glyph is a self-contained silhouette, but the caption under
                 it means nobody has to guess on first use. `aria-label` repeats
                 the name for screen readers, since the caption is a sibling. */}
             <nav className="flex items-center gap-2 shrink-0" aria-label="Main sections">
-              {['classroom', 'my-team', 'feedback'].map((id) => {
+              {['classroom', 'my-team', 'feedback', 'profile'].map((id) => {
                 const isActive = section === id
                 const Icon = SECTION_ICONS[id]
                 const label = SECTION_LABELS[id]
@@ -247,6 +288,8 @@ function Shell() {
           {section === 'my-team' && <Teams />}
 
           {section === 'feedback' && <Feedback />}
+
+          {section === 'profile' && <Profile />}
         </ProfileProvider>
       </main>
 

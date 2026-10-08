@@ -1,8 +1,8 @@
 /**
- * Nav icons for the three main sections.
+ * Nav icons for the main sections.
  *
  * Each one has to be recognisable on its own, with no text beside it, and should
- * not read as a generic stock glyph. Two of the three are built from the brand
+ * not read as a generic stock glyph. Two of them are built from the brand
  * mark in `public/logo-icon.svg` - the bulb with the smiling face - so the nav
  * carries the same identity as the logo instead of borrowing icons out of every
  * other dashboard.
@@ -13,12 +13,14 @@
  *   Feedback  - that same face inside a speech bubble, so "a note from you" is
  *               tied to the brand rather than to a generic envelope.
  *   My Team   - three heads, the middle one larger: a group, not a pair.
+ *   Profile   - a person silhouette with a small gear, distinct from the team
+ *               heads and clearly "my settings".
  *
  * `currentColor` is the whole theming story, so a button only has to change its
  * text colour to restyle its icon.
  *
- * Inline rather than separate files: three icons on every page load does not
- * justify three requests.
+ * Inline rather than separate files: four icons on every page load does not
+ * justify four requests.
  */
 
 /** Classroom: the brand bulb. */
@@ -176,11 +178,28 @@ export function FeedbackIcon({ className = 'w-12 h-12' }) {
   )
 }
 
+/** Profile: a person silhouette with a small gear - "my settings". */
+export function ProfileIcon({ className = 'w-12 h-12' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      {/* Person silhouette */}
+      <circle cx="12" cy="7.5" r="3.5" />
+      <path d="M12 15.5c-4.42 0-8 2.55-8 5.7V21h16v-1.8c0-3.15-3.58-5.7-8-5.7Z" />
+      {/* Small gear at bottom-right */}
+      <g fill="currentColor" transform="translate(16.5, 16.5) scale(0.45)">
+        <circle cx="0" cy="0" r="3" />
+        <path d="M-3 0h-2M3 0h2M0-3v-2M0 3v2M-2.12-2.12l-1.41-1.41M2.12 2.12l1.41 1.41M-2.12 2.12l-1.41 1.41M2.12-2.12l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </g>
+    </svg>
+  )
+}
+
 /** Section id -> icon, so App.jsx can stay a plain map over its section list. */
 export const SECTION_ICONS = {
   classroom: ClassroomIcon,
   'my-team': MyTeamIcon,
   feedback: FeedbackIcon,
+  profile: ProfileIcon,
 }
 
 /** Section id -> label, kept for tooltips and accessible names. */
@@ -188,4 +207,5 @@ export const SECTION_LABELS = {
   classroom: 'Classroom',
   'my-team': 'My Team',
   feedback: 'Feedback',
+  profile: 'Profile',
 }

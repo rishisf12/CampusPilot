@@ -18,6 +18,7 @@ Backend: FastAPI + SQLModel + PostgreSQL 16. Frontend: React 18 + Vite.
 - [Environment variables](#environment-variables)
 - [Project layout](#project-layout)
 - [Features](#features)
+- [Monitoring](#monitoring)
 - [API reference](#api-reference)
 - [Data model](#data-model)
 - [How the exam system works](#how-the-exam-system-works)
@@ -166,12 +167,19 @@ CampusPilot/
 │       │   ├── feedback/         # Student feedback + admin replies
 │       │   ├── profile/          # Programme, semester, branch, electives
 │       │   ├── rooms/            # Vacant room lookup
+│       │   ├── monitoring/       # Telemetry ingest, metrics, admin monitoring, AI scans
+│       │   │   ├── models.py     # 10 monitoring tables
+│       │   │   ├── collector.py  # /collect/* ingest + HMAC pseudonymisation
+│       │   │   ├── queries.py    # Read-only aggregates (the AI scan tool layer)
+│       │   │   ├── rollup.py     # event -> event_hourly, idempotent; also a CLI
+│       │   │   ├── metrics.py    # Prometheus instruments
+│       │   │   └── routes.py     # /monitoring/* admin endpoints
 │       │   ├── schedule/         # Live schedule (current/next class)
 │       │   ├── teams/            # Hackathon teams & matching
 │       │   └── timetable/        # Class timetable upload & parsing
 │       ├── ocr/                  # Optional OCR extraction
 │       ├── scripts/seed.py       # Demo data
-│       ├── tests/                # 225 tests
+│       ├── tests/                # 787 tests (SQLite and PostgreSQL)
 │       └── uploads/              # Runtime uploads (git-ignored)
 ├── frontend/
 │   ├── index.html                # Title, favicon, Tailwind palette, CSS reset
@@ -205,6 +213,14 @@ CampusPilot/
 │       │   ├── admin/            # AdminLogin, AdminPanel
 │       │   ├── classroom/        # Attendance, ExamSeating, LiveSchedule, VacantRoomLookup
 │       │   ├── feedback/         # Feedback form + history
+│       │   ├── monitoring/       # Web + Android monitoring sections
+│       │   │   ├── Monitoring.jsx  # Section shell, subsection nav, freshness badge
+│       │   │   ├── Health.jsx      # A: Health & Performance
+│       │   │   ├── Activity.jsx    # B: User Activity
+│       │   │   ├── Security.jsx    # C: Security
+│       │   │   ├── Feedback.jsx    # D: Feedback
+│       │   │   ├── History.jsx     # Scan history + incident log
+│       │   │   └── components.jsx  # StatTile, Panel, StatusPill, AwaitingData, ...
 │       │   └── myteam/           # Teams, Hackathons, CreateTeam, MatchScore
 │       ├── hooks/                # React hooks
 │       │   ├── useLiveDay.js
@@ -219,6 +235,8 @@ CampusPilot/
 │       │   └── time.js
 │       └── tests/
 │           └── passkey.test.js
+├── ops/
+│   └── prometheus/               # Prometheus config, alert rules, blackbox modules
 └── tools/                        # Maintenance scripts (not part of the app)
 ```
 
@@ -303,6 +321,110 @@ CampusPilot/
 - Exam Seating Index view: grouped by date and time with Lecture Hall | Course
   Code | Roll Numbers, 20-row preview and *Show All*.
 - Refetches automatically when `profile_version` changes.
+
+---
+
+## Monitoring
+
+Two admin sections — **Web App Monitoring** and **Android App Monitoring** —
+each with four subsections, plus a scan-history tab across both.
+
+| Subsection | What it reports |
+|---|---|
+| Health & Performance | Request counts and latency from the app's own Prometheus registry, crash-free rate per platform, data freshness |
+| User Activity | Active users, sessions, new vs returning, day-N retention, countries, app versions, hourly volume |
+| Security | Integrity signals (root / emulator / tamper) and auth events, by kind |
+| Feedback | Volume, VADER sentiment distribution, topic mix, reply rate |
+
+### Turning it on
+
+Nothing is on by default. The dashboards say *"no data yet"* rather than showing
+zeros, so an unconfigured deployment is empty rather than misleading.
+
+```bash
+# 1. Generate a pepper. Required - the API refuses telemetry with the default.
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# 2. Set it and switch ingestion on.
+echo 'TELEMETRY_PEPPER=<the value above>' >> .env
+echo 'TELEMETRY_ENABLED=true'           >> .env
+
+# 3. Bring up the metrics stack.
+docker compose --profile monitoring up -d
+```
+
+`/metrics` is served by default (`METRICS_ENABLED=true`) and needs no telemetry.
+
+### Compose profiles
+
+| Profile | Adds | Extra RAM | Use when |
+|---|---|---|---|
+| *(default)* | postgres, backend, frontend | — | Normal operation |
+| `monitoring` | + Prometheus, node_exporter | ~400 MB | 2–4 GB VPS |
+| `monitoring-full` | + cAdvisor, blackbox_exporter | ~1.5 GB | 8 GB+ VPS |
+| `rollup` | + standalone hourly rollup worker | ~50 MB | Multiple backend replicas |
+
+None of the monitoring ports are published to the host. Prometheus reaches the
+exporters over the compose network; exposing them would put internal route names
+and request counts on the open internet.
+
+Verify collection actually works — a valid config and a working scrape are
+different claims:
+
+```bash
+# From the host, if you publish Prometheus; otherwise pipe it into a container
+# already on the compose network (which is the default setup):
+Get-Content backend/backend/tools/check_prometheus.py -Raw |
+  docker compose exec -T -e PROMETHEUS_URL=http://prometheus:9090 backend python -
+```
+
+### The hourly rollup
+
+Volume charts and every future AI scan read `event_hourly`, not the raw `event`
+table — that is what keeps a 90-day comparison cheap enough to run inside a
+scan's time budget.
+
+It **recomputes** rather than accumulating. Each run deletes the buckets in its
+window and re-derives them from `event`, which makes it idempotent and
+self-healing after a crash. An accumulating counter has no reconciliation path:
+miss a window or double-run once and every dashboard inherits the error forever.
+
+```bash
+# One-off rebuild (this is also the "Rebuild rollup" button in the UI)
+docker compose exec backend python -m features.monitoring.rollup --hours 48
+
+# Apply the 90-day retention window as well
+docker compose exec backend python -m features.monitoring.rollup --prune
+```
+
+### What is deliberately not there
+
+- **No Android client exists.** The four Android subsections read *"awaiting
+  first data"* and say which endpoint to point a build at. Rendering zeroes
+  would be indistinguishable from a healthy app.
+- **No AI scans yet.** The *Scan now* buttons are rendered but disabled, with a
+  tooltip explaining that `SCAN_ENABLED` is off. The database tables, the scan
+  allowlist and the history/incident-log read path exist and are populated by
+  nothing yet. See `docs/observability/ARCHITECTURE.md` for the design.
+- **No revenue.** Purchases are recorded with a verified/unverified split and
+  every figure states which portion is verified. With `ENABLE_STORE_VERIFY=false`
+  (the default) the unverified total is labelled a claim, not revenue.
+
+### Privacy
+
+The monitoring tables are the only place in this app that stores anything about
+users that is not already in the `user` table.
+
+- **No IP addresses.** A truncated HMAC is kept for rate limiting and nothing
+  else.
+- **No user ids.** `user_hash` is HMAC-SHA256 with a server-side pepper, so it
+  cannot be reversed from the table alone. Rotating the pepper pseudonymises all
+  history at once.
+- **No client-settable identity.** There is no field anywhere in the collector
+  schema a client can use to name a user — a client that could set its own
+  identity could forge activity for anyone.
+- **No free-text props.** `props` is a flat map of scalars, count- and
+  length-capped, and is never rendered.
 
 ---
 
@@ -409,6 +531,43 @@ All paths are relative to `http://127.0.0.1:8001`. 🔒 requires
 `POST /ocr/extract/timetable`, `POST /ocr/extract/exam`,
 `POST /ocr/debug/extract-text`, `GET /ocr/models`.
 
+### Telemetry ingest
+
+Unauthenticated by necessity — a browser beacon and a crashing Android process
+cannot present a session. Returns **503** unless `TELEMETRY_ENABLED=true`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/collect/events` | `{"platform":?, "events":[{event_name, platform, session_id, props?, app_version?, os_version?, device_model?, country?, ts?}]}`. Always 200 with `{accepted, rejected}` — a partially-bad batch must not make clients retry the good events forever |
+| `POST` | `/collect/crash` | `{kind, session_id, fingerprint, exception_type?, message?, stack_trace?, fatal?, ...}` |
+| `POST` | `/collect/security-signal` | `{kind: root_detected\|emulator_detected\|tamper_detected, blocked?}`. Recorded as an observation, never used to refuse a request |
+
+Event names are an **allowlist** (`ALLOWED_EVENTS` in `collector.py`). Unknown
+names are rejected with a generic message — echoing "xyz is not in the allowlist"
+would turn the endpoint into an oracle for enumerating what the app records.
+`props` is truncated rather than rejected, and capped at 12 keys.
+
+### Monitoring (admin only)
+
+Every endpoint below requires an admin token. Students get **403**, anonymous
+**401**.
+
+| Method | Path | Notes |
+|---|---|---|
+| 🔒 `GET` | `/monitoring/subsections` | The canonical eight. The UI renders from this rather than a local copy, so a button cannot exist without a backend counterpart |
+| 🔒 `GET` | `/monitoring/overview` | `?days=&platform=` — everything the panels need in one round trip and one consistent window |
+| 🔒 `GET` | `/monitoring/health` | `?days=&platform=` — Prometheus-derived request/latency figures plus crash-free rates |
+| 🔒 `GET` | `/monitoring/feedback` | `?days=` — volume, sentiment, topics. Read-only; Feedback Responses is unaffected |
+| 🔒 `GET` | `/monitoring/monetisation` | `?days=` — purchases and ad revenue with the verified/unverified split |
+| 🔒 `GET` | `/monitoring/history` | `?subsection=&limit=` — scans, the derived incident log, and the tool-call audit |
+| 🔒 `POST` | `/monitoring/rollup` | `?lookback_hours=` — rebuild the hourly rollup now instead of waiting for the timer |
+
+### Metrics
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/metrics` | Prometheus exposition. Route **templates** (`auth/login`), not concrete paths; status is bucketed to `2xx`/`4xx`/`5xx`; no user identifiers. Excludes itself from its own counters |
+
 ---
 
 ## Data model
@@ -422,6 +581,24 @@ All paths are relative to `http://127.0.0.1:8001`. 🔒 requires
 | `timetable_slot` | Weekly class | `day`, `start_time`, `end_time`, `room`, `course_code`, `branch_or_program`, `semester` |
 | `exam_seating` | Seating index row | `roll_start_prefix`, `roll_start_num`, `roll_end_num`, `room`, **`seating_date`**, `start_time`, `end_time`, `course_code`, `branch`, `semester`, `is_extra` |
 | `mid_sem_schedule` | Exam timetable row | **`schedule_date`**, `start_time`, `end_time`, `course_code`, `room`, `branch`, `semester`, `group` |
+
+### Monitoring tables
+
+Ten tables, all additive. `user_hash` is an HMAC with a server-side pepper, never
+a plain hash — see [Privacy](#privacy) above for why that distinction is load-bearing.
+
+| Table | Grain | Notes |
+|---|---|---|
+| `event` | One thing a user did | Raw. High cardinality, expires after `RETENTION_DAYS` (90) |
+| `event_hourly` | Hour × event_name × dimensions | **What every dashboard and every future scan reads.** Dimensions are `''` rather than NULL, because Postgres treats NULLs as distinct in a unique index and the constraint would silently never fire |
+| `monitoring_session` | One app/web session | The source of truth for DAU/WAU/MAU and retention. Not deleted by `prune` |
+| `purchase` | One transaction | `transaction_id` unique, so a replayed receipt is rejected. `verified` is the column that matters |
+| `ad_event` | One impression or click | eCPM is derived from these, never accepted from the client |
+| `crash_report` | One crash or ANR | `session_id` is what makes a session-based crash-free rate possible. `stack_trace` is untrusted text |
+| `security_event` | One security occurrence | `ip_hash` is truncated; the raw address is never stored |
+| `scan_result` | One AI scan verdict | Never overwritten. **Empty until scans are enabled** |
+| `status_transition` | One status change | The incident log is *derived* from this, not stored — an open incident has no end time |
+| `tool_call_audit` | One tool call by one scan | What makes "the scan never invented a number" checkable rather than a claim |
 
 `seating_date` and `schedule_date` are declared with an explicit `sa_column`
 because `date` would otherwise collide with `datetime.date` in SQLAlchemy's column

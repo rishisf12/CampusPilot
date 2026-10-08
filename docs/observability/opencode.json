@@ -18,11 +18,6 @@
           "tool_call": true,
           "limit": { "context": 32768, "output": 4096 }
         },
-        "qwen3:30b-a3b": {
-          "name": "Qwen3 30B-A3B (full profile)",
-          "tool_call": true,
-          "limit": { "context": 65536, "output": 4096 }
-        },
         "qwen3:4b": {
           "name": "Qwen3 4B (fallback, 4 GB box)",
           "tool_call": true,

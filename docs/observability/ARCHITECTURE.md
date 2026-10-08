@@ -1,39 +1,86 @@
 # Observability & AI Status Scan — architecture
 
-Status: design only. Nothing here is implemented. Every tool below is verified
-against the zero-cost rules before I recommend it; where I could not verify
-current licensing or maintenance from memory I say so and mark the row **UNVERIFIED**
-rather than assert it.
+> **Status: Phase 1 is built and tested. Phase 2 (AI scans) is design only.**
+>
+> This document was written as a design. Since then the following have been
+> implemented, tested on both database dialects, and verified running in Docker.
+> Sections below that describe the scan subsystem remain design.
+>
+> | Area | State |
+> |---|---|
+> | `/metrics` + Prometheus instruments | **Built.** 9 metrics, route templates, status classes, no user identifiers |
+> | Prometheus + node_exporter (`monitoring` profile) | **Built.** Config and 7 alert rules validated by `promtool`; scraping verified against a live stack |
+> | cAdvisor + blackbox (`monitoring-full` profile) | **Built, not enabled** — config validated, needs an 8 GB+ host |
+> | Telemetry ingest (`/collect/*`) | **Built.** Allowlist, batch cap, per-source rate limiting, HMAC pseudonymisation |
+> | Ten monitoring tables + migration | **Built.** Alembic revision `27f44ac2c78b` |
+> | Hourly rollup (`event` → `event_hourly`) | **Built.** Idempotent recompute, CLI + optional in-process timer |
+> | Admin read endpoints (`/monitoring/*`) | **Built.** Eight subsections, all admin-gated, all read-only |
+> | Web + Android monitoring UI | **Built.** Admin sub-tabs; Feedback Responses untouched |
+> | VADER sentiment + topic mix for §D | **Built** |
+> | AI scan runner, reconciliation pass, RQ queue | **Design only.** Tables and read path exist; nothing writes to them yet |
+> | Ollama / local model server | **Design only** |
+> | Android instrumentation SDK | **Not started.** No Android project exists in this repository |
+>
+> Everything remains free and self-hosted. Nothing below requires an API key,
+> a paid tier, or a quota.
+
+Sections 0, 2.1, 2.4, 3, 7.1 and 7.2 described a SQLite deployment and a
+tooling set that this project has since moved past — the database is now
+PostgreSQL (see §0.1 note below), and `grafana/mcp-grafana` remains the only
+community MCP still recommended.
+
+Every tool below is verified against the zero-cost rules before I recommend it;
+where I could not verify current licensing or maintenance from memory I say so
+and mark the row **UNVERIFIED** rather than assert it.
 
 ---
 
 ## 0. Read this first — three facts that change the plan
 
-### 0.1 You have SQLite, not Postgres
+### 0.1 ~~You have SQLite, not Postgres~~ — resolved
 
-`backend/backend/core/config.py:16` defaults to `sqlite:///.../classpilot.db`, and
-`docker-compose.yml:15` sets `DATABASE_URL=sqlite:///./database/classpilot.db`.
+**This section is historical.** The SQLite constraint was the single most
+consequential fact in the original version of this document. It has since been
+resolved: PostgreSQL 16 is now the default, with SQLite retained only as a test
+dialect.
 
-This is the single most consequential fact in this document. It rules out a
-large part of the catalogue you asked for:
+`backend/backend/core/config.py` defaults `database_url` to
+`postgresql+psycopg://…`; Alembic owns the schema; `docker-compose.yml` runs a
+`postgres` service that is not published to the host. SQLite is still reachable
+via `DATABASE_URL=sqlite:///` and is what the fast unit tests use.
 
-| Tool | Status on SQLite |
-|---|---|
-| `crystaldba/postgres-mcp` (MIT) | **Unusable** — speaks the Postgres wire protocol |
-| Umami (MIT) | **Unusable** — Postgres/MariaDB only |
-| Superset (Apache-2.0) | **Unusable** — SQLAlchemy URI can target SQLite, but Umami-style schemas and most datasources assume Postgres |
-| Matomo (GPL-3.0) | **Unusable** — MySQL/MariaDB only |
-| Grafana + SQLite datasource | **Works** — via the `frser-sqlite-datasource` plugin |
-| `sqlite3` read-only wrapper | **Works** — this is what I recommend instead of the Postgres MCP |
+The migration moved 868 rows with counts verified per table and the sequence
+reset afterwards. Both dialects run in CI, and **the Postgres job gates the
+merge** — see the note below for why that turned out to matter far more than
+expected.
 
-Grafana ships **no first-party SQLite datasource**. The community plugin
-`grafana-sqlite-datasource` is Apache-2.0 but is thinly maintained. Treat SQLite
-dashboards as the weakest part of the lite profile, and treat "migrate to
-Postgres" as the single highest-leverage unlock in this whole document: it is the
-gate on Umami, Superset, the Postgres MCP, BEAT, and `pg_stat_statements`.
+The original table of "unusable on SQLite" tools is therefore no longer a
+constraint. Umami, Superset, `crystaldba/postgres-mcp` and BEAT are unblocked.
+None of them has been adopted, because §5.1 explains why owning the four query
+tools directly is better than trusting a community MCP for read-only access.
 
-At campus scale (~2–5k users) SQLite is *adequate*. The reason to move is
-tooling, not throughput.
+#### What the dual-dialect CI setup actually caught
+
+Worth recording, because it is the argument for keeping both jobs:
+
+The hourly rollup originally built its `GROUP BY` by re-constructing the same
+`func.coalesce(col, "")` expressions used in the `SELECT` list. Two structurally
+identical but *distinct* SQLAlchemy `Function` objects get **separate bind
+parameters**, so the statement compiled to:
+
+```sql
+SELECT coalesce(event.app_version, $2) ...
+GROUP BY coalesce(event.app_version, $7)
+```
+
+SQLite compares expressions structurally and accepted it. PostgreSQL saw two
+different expressions, could not match the selected one to any grouped one, and
+rejected the query with `column "event.app_version" must appear in the GROUP BY
+clause`. The entire SQLite suite was green and production was broken.
+
+The regression test for it now asserts on `compiled.params` — that exactly three
+distinct bind parameters exist for three dimensions — which works on both
+dialects regardless of paramstyle. It is verified to fail with the bug present.
 
 ### 0.2 You have no Android app
 

@@ -347,10 +347,6 @@ function ProfileView({ onSaved }) {
   const [extras, setExtras] = useState([])
   const [extraCode, setExtraCode] = useState('')
   const [target, setTarget] = useState(75)
-  // Team-finding fields: comma-separated skill tags plus a short bio/contact.
-  const [skillsText, setSkillsText] = useState('')
-  const [bio, setBio] = useState('')
-  const [contact, setContact] = useState('')
 
   // Branch change block
   const [branchFrom, setBranchFrom] = useState('')
@@ -364,9 +360,6 @@ function ProfileView({ onSaved }) {
       setProfile(data)
       // The target lives on the profile, so it loads from there, not from storage.
       setTarget(Number(data.attendance_target ?? 75))
-      setSkillsText((data.skills || []).join(', '))
-      setBio(data.bio || '')
-      setContact(data.contact || '')
       setBranchFrom(data.branch || '')
       setNoBranchChange(!data.branch_change_requested)
       setBranchTo(data.branch_change_requested && data.requested_branch ? data.requested_branch : '')
@@ -401,10 +394,6 @@ function ProfileView({ onSaved }) {
         elective_codes: profile.elective_codes || [],
         // The attendance target is part of the profile, so it is saved with it.
         attendance_target: Number(target),
-        // Skills drive My Team matching; free-form, normalised server-side.
-        skills: skillsText.split(',').map((tag) => tag.trim()).filter(Boolean),
-        bio: bio.trim(),
-        contact: contact.trim(),
       })
       setProfile(updated)
       setTarget(Number(updated.attendance_target ?? target))
@@ -627,44 +616,6 @@ function ProfileView({ onSaved }) {
               onChange={(event) => setTarget(Number(event.target.value))}
             />
             <span className="text-xs text-gray-500">Used by the Attendance tab for risk colouring.</span>
-          </div>
-        </div>
-
-        {/* Team-finding: skills drive My Team matching, bio/contact show on teams */}
-        <div>
-          <span className="label">Team skills</span>
-          <input
-            id="pf-skills"
-            className="input-field font-mono"
-            value={skillsText}
-            onChange={(event) => setSkillsText(event.target.value)}
-            placeholder="e.g. react, python, ml"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Comma separated. Teams needing what you know will rank higher for you.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <span className="label">Bio</span>
-            <input
-              id="pf-bio"
-              className="input-field"
-              value={bio}
-              onChange={(event) => setBio(event.target.value)}
-              placeholder="One line about you"
-            />
-          </div>
-          <div>
-            <span className="label">Contact</span>
-            <input
-              id="pf-contact"
-              className="input-field"
-              value={contact}
-              onChange={(event) => setContact(event.target.value)}
-              placeholder="How teammates reach you"
-            />
           </div>
         </div>
 

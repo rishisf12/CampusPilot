@@ -82,6 +82,24 @@ services:
       - ALLOWED_EXTENSIONS=.pdf,.csv
       - BRANCH_OPTIONS=CSE A,CSE B,DS,ECE,ME,SM,PG,MDes
       - ADMISSION_YEAR=21
+      # --- Monitoring / observability -------------------------------------
+      # Generate with:
+      #   python -c "import secrets; print(secrets.token_hex(32))"
+      # The API refuses to accept telemetry with the default value, because a
+      # known pepper makes every user_hash in the database reversible.
+      - TELEMETRY_PEPPER=${TELEMETRY_PEPPER:-}
+      # Off by default: /collect/events is an unauthenticated write endpoint
+      # and should only be open once a client is actually sending to it.
+      - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-false}
+      - TELEMETRY_MAX_BATCH=100
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      # Exactly one process must own the hourly rollup timer. With multiple
+      # replicas, leave this off and run the rollup as its own service instead.
+      - ROLLUP_INLINE=${ROLLUP_INLINE:-true}
+      # AI scan subsystem. Off until a local model server is configured; see
+      # docs/observability/ARCHITECTURE.md.
+      - SCAN_ENABLED=${SCAN_ENABLED:-false}
+      - ENABLE_STORE_VERIFY=${ENABLE_STORE_VERIFY:-false}
     volumes:
       # Mounted read-write: uploads and the legacy SQLite file both live here.
       # The SQLite file is only needed for the one-shot migration.
@@ -129,7 +147,104 @@ services:
   #       condition: service_healthy
   #   restart: unless-stopped
 
+# ---------------------------------------------------------------------
+  # Observability. Everything here is optional and off by default:
+  #   docker compose --profile monitoring up -d
+  #
+  # On a small VPS prefer the `lite` profile, which is node_exporter plus the
+  # API's own /metrics and needs roughly 400 MB of RAM:
+  #   docker compose --profile monitoring-lite up -d
+  #
+  # The `full` profile adds container metrics and HTTP probing. It costs about
+  # 1.5 GB, which a 2 GB VPS cannot spare.
+  #
+  # None of these are published to the host. Prometheus reaches them over the
+  # compose network; publishing a metrics port would put internal route names
+  # and request counts on the open internet.
+  # ---------------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    profiles: ["monitoring", "monitoring-full"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+      # A single-campus app does not need one-minute resolution for 30 days of
+      # metrics. This is the setting that decides whether Prometheus fits in
+      # RAM, and it is the one most worth lowering first.
+      - --storage.tsdb.retention.size=2GB
+    volumes:
+      # The whole directory, not just prometheus.yml. `rule_files` points at
+      # alerts.yml, and mounting files one at a time means every new rule file
+      # has to be added here too - where the failure mode is Prometheus
+      # refusing to start with a message that does not mention compose.
+      - ./ops/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    profiles: ["monitoring", "monitoring-full"]
+    # --path.rootfs makes the host filesystem readable as "/" inside the
+    # container. Without it every metric describes the container's own mount
+    # namespace, so disk and network figures are quietly wrong.
+    #
+    # Mounted `:ro` and deliberately NOT `:ro,rslave`. The slave propagation
+    # only matters when host mounts are added or removed while the exporter is
+    # running, which never happens on a single-VPS deployment - and it is
+    # rejected outright by Docker Desktop ("not a shared or slave mount"), so
+    # using it makes the stack impossible to start locally. A portable config
+    # that is right 99% of the time beats a correct one that will not boot on
+    # half the machines someone will try it on.
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /:/host:ro
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    profiles: ["monitoring-full"]
+    # read_only on /etc is what lets cAdvisor read the container metadata; the
+    # root filesystem must stay writable for its own state.
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    profiles: ["monitoring-full"]
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./ops/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+
+  # Standalone rollup worker. Use this instead of ROLLUP_INLINE when running
+  # more than one backend replica, so exactly one process owns the timer.
+  rollup:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    profiles: ["rollup"]
+    command: python -m features.monitoring.rollup --loop --prune
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-campuspilot}:${POSTGRES_PASSWORD:-campuspilot}@postgres:5432/${POSTGRES_DB:-campuspilot}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   database:
   uploads:
+  prometheus_data:

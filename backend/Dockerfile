@@ -28,6 +28,20 @@ COPY database ./database
 # Create uploads directory
 RUN mkdir -p /app/backend/uploads
 
+# The package directory has to be importable by its bare names.
+#
+# The application uses flat imports throughout - `from core.database import ...`,
+# `from features.monitoring import ...` - because that is what the tests, the
+# Alembic env.py and the local tooling all do. That means `/app/backend` has to
+# be on sys.path, not just `/app`.
+#
+# Without this the container starts and immediately dies with
+# `ModuleNotFoundError: No module named 'core'`: `uvicorn backend.main:app`
+# resolves the outer `backend` package fine, then the module's own imports fail.
+# It is worth calling out because the failure looks like a missing file rather
+# than a path problem.
+ENV PYTHONPATH=/app/backend
+
 # Expose port
 EXPOSE 8001
 

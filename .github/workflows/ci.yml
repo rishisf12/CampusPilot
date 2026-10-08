@@ -105,6 +105,21 @@ jobs:
           # the change.
           python -m alembic -c alembic.ini check
 
+      - name: Validate Prometheus config and rules
+        run: |
+          # A Prometheus config that does not parse means the monitoring stack
+          # silently does not start, which is the failure mode this whole
+          # project is meant to prevent. Validating it in CI costs about twenty
+          # seconds and catches a missing rule file or a renamed metric before
+          # anyone discovers it at 3am.
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/ops/prometheus:/etc/prometheus:ro" \
+            prom/prometheus:v2.54.1 \
+            check config /etc/prometheus/prometheus.yml
+
+      - name: Validate docker-compose
+        run: docker compose --profile monitoring --profile monitoring-full --profile rollup config --quiet
+
   frontend-test:
     name: Frontend Tests & Build
     runs-on: ubuntu-latest

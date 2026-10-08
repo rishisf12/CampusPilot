@@ -1,0 +1,84 @@
+# Prometheus configuration.
+#
+# Two deployment tiers, selected by which services are running:
+#
+#   lite  - the API's /metrics plus node_exporter. ~400 MB of RAM.
+#   full  - adds cAdvisor (container metrics) and blackbox_exporter (does the
+#           site actually answer from the outside).
+#
+# The tier is decided by `honor_timestamps` and the static_configs below, both
+# of which degrade gracefully: if a target is down, Prometheus records the gap
+# rather than failing, and the remaining targets still report. A configuration
+# that hard-fails when one exporter is missing would make the whole monitoring
+# stack a single point of failure for the thing it is supposed to watch.
+
+global:
+  # 15s is the default and is right for an app this size: faster costs storage
+  # without showing anything a human will act on.
+  scrape_interval: 15s
+  # How long a target may be missing before it is marked down. A short window
+  # means a brief restart shows as a real outage; a long one hides a genuine
+  # one. 2m is the compromise.
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: campuspilot
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # The API itself. This is where every number in the Health subsection comes
+  # from - request counts, latency histograms, in-flight gauge, collector
+  # accept/reject counters and scan outcomes.
+  - job_name: campuspilot-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8001"]
+        labels:
+          component: api
+
+  # Host-level CPU, memory, disk and network. Without this a 100% CPU spike
+  # shows up only indirectly, as slow queries, and by then the cause is a
+  # process rather than a subsystem.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          component: host
+
+  # Prometheus's own scrape health. Worth alerting on: a monitoring system that
+  # has silently stopped collecting is the hardest kind of failure to notice.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Present only in the `full` tier. `up == 0` here means "cAdvisor is not
+  # running", which is the correct reading for a lite deployment too.
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          component: container
+
+  # Blackbox probing. Relabeling is required: blackbox_exporter serves many
+  # modules on one port, and the module has to be passed as a *parameter*, so
+  # the job's own label is moved into `__param_target` and `__param_module`.
+  # Without those two relabel rules the exporter probes nothing and every
+  # series comes back as probe_success 0 - which looks exactly like a total
+  # outage.
+  - job_name: blackbox
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://backend:8001/health
+          - http://frontend/
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

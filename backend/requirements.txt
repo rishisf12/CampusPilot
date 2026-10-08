@@ -18,6 +18,26 @@ passlib==1.7.4
 aiosmtplib==3.0.1
 email-validator==2.2.0
 
+# --- Observability: metrics --------------------------------------------------
+# prometheus_client is the reference Python client, Apache-2.0. It gives us
+# /metrics, which is what Prometheus scrapes - the "DB performance" and "slow
+# endpoints" numbers in the Health subsection come out of these instruments.
+prometheus-client==0.21.0
+
+# --- Observability: scan queue ----------------------------------------------
+# RQ is BSD-3-Clause and deliberately small (~2k lines). A scan is a linear,
+# expensive, on-request job; BullMQ would mean running a Node service purely as a
+# queue and Celery would bring a result backend and beat scheduler we never use.
+# Concurrency is pinned to 1 so scans cannot overload a small VPS.
+rq==1.16.2
+redis==5.2.1
+
+# --- Feedback NLP (all local, no model downloads at runtime) ----------------
+# VADER is a lexicon-based sentiment model from NLTK (Apache-2.0). It runs in
+# microseconds with no torch dependency, which matters because sentiment runs
+# over every feedback row on demand rather than in a batch.
+vaderSentiment==3.3.2
+
 # --- Database: PostgreSQL ---------------------------------------------------
 # psycopg 3 (not psycopg2): SQLAlchemy 2.x supports it natively via the
 # "postgresql+psycopg" driver name, and it is the actively developed line.

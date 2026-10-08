@@ -45,6 +45,16 @@ from sqlmodel import SQLModel  # noqa: E402
 
 import models  # noqa: E402,F401  - imported for the side effect of registering tables
 
+# Feature-local models are registered too. This import list is the single
+# place that decides what Alembic knows about, and it has to be exhaustive:
+# a table missing from SQLModel.metadata is not merely invisible to autogenerate,
+# it is interpreted as "this table was deleted", so forgetting an import
+# produces a migration that DROPs a table full of live data and, because the
+# initial revision already created it, does so on a database that is otherwise
+# perfectly in sync. `alembic check` in CI catches that case, which is why it
+# is a required step rather than an optional one.
+from features.monitoring import models as _monitoring_models  # noqa: E402,F401
+
 from core.config import settings  # noqa: E402
 
 config = context.config
@@ -53,6 +63,37 @@ if config.config_file_name is not None and config.attributes.get("configure_logg
     fileConfig(config.config_file_name)
 
 target_metadata = SQLModel.metadata
+
+
+def _assert_metadata_complete() -> None:
+    """Fail loudly if a table is known to the database but not to the models.
+
+    Cheap insurance against the specific failure described above: a feature
+    added a model, the migration exists, but this file was not updated. Without
+    it the symptom appears as a generated DROP TABLE in a future migration, at
+    which point the cause is three commits back and the data is gone.
+    """
+    import os
+
+    if not os.environ.get("DATABASE_URL") and not settings.database_url:
+        return
+    from sqlalchemy import inspect
+
+    from core.database import engine
+
+    inspector = inspect(engine)
+    known = set(SQLModel.metadata.tables)
+    try:
+        existing = set(inspector.get_table_names()) - {"alembic_version"}
+    except Exception:  # noqa: BLE001 - database may not be reachable at import
+        return
+    missing = existing - known
+    if missing:
+        raise RuntimeError(
+            "These tables exist in the database but not in SQLModel.metadata: "
+            f"{sorted(missing)}. Import the defining module in alembic/env.py, or "
+            "the next autogenerate will try to drop them."
+        )
 
 
 def _url() -> str:
@@ -101,6 +142,7 @@ def run_migrations_online() -> None:
         connectable = app_engine
 
     with connectable.connect() as connection:
+        _assert_metadata_complete()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
