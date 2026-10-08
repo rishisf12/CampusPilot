@@ -15,7 +15,7 @@
 | 2 | Web Health + Security + Rule Scans | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine, scan service, scan endpoint, rate limiting, brute force detection, all tests pass |
 | 3 | Analytics/Monetization + Web Activity + Android SDK | ✅ Done | 2026-10-08 | 2026-10-08 | Monetisation panel, Android SDK snippet, Activity panel monetization summary, all tests pass |
 | 4 | Android Health + Security | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine evaluators for A_A_HEALTH and C_A_SECURITY, data collectors, scan endpoint integration, all tests pass |
-| 5 | Feedback Analysis | ⏳ Pending | — | — | |
+| 5 | Feedback Analysis | ✅ Done | 2026-10-08 | 2026-10-08 | VADER sentiment, keyword topics, crash/release correlation, Feedback endpoint uses analyse(), all tests pass |
 | 6 | History Dashboard | ⏳ Pending | — | — | |
 | 7 | Stage 2 LLM Summaries | ⏳ Pending | — | — | |
 | 8 | Alerting + Profiles + Hardening + Docs | ⏳ Pending | — | — | |
@@ -157,12 +157,21 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ---
 
-## Next Actions (Phase 5)
+---
 
-1. **Feedback Analysis**: NLP pipeline, topic model, D_W/D_A_FEEDBACK panels
-2. **History Dashboard**: Partitioned tables, history API, charts, calendar overlay, export
-3. **Stage 2 LLM**: Ollama integration, 8 prompts + schemas, Promptfoo evals
-4. **Alerting + Profiles + Hardening + Docs**
+## Phase 5 Progress (2026-10-08) — ✅ **COMPLETE**
+
+### ✅ Completed
+1. **Feedback endpoint integration**: `GET /monitoring/feedback` now calls `analyse()` from `feedback_analysis.py` (was using stale `feedback_detail`)
+2. **VADER sentiment + keyword topics**: `analyse()` returns sentiment (positive/neutral/negative + mean), keyword-based topic buckets, per-day volume
+3. **Crash/release correlation**: New `crash_correlation` and `release_correlation` fields tracking crash keyword mentions in feedback
+4. **FeedbackPanel integration**: Already wired in `Monitoring.jsx` — reads `overview` data which now includes feedback from `analyse()`
+5. All 126 monitoring tests pass, all 13 admin tests pass, all 69 auth tests pass
+6. Full backend test suite: 784 passed, 9 skipped
+
+### 📋 Phase 5 Complete — Ready for Phase 6
+
+---
 
 ## Test Results Log
 

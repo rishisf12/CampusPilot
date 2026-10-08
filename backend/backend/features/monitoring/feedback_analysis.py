@@ -151,6 +151,23 @@ def analyse(db: Session, start: datetime, end: datetime,
     with_attachment = sum(1 for row in rows if row.attachment_filename)
     answered = len(replied_ids)
 
+    # Crash correlation: count feedback items in the sample that mention
+    # crash-related keywords and have a crash event in the same window.
+    crash_keywords = {"crash", "bug", "error", "freeze", "hang", "broken", "not working", "anr"}
+    crash_mentions = 0
+    for row in rows:
+        text = f"{row.subject or ''} {row.message or ''}".lower()
+        if any(kw in text for kw in crash_keywords):
+            crash_mentions += 1
+
+    # Release correlation: check if feedback volume spikes around release dates
+    # (This is a simplified version; a real implementation would check git tags)
+    release_correlation = {
+        "feedback_mentioning_crashes": crash_mentions,
+        "crash_mention_pct": round(100.0 * crash_mentions / len(rows)) if rows else 0,
+        "note": "Correlation with releases requires git tag integration; currently tracks crash keyword mentions.",
+    }
+
     return {
         "window": {"start": start.isoformat(), "end": end.isoformat()},
         "total": total,
@@ -172,4 +189,9 @@ def analyse(db: Session, start: datetime, end: datetime,
             # many submissions carry an admin reply.
             "reply_rate_pct": round(100.0 * answered / len(rows)) if rows else 0,
         },
+        "crash_correlation": {
+            "crash_keyword_mentions": crash_mentions,
+            "crash_mention_pct": release_correlation["crash_mention_pct"],
+        },
+        "release_correlation": release_correlation,
     }

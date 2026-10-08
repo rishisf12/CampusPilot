@@ -447,7 +447,8 @@ def feedback_analysis(
 ):
     days = max(1, min(days, 365))
     start, end = _window(days)
-    return queries.feedback_detail(session, start, end)
+    from features.monitoring.feedback_analysis import analyse
+    return analyse(session, start, end)
 
 
 # --------------------------------------------------------------------------
