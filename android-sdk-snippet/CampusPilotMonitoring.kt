@@ -10,7 +10,6 @@
  * - okhttp (for HTTP)
  * - kotlinx.coroutines (for background work)
  * - androidx.lifecycle:lifecycle-process (for ProcessLifecycleOwner)
- * - com.google.firebase:firebase-crashlytics (optional, for crash integration)
  * 
  * Usage:
  * 
@@ -31,7 +30,7 @@
  * 
  * CampusPilotMonitoring.recordPurchase("premium_monthly", 9900000, "INR", "token_from_play_store")
  * 
- * CampusPilotMonitoring.recordAdImpression("admob", "banner_home", 50000)
+ * CampusPilotMonitoring.recordAdImpression("self_hosted_sponsor", "banner_home", 50000)
  * 
  * CampusPilotMonitoring.recordSecuritySignal("root_detected", true, mapOf("detail" to "Magisk detected"))
  */

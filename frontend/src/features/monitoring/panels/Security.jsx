@@ -7,7 +7,7 @@
  * conclude the app is under attack when in fact the app is fine and nobody has
  * asked it to act on anything.
  */
-import { Panel, StatTile, EmptyState, AwaitingData, num } from './components'
+import { Panel, StatTile, EmptyState, AwaitingData, num } from '../components/components'
 
 const KIND_LABELS = {
   failed_login: 'Failed logins',

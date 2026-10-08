@@ -6,7 +6,7 @@
  * campus of 900 and alarming for a campus of 40,000, and the dashboard cannot
  * know which.
  */
-import { Panel, StatTile, EmptyState, AwaitingData, MiniBars, num, pctChange } from './components'
+import { Panel, StatTile, EmptyState, AwaitingData, MiniBars, num, pctChange } from '../components/components'
 
 export function ActivityPanel({ data, monetisation, loading, awaiting }) {
   if (awaiting) {

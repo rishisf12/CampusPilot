@@ -6,7 +6,7 @@
  * the 95th percentile *was*, only how long this particular call took - which is
  * the difference between a latency panel and a stopwatch.
  */
-import { Panel, StatTile, EmptyState, num } from './components'
+import { Panel, StatTile, EmptyState, num } from '../components/components'
 
 export function HealthPanel({ data, loading }) {
   if (loading) return <Panel title="Health & Performance"><EmptyState title="Loading metrics…" /></Panel>

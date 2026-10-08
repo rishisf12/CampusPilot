@@ -1,8 +1,13 @@
 // Monitoring feature hooks
+//
+// These wrap the canonical `monitoringApi` client (src/api.js). They are kept
+// separate from the panels so the fetch/loading/error contract is written once.
+// Response shapes are intentionally untyped here; the TypeScript migration
+// (roadmap Phase 2/5) is where these become real types generated from
+// /openapi.json rather than hand-maintained interfaces.
 
 import { useState, useEffect, useCallback } from 'react';
-import { monitoringApi } from './api';
-import type { OverviewResponse, ScanHistoryResponse, SubsectionsResponse } from './types';
+import { monitoringApi } from '../../../api';
 
 // Hook for fetching monitoring overview
 export function useMonitoringOverview(days = 7, platform = 'web') {

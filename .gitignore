@@ -73,6 +73,13 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
+# Ruff
+.ruff_cache/
+
+# Browser-automation scratch output (page snapshots). These are per-run debug
+# artefacts, not source, and they grew every time a page was inspected.
+.playwright-mcp/
+
 # Jupyter
 .ipynb_checkpoints/
 

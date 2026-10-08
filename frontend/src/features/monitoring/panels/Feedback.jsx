@@ -5,7 +5,7 @@
  * feature is deliberately untouched - this is a separate, read-only view that
  * counts and buckets submissions without changing how they are answered.
  */
-import { Panel, StatTile, EmptyState, AwaitingData, MiniBars, num, pctChange } from './components'
+import { Panel, StatTile, EmptyState, AwaitingData, MiniBars, num, pctChange } from '../components/components'
 
 const TOPIC_LABELS = {
   timetable: 'Timetable & rooms',

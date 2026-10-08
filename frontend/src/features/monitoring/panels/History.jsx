@@ -10,7 +10,7 @@
  * time yet, and inventing a duration would mean rewriting rows every time a
  * later scan closed it.
  */
-import { Panel, StatTile, StatusPill, EmptyState, num } from './components'
+import { Panel, StatTile, StatusPill, EmptyState, num } from '../components/components'
 
 export function HistoryPanel({ data, loading, selected, onSelect }) {
   if (loading) return <Panel title="Scan history"><EmptyState title="Loading…" /></Panel>

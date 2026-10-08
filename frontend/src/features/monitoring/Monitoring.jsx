@@ -21,13 +21,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { monitoringApi } from '../../api'
-import { ActivityPanel } from './Activity'
-import { FeedbackPanel } from './Feedback'
-import { HealthPanel } from './Health'
-import { HistoryPanel } from './History'
-import { MonetisationPanel } from './Monetisation'
-import { SecurityPanel } from './Security'
-import { StatusPill } from './components'
+import { ActivityPanel } from './panels/Activity'
+import { FeedbackPanel } from './panels/Feedback'
+import { HealthPanel } from './panels/Health'
+import { HistoryPanel } from './panels/History'
+import { MonetisationPanel } from './panels/Monetisation'
+import { SecurityPanel } from './panels/Security'
+import { StatusPill } from './components/components'
 
 const RANGES = [
   { days: 1, label: '24h' },

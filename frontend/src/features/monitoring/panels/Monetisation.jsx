@@ -5,7 +5,7 @@
  * verified (store-validated) and unverified (client-claimed) so an admin
  * can distinguish auditable revenue from claims.
  */
-import { Panel, StatTile, EmptyState, AwaitingData, num, pctChange, pct } from './components'
+import { Panel, StatTile, EmptyState, AwaitingData, num, pctChange } from '../components/components'
 
 export function MonetisationPanel({ data, loading, awaiting }) {
   if (awaiting) {
