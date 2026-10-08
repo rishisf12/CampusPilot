@@ -6,9 +6,7 @@ hostile, and retention means the sweep has to remove files as well as rows.
 Both are silent when broken, so they are pinned here rather than checked by eye.
 """
 import datetime
-import email.message
 from email.message import EmailMessage
-from pathlib import Path
 
 import pytest
 from sqlmodel import select
@@ -28,7 +26,7 @@ def fresh_team_tables():
     """
     from sqlmodel import Session
 
-    from core.database import create_db_and_tables, engine
+    from core.database import engine
     from models import FeedCursor, Hackathon, JoinRequest, Team, TeamMember, User, UserProfile
 
     def wipe():
@@ -329,7 +327,6 @@ class TestRetention:
         assert (datetime.datetime.utcnow() - feed.cutoff()).days == 30
 
     def test_purge_removes_old_rows(self, client):
-        from core.database import engine as _  # noqa: F401
         from sqlmodel import Session, select
         from models import Hackathon
 
@@ -525,7 +522,6 @@ class TestIngestionIsSafeWhenUnconfigured:
 
     def test_no_network_call_when_disabled(self, client, monkeypatch):
         """Must not attempt a connection, so the endpoint is safe to expose."""
-        import imaplib
 
         from sqlmodel import Session
         from core.database import engine
@@ -541,9 +537,6 @@ class TestIngestionIsSafeWhenUnconfigured:
 
 class TestEntryConstruction:
     def test_builds_an_entry_from_a_message(self, client, monkeypatch, tmp_path):
-        from sqlmodel import Session
-        from core.database import engine
-
         monkeypatch.setattr(feed.settings, "feed_media_dir", tmp_path)
         message = EmailMessage()
         message["Subject"] = "CodeSprint Finals"
@@ -557,17 +550,16 @@ class TestEntryConstruction:
             b"\x89PNG\r\n\x1a\ndata", maintype="image", subtype="png", filename="poster.png"
         )
 
-        with Session(engine) as session:
-            entry = feed._entry_from(message, uid=42)
-            assert entry is not None
-            assert entry.title == "CodeSprint Finals"
-            assert "Twelve hours, one theme." in entry.body_text
-            # Anchor text is part of the prose once HTML is flattened, so it
-            # shows in the dropdown too. The href is what gets vetted.
-            assert entry.link == "https://codesprint.test"
-            assert entry.source == "email"
-            assert entry.feed_uid == 42
-            assert len(entry.attachments) == 1
+        entry = feed._entry_from(message, uid=42)
+        assert entry is not None
+        assert entry.title == "CodeSprint Finals"
+        assert "Twelve hours, one theme." in entry.body_text
+        # Anchor text is part of the prose once HTML is flattened, so it
+        # shows in the dropdown too. The href is what gets vetted.
+        assert entry.link == "https://codesprint.test"
+        assert entry.source == "email"
+        assert entry.feed_uid == 42
+        assert len(entry.attachments) == 1
 
     def test_empty_message_is_dropped(self, client, monkeypatch, tmp_path):
         monkeypatch.setattr(feed.settings, "feed_media_dir", tmp_path)
@@ -575,11 +567,7 @@ class TestEntryConstruction:
         assert feed._entry_from(message, uid=1) is None
 
     def test_body_is_length_capped(self, client, monkeypatch, tmp_path):
-        from sqlmodel import Session
-        from core.database import engine
-
         monkeypatch.setattr(feed.settings, "feed_media_dir", tmp_path)
         monkeypatch.setattr(feed.settings, "feed_max_body_chars", 50)
-        with Session(engine) as session:
-            entry = feed._entry_from(build_message(body="y" * 900), uid=7)
+        entry = feed._entry_from(build_message(body="y" * 900), uid=7)
         assert len(entry.body_text) <= 50

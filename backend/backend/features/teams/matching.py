@@ -23,7 +23,7 @@ both sides, then |A n B| / |A u B|, returning 0.0 on an empty union so a user
 with no skills never divides by zero.
 """
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from sqlmodel import Session, select
 
@@ -221,7 +221,7 @@ def _team_member_skills(session: Session, team_ids: List[int]) -> Dict[int, List
         return {}
     members = session.exec(
         select(TeamMember).where(
-            TeamMember.team_id.in_(team_ids), TeamMember.is_approved == True  # noqa: E712
+            TeamMember.team_id.in_(team_ids), TeamMember.is_approved == True
         )
     ).all()
     user_ids = [m.user_id for m in members if m.user_id is not None]
@@ -269,7 +269,7 @@ def score_teams_for_user(
     if hackathon_id is not None:
         query = query.where(Team.hackathon_id == hackathon_id)
     if recruiting_only:
-        query = query.where(Team.is_open == True)  # noqa: E712
+        query = query.where(Team.is_open == True)
 
     teams = session.exec(query.order_by(Team.created_at.desc())).all()
     if not teams:

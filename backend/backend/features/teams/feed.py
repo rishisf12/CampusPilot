@@ -22,7 +22,6 @@ until `FEED_IMAP_USER` and `FEED_IMAP_PASSWORD` are both set.
 """
 import email
 import email.policy
-import html
 import imaplib
 import logging
 import re
@@ -115,7 +114,7 @@ def html_to_text(raw: str) -> Tuple[str, List[str]]:
     try:
         parser.feed(raw)
         parser.close()
-    except Exception as exc:  # noqa: BLE001 - malformed mail must not kill the sweep
+    except Exception as exc:  # noqa: BLE001
         logger.warning("could not parse html body: %s", exc)
 
     text = "".join(parser.parts)
@@ -201,7 +200,7 @@ def sanitize_body(message: email.message.Message) -> Tuple[str, List[str]]:
 
     try:
         raw = source.get_content()
-    except Exception as exc:  # noqa: BLE001 - undecodable charset
+    except Exception as exc:  # noqa: BLE001
         logger.warning("could not decode body: %s", exc)
         payload = source.get_payload(decode=True) or b""
         raw = payload.decode("utf-8", errors="replace")
@@ -274,7 +273,7 @@ def _looks_executable(data: bytes) -> bool:
         return True
     if head[:4] in {b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe"}:
         return True                       # Mach-O
-    if head[:2] == b"MZ" or head[:2] == b"#!":
+    if head[:2] == b"MZ" or head[:2] == b"#!":  # noqa: SIM103 - chain of if/return is more readable
         return True                       # DOS stub / shebang
     return False
 
@@ -313,7 +312,7 @@ def _sniff_suffix(data: bytes) -> Optional[str]:
         return ".png"
     if head.startswith(b"\xff\xd8\xff"):
         return ".jpg"
-    if head.startswith(b"GIF87a") or head.startswith(b"GIF89a"):
+    if head.startswith((b"GIF87a", b"GIF89a")):
         return ".gif"
     if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
         return ".webp"
@@ -546,7 +545,7 @@ def ingest_once(session: Session) -> Dict[str, Any]:
             try:
                 message = _decode_payload(payload[0][1])
                 entry = _entry_from(message, uid)
-            except Exception as exc:  # noqa: BLE001 - one bad mail must not stop the rest
+            except Exception as exc:  # noqa: BLE001
                 logger.warning("could not parse uid %s: %s", uid, exc)
                 cursor.last_uid = uid
                 continue
@@ -570,7 +569,7 @@ def ingest_once(session: Session) -> Dict[str, Any]:
         return {"ok": False, "reason": str(exc), "added": added}
     finally:
         if client is not None:
-            try:
+            try:  # noqa: SIM105 - contextlib.suppress not suitable in finally block
                 client.logout()
             except Exception:  # noqa: BLE001
                 pass

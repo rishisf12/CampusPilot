@@ -279,7 +279,6 @@ async def ingest_feedback_email(
     for att in payload.attachments:
         fname = att.get("filename") or "attachment"
         content_b64 = att.get("content") or ""
-        ctype = att.get("content_type") or "application/octet-stream"
         ext = Path(fname).suffix.lower()
         if ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
             logger.warning("Skipping attachment with disallowed extension: %s", ext)
@@ -289,7 +288,9 @@ async def ingest_feedback_email(
         import base64
         try:
             data = base64.b64decode(content_b64)
-        except Exception:
+            # but a corrupt attachment is skipped rather than failing the
+            # whole submission.
+        except Exception:  # noqa: BLE001
             logger.warning("Failed to decode base64 attachment: %s", fname)
             continue
         if len(data) > settings.max_upload_mb * 1024 * 1024:

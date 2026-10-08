@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from sqlmodel import Session, select
@@ -49,11 +49,7 @@ TOPICS: dict[str, tuple[str, ...]] = {
 }
 
 _WORD_RE = re.compile(r"[a-z']{3,}")
-_STOPWORDS = frozenset("""
-the and for that this with you your are but not have has was were will would can could
-from they there here what when where which who how why all any some more most very just
-get got than then out off about into over under app application website site using use
-""".split())
+_STOPWORDS = frozenset(["the", "and", "for", "that", "this", "with", "you", "your", "are", "but", "not", "have", "has", "was", "were", "will", "would", "can", "could", "from", "they", "there", "here", "what", "when", "where", "which", "who", "how", "why", "all", "any", "some", "more", "most", "very", "just", "get", "got", "than", "then", "out", "off", "about", "into", "over", "under", "app", "application", "website", "site", "using", "use"])
 
 #: Cap on how many rows are analysed per request. Sentiment on 50,000 rows
 #: would take seconds and hold a database connection the whole time; on a

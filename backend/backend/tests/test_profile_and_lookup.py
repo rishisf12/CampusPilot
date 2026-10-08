@@ -8,13 +8,13 @@ from models import UserProfile
 
 
 def make_profile(**overrides):
-    defaults = dict(
-        user_id=1,
-        programme="BTech",
-        semester=5,
-        branch="CSE A",
-        elective_codes=[],
-    )
+    defaults = {
+        "user_id": 1,
+        "programme": "BTech",
+        "semester": 5,
+        "branch": "CSE A",
+        "elective_codes": [],
+    }
     defaults.update(overrides)
     return UserProfile(id=1, **defaults)
 

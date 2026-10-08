@@ -1,0 +1,120 @@
+# ruff.toml - lint policy for the CampusPilot backend.
+#
+# Why this file exists at all:
+#
+# ruff's default rule set is NOT the historical E4/E7/E9/F default, and CI
+# installed `pip install ruff` unpinned - so the rule set could change between
+# two runs of the same commit. Before this file, `ruff check` reported ~1370
+# findings on a clean checkout, all pre-existing, which made the lint job
+# permanently red and, because the `docker` job declares `needs: [lint]`,
+# silently prevented the image build from ever running.
+#
+# Two principles:
+#   * correctness rules are ON  - they find real bugs
+#   * bulk modernisation is OFF - see `UP` below
+#
+# ruff is pinned in backend/requirements-dev.txt so a green run here is the
+# same green run in CI.
+
+target-version = "py310"
+line-length = 100
+
+[lint]
+select = [
+    "E4",     # pycodestyle: imports, whitespace, indentation
+    "E7",     # pycodestyle: statements
+    "E9",     # pycodestyle: syntax/runtime errors
+    "F",      # pyflakes: undefined names, unused imports, f-strings
+    "B",      # flake8-bugbear: closures in loops, duplicate set values, ...
+    "C4",     # flake8-comprehensions
+    "RET",    # flake8-return: redundant else, explicit return None
+    "SIM",    # flake8-simplify: needless bool, collapsible if
+    "PIE",    # flake8-pie
+    "A",      # flake8-builtins: shadowing a builtin is a real footgun
+    "RUF",    # ruff-specific: unused noqa, unsorted __all__, ...
+    "BLE",    # blind-except. Deliberately enabled: the codebase already marks
+              # the intentional boundary catches with `# noqa: BLE001`, and
+              # enabling it is what makes those markers mean something instead
+              # of being silently unused directives.
+]
+
+ignore = [
+    # 704 lines in backend/backend exceed 100 characters, so enabling E501
+    # would be ~300 reflows of pure churn inside a lint-baseline commit and
+    # would bury any real finding. Revisit if a formatter is ever adopted.
+    "E501",
+
+    # FastAPI dependency injection is `Depends(...)` in an argument default.
+    # B008 calls that a bug; here it is the framework's documented contract,
+    # and rewriting it would change every route signature.
+    "B008",
+
+    # 819 of the pre-existing findings are pyupgrade asking for
+    # `Optional[X]` -> `X | None` and `List[X]` -> `list[X]` across the backend.
+    # That is a mechanical rewrite of 772 call sites that catches no bug and
+    # makes every later diff on those files noisier. Worth doing eventually as
+    # its own commit, per feature - not as lint baseline.
+    "UP",
+
+    # The codebase stores UTC as naive datetimes on purpose
+    # (`datetime.now(timezone.utc).replace(tzinfo=None)`) because the column is
+    # TIMESTAMP WITHOUT TIME ZONE. DTZ would flag the conversion itself.
+    "DTZ",
+
+    # Ambiguous-unicode rules. The exam and timetable parsers deliberately
+    # handle en dashes, non-breaking spaces and smart quotes because that is
+    # exactly the punctuation that appears in the uploaded PDFs. Rewriting
+    # those characters to ASCII would change parsing behaviour.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+
+    # Not worth the noise at this codebase size.
+    "D",     # pydocstyle
+    "ANN",   # missing type annotations
+    "N",     # pep8-naming
+    "COM",   # trailing commas
+    "ARG",   # unused arguments
+    "PTH",   # use pathlib
+    "T20",   # print statements
+    "FIX",   # TODO/FIXME markers
+]
+
+[lint.per-file-ignores]
+# Re-exports are the entire purpose of these files; an "unused" import here is
+# the module's public API, not dead code.
+"**/__init__.py" = ["F401", "F403"]
+
+# Alembic migrations are generated files. Long docstrings, module-level engine
+# handles and revision identifiers are inherent to how Alembic works.
+"alembic/versions/*" = ["E501", "F401"]
+
+# E712 in a SQLAlchemy query is not a truthiness bug. `Course.is_extra == True`
+# inside `select().where()` is how you build the filter; ruff's suggested
+# `Course.is_extra:` is not valid SQLAlchemy and `.is_(True)` compiles to
+# `IS TRUE` rather than `= TRUE`, which is not equivalent on every dialect.
+# Every E712 in this repo is of that shape, so it is scoped out per module
+# instead of globally - the rule stays active for real `if flag == True:` bugs.
+"backend/backend/features/monitoring/services/queries.py" = ["E712"]
+"backend/backend/features/monitoring/services/scan_service.py" = ["E712"]
+"backend/backend/features/schedule/routes.py" = ["E712"]
+"backend/backend/features/exam/clash.py" = ["E712"]
+"backend/backend/features/teams/matching.py" = ["E712"]
+
+# main.py registers middleware and then imports the routers. The ordering is
+# load-bearing (a router module imports from `core.config`, which must be
+# configured first), and moving the imports would be a behavioural change for
+# no lint benefit. `schedule/service.py` is listed here as well as above: it
+# both builds a day->int map before importing and filters on a boolean column.
+"backend/backend/main.py" = ["E402"]
+"backend/backend/features/rooms/service.py" = ["E402"]
+"backend/backend/features/schedule/service.py" = ["E402", "E712"]
+
+# `format` is a declared query parameter on the CSV export endpoints. Renaming
+# it to `format_` would change the public API, so the shadowing is accepted
+# and documented rather than renamed away.
+"backend/backend/features/monitoring/api/routes.py" = ["A002"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

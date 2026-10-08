@@ -5,15 +5,13 @@ import json
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from datetime import datetime, time, date
-from io import BytesIO
+from datetime import datetime, time
 
 import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image
 import requests
 
-from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +87,9 @@ def extract_text_from_image(image: Image.Image, lang: str = 'eng') -> str:
         gray = enhancer.enhance(2.0)
         
         # Extract text with Tesseract
-        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789YOUR_TOKEN_HEREQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.:/-– '
-        text = pytesseract.image_to_string(gray, lang=lang, config=custom_config)
-        return text
-    except Exception as e:
+        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.:/-– '
+        return pytesseract.image_to_string(gray, lang=lang, config=custom_config)
+    except Exception as e:  # noqa: BLE001
         logger.error(f"OCR failed: {e}")
         return ""
 
@@ -140,16 +137,15 @@ def call_huggingface_llm(prompt: str, model: str = DEFAULT_MODEL, api_token: Opt
             if isinstance(result, list) and len(result) > 0:
                 return result[0].get('generated_text', '')
             return str(result)
-        elif response.status_code == 503:
+        if response.status_code == 503:
             # Model loading, wait and retry
             logger.warning("Model loading, waiting...")
             import time
             time.sleep(10)
             return call_huggingface_llm(prompt, model, api_token)
-        else:
-            logger.error(f"HF API error: {response.status_code} - {response.text}")
-            return ""
-    except Exception as e:
+        logger.error(f"HF API error: {response.status_code} - {response.text}")
+        return ""
+    except Exception as e:  # noqa: BLE001
         logger.error(f"HF API call failed: {e}")
         return ""
 
@@ -306,7 +302,7 @@ def validate_timetable_slot(slot: Dict) -> Optional[Dict]:
     try:
         start = normalize_time(slot['start_time'])
         end = normalize_time(slot['end_time'])
-    except:
+    except Exception:  # noqa: BLE001 - invalid time format returns None
         return None
     
     # Normalize room
@@ -341,14 +337,14 @@ def validate_exam_row(row: Dict) -> Optional[Dict]:
     # Parse date
     try:
         exam_date = datetime.strptime(row['exam_date'], '%Y-%m-%d').date()
-    except:
+    except Exception:  # noqa: BLE001 - invalid date format returns None
         return None
     
     # Normalize time
     try:
         start_time = normalize_time(row.get('start_time', '09:00'))
         end_time = normalize_time(row.get('end_time', '12:00'))
-    except:
+    except Exception:  # noqa: BLE001 - invalid time format defaults to 09:00-12:00
         start_time = time(9, 0)
         end_time = time(12, 0)
     
@@ -413,8 +409,7 @@ def normalize_room(room: str) -> str:
         return ""
     room = room.strip().upper()
     room = re.sub(r'([A-Z]+)\s*(\d+)', r'\1-\2', room)
-    room = re.sub(r'\s+', ' ', room).replace(' - ', '-').replace(' -', '-').replace('- ', '-')
-    return room
+    return re.sub(r'\s+', ' ', room).replace(' - ', '-').replace(' -', '-').replace('- ', '-')
 
 
 def process_uploaded_pdf(pdf_path: Path, doc_type: str, hf_token: Optional[str] = None, poppler_path: Optional[str] = None) -> Dict[str, Any]:
@@ -424,10 +419,9 @@ def process_uploaded_pdf(pdf_path: Path, doc_type: str, hf_token: Optional[str] 
     """
     if doc_type == 'timetable':
         return extract_timetable_with_llm(pdf_path, hf_token=hf_token, poppler_path=poppler_path)
-    elif doc_type == 'exam':
+    if doc_type == 'exam':
         return extract_exam_with_llm(pdf_path, hf_token=hf_token, poppler_path=poppler_path)
-    else:
-        raise ValueError(f"Unknown doc_type: {doc_type}")
+    raise ValueError(f"Unknown doc_type: {doc_type}")
 
 
 if __name__ == "__main__":

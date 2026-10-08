@@ -11,8 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlmodel import Session, select, func, Column, text, JSON
-from sqlalchemy.dialects import postgresql, sqlite
+from sqlmodel import Session, select, func
 
 from features.monitoring.domain.models import (
     AdEvent,
@@ -21,16 +20,13 @@ from features.monitoring.domain.models import (
     Event,
     EventHourly,
     FeedbackAnalysis,
-    FeedbackSentimentSnapshot,
     HealthMetric,
     SecurityEvent,
     SecurityHeaderCheck,
     SecurityLog,
     Session as MonitorSession,
     Purchase,
-    SlowEndpoint,
     Subscription,
-    ToolCallAudit,
 )
 
 
@@ -233,7 +229,7 @@ def retention_cohorts(session: Session, days: int,
 
     # Ensure all keys from 1 to max_key are present (fill missing with zeros)
     # The maximum key we might need is based on the cohorts found or the days parameter
-    max_key = max(int(k) for k in out.keys()) if out else 0
+    max_key = max(int(k) for k in out) if out else 0
     max_key = max(max_key, days)  # at least up to the days parameter
     
     for i in range(1, max_key + 1):
@@ -253,16 +249,14 @@ def _date_trunc_day(dialect: str, col):
     """Return SQL expression for truncating a datetime to day."""
     if dialect == "postgresql":
         return func.date_trunc("day", col)
-    else:
-        return func.strftime("%Y-%m-%d", col)
+    return func.strftime("%Y-%m-%d", col)
 
 
 def _date_trunc_hour(dialect: str, col):
     """Return SQL expression for truncating a datetime to hour."""
     if dialect == "postgresql":
         return func.date_trunc("hour", col)
-    else:
-        return func.strftime("%Y-%m-%d %H:00:00", col)
+    return func.strftime("%Y-%m-%d %H:00:00", col)
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +358,7 @@ def security_overview(session: Session, start: datetime, end: datetime,
     blocked_rows = session.exec(
         blocked_stmt.group_by(SecurityEvent.kind)
     ).all()
-    blocked = {k: c for k, c in blocked_rows}
+    blocked = dict(blocked_rows)
 
     return {
         "platform": platform,
@@ -764,14 +758,14 @@ def security_detail(session: Session, start: datetime, end: datetime,
     by_severity = {}
     by_category = {}
     by_action = {}
-    for l in logs:
-        by_severity[l.severity] = by_severity.get(l.severity, 0) + 1
-        by_category[l.category] = by_category.get(l.category, 0) + 1
-        by_action[l.action] = by_action.get(l.action, 0) + 1
+    for log in logs:
+        by_severity[log.severity] = by_severity.get(log.severity, 0) + 1
+        by_category[log.category] = by_category.get(log.category, 0) + 1
+        by_action[log.action] = by_action.get(log.action, 0) + 1
 
-    unresolved = sum(1 for l in logs if not l.resolved)
-    root_emu = sum(1 for l in logs if l.root_detected or l.emulator_detected)
-    tamper = sum(1 for l in logs if l.tamper_detected)
+    unresolved = sum(1 for log in logs if not log.resolved)
+    root_emu = sum(1 for log in logs if log.root_detected or log.emulator_detected)
+    tamper = sum(1 for log in logs if log.tamper_detected)
 
     return {
         "platform": platform,
@@ -785,14 +779,14 @@ def security_detail(session: Session, start: datetime, end: datetime,
         "tamper_detected": tamper,
         "recent_events": [
             {
-                "ts": l.ts.isoformat(),
-                "category": l.category,
-                "severity": l.severity,
-                "action": l.action,
-                "rule_id": l.rule_id,
-                "description": l.description,
-                "resolved": l.resolved,
-            } for l in logs[:50]
+                "ts": log.ts.isoformat(),
+                "category": log.category,
+                "severity": log.severity,
+                "action": log.action,
+                "rule_id": log.rule_id,
+                "description": log.description,
+                "resolved": log.resolved,
+            } for log in logs[:50]
         ],
         "vulnerabilities": [
             {
@@ -1261,7 +1255,7 @@ def security_counts(session: Session, start: datetime, end: datetime,
         base = base.where(SecurityEvent.kind.in_(kinds))
 
     counts = session.exec(base.group_by(SecurityEvent.kind)).all()
-    return {k: c for k, c in counts}
+    return dict(counts)
 
 
 def previous_window(start: datetime, end: datetime) -> tuple[datetime, datetime]:

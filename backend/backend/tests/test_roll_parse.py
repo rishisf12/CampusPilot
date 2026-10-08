@@ -76,25 +76,6 @@ class TestRollInRange:
         assert roll_in_range("23bcs050", "23BCS", 1, 100) is True
 
 
-def parse_roll_range(range_str: str) -> tuple[str, int, int]:
-    """Parse '23BCS003 to 23BCS291' or '23BCS003-23BCS291'."""
-    normalized = range_str.replace(" to ", "-").replace(" TO ", "-").replace(" To ", "-")
-    parts = normalized.split("-")
-    if len(parts) != 2:
-        raise ValueError(f"Invalid range format: {range_str}")
-
-    start_prefix, start_num = parse_roll(parts[0].strip())
-    end_prefix, end_num = parse_roll(parts[1].strip())
-
-    if start_prefix != end_prefix:
-        raise ValueError(f"Prefix mismatch in range: {range_str}")
-
-    if start_num > end_num:
-        raise ValueError(f"Start > end in range: {range_str}")
-
-    return start_prefix, start_num, end_num
-
-
 class TestParseRollRange:
     def test_with_to(self):
         assert parse_roll_range("23BCS003 to 23BCS291") == ("23BCS", 3, 291)

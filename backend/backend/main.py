@@ -35,7 +35,7 @@ def _start_rollup_loop(interval_s: int = 3600) -> threading.Thread:
                 with session_scope() as db:
                     summary = rollup_mod.rollup(db)
                 logger.info("rollup: %s", summary)
-            except Exception:  # noqa: BLE001 - the loop must outlive any failure
+            except Exception:
                 logger.exception("rollup failed; will retry next interval")
 
     thread = threading.Thread(target=loop, name="hourly-rollup", daemon=True)

@@ -23,7 +23,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
 
 BACKEND = Path(__file__).resolve().parents[1]
 REPO = BACKEND.parents[1]
@@ -50,10 +49,9 @@ _APP_ROUTE_RE = re.compile(r'@app\.(?:get|post|put|delete|patch)\(\s*["\'](/[^"\
 def _backend_router_names() -> set[str]:
     """Module paths passed to a bare `include_router(...)`, e.g. `teams.router`."""
     text = MAIN.read_text(encoding="utf-8")
-    names = set(_BARE_INCLUDE_RE.findall(text))
+    return set(_BARE_INCLUDE_RE.findall(text))
     # These two are defined as attributes rather than module-level names, so they
     # cannot be resolved from main.py alone. They are listed here explicitly.
-    return names
 
 
 def _backend_prefixes() -> set[str]:

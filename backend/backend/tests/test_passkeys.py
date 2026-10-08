@@ -12,7 +12,7 @@ import hashlib
 import json
 import struct
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import cbor2
 import pytest
@@ -190,14 +190,13 @@ def authenticator():
 def enrolled(session, user, authenticator):
     """A user with one working passkey."""
     options = svc.registration_options(session, user, user_agent="Mozilla/5.0 (Windows NT 10.0)")
-    record = svc.complete_registration(
+    return svc.complete_registration(
         session,
         user,
         authenticator.create(options["_challenge"]),
         options["_challenge"],
         options["_label"],
     )
-    return record
 
 
 class TestRegistration:

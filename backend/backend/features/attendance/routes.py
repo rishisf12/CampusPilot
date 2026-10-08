@@ -1,7 +1,7 @@
 """Attendance API routes: mark, summary, subjects, per-course calendar."""
 import logging
 from datetime import date
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -58,9 +58,9 @@ def create_attendance(
         session.commit()
         session.refresh(record)
         return record
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Failed to mark attendance")
-        raise HTTPException(status_code=500, detail=f"Could not record attendance: {exc}")
+        raise HTTPException(status_code=500, detail=f"Could not record attendance: {exc}") from exc
 
 
 @router.get("/summary")
@@ -150,4 +150,4 @@ def remove_attendance(
     if not delete_attendance(session, record_id):
         raise HTTPException(status_code=404, detail="Record not found")
     session.commit()
-    return None
+    return

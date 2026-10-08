@@ -60,13 +60,13 @@ def get_current_user(
             credentials.credentials, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
         user_id = int(payload.get("sub"))
-    except Exception as exc:  # noqa: BLE001 - any decode failure is a 401
+    except Exception as exc:
         logger.info("Token rejected: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
     user = session.exec(select(User).where(User.id == user_id)).first()
     if user is None:

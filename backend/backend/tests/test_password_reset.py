@@ -15,11 +15,11 @@ from sqlmodel import Session, SQLModel, create_engine, delete, select
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import core.database as database  # noqa: E402
-from models import PasswordResetCode, PasskeyCredential, User  # noqa: E402
-from features.auth.routes import hash_password, verify_password  # noqa: E402
-from features.auth import password_reset as svc  # noqa: E402
-from test_passkeys import SoftwareAuthenticator  # noqa: E402
+import core.database as database
+from models import PasswordResetCode, PasskeyCredential, User
+from features.auth.routes import hash_password, verify_password
+from features.auth import password_reset as svc
+from test_passkeys import SoftwareAuthenticator
 
 USERNAME = "reset_tester"
 EMAIL = "reset_tester@iiitdmj.ac.in"

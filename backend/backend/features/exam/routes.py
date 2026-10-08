@@ -81,9 +81,9 @@ async def upload_seating_index(
 
     try:
         result = parse_seating_index_file(saved_path, is_csv=is_csv)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Seating index parse failed")
-        raise HTTPException(status_code=400, detail=f"Failed to parse seating index: {exc}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse seating index: {exc}") from exc
 
     rows = result["rows"]
     if not rows:
@@ -132,9 +132,9 @@ async def upload_mid_sem_timetable(
 
     try:
         result = parse_mid_sem_file(saved_path, is_csv=is_csv)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Mid-sem timetable parse failed")
-        raise HTTPException(status_code=400, detail=f"Failed to parse exam timetable: {exc}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse exam timetable: {exc}") from exc
 
     rows = result["rows"]
     if not rows:
@@ -341,7 +341,7 @@ def lookup_exam(
     try:
         result = lookup_roll(session, roll, profile_filter)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return result
 
@@ -391,7 +391,7 @@ def download_exam_pdf(
     try:
         result = lookup_roll(session, roll, profile_filter)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not result["exams"]:
         raise HTTPException(
@@ -533,7 +533,7 @@ def clear_exam_timetable(
     session.exec(delete(MidSemSchedule))
     session.exec(delete(ExamUpload).where(ExamUpload.kind == "timetable"))
     session.commit()
-    return None
+    return
 
 
 @router.delete("/seating", status_code=204)
@@ -544,7 +544,7 @@ def clear_exam_seating(
     session.exec(delete(ExamSeating))
     session.exec(delete(ExamUpload).where(ExamUpload.kind == "seating"))
     session.commit()
-    return None
+    return
 
 
 @router.post("/debug/parse-exam")

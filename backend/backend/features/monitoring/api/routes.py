@@ -14,7 +14,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import BaseModel, Field
-from sqlmodel import Session, func, select
+from sqlmodel import Session, select
 
 from core.config import get_settings
 from core.database import get_session
@@ -22,15 +22,10 @@ from core.deps import get_current_admin
 from features.monitoring.infrastructure import collector
 from features.monitoring.services import queries, rollup, scan_service
 from features.monitoring.domain.models import (
-    AdEvent,
     CrashReport,
     EventHourly,
-    HealthMetric,
-    Purchase,
     ScanResult,
     SecurityEvent,
-    SecurityLog,
-    Session as MonitorSession,
     StatusTransition,
     ToolCallAudit,
 )
@@ -80,7 +75,7 @@ def collect_events(
             session,
             payload,
             user_id=None,  # No auth context here
-            pepper=settings.telemetry_pepper,
+            pepper=pepper,
             ip=client_ip_addr,
         )
     except collector.CollectError as e:
@@ -89,11 +84,11 @@ def collect_events(
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=str(e),
-            )
+            ) from e
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
     return result
 
@@ -207,7 +202,7 @@ def collect_security_signal(
         ts=datetime.now(timezone.utc).replace(tzinfo=None),
         platform=payload["platform"],
         kind=payload["kind"],
-        ip_hash=collector.ip_hash(settings.telemetry_pepper, client_ip) if client_ip else None,
+        ip_hash=ip_hash,
         user_hash=None,
         app_version=payload.get("app_version"),
         blocked=payload.get("blocked", False),
@@ -359,7 +354,7 @@ def overview(
     days = max(1, min(days, 90))
     start, end = _window(days)
 
-    out = {
+    return {
         "window": {"start": start.isoformat(), "end": end.isoformat(), "days": days},
         "platform": platform,
         "activity": queries.activity_overview(session, start, end, platform),
@@ -372,7 +367,6 @@ def overview(
         "feedback": queries.feedback_overview(session, start, end, platform),
         "data_freshness": queries.data_freshness(session),
     }
-    return out
 
 
 # --------------------------------------------------------------------------
@@ -478,7 +472,13 @@ def history(
             start = datetime.fromisoformat(start_date)
             end = datetime.fromisoformat(end_date) + timedelta(days=1)  # inclusive end
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+            # from None: this is the caller's own bad input being restated as a
+            # 400, so the original ValueError adds nothing to the response or
+            # the log line.
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid date format. Use YYYY-MM-DD.",
+            ) from None
     else:
         start, end = _window(days)
 
@@ -597,7 +597,9 @@ def history(
                                 "date": dt.isoformat(),
                                 "message": msg,
                             })
-        except Exception:
+            # git missing, or the deploy not being a checkout, must not
+            # break the history response.
+        except Exception:  # noqa: BLE001
             # Git not available or repo not found - silently skip
             pass
 
@@ -653,7 +655,7 @@ def history(
         output = io.StringIO()
         writer = csv.writer(output)
 
-        if "scans" in response_data and response_data["scans"]:
+        if response_data.get("scans"):
             writer.writerow(["scan_id", "subsection", "status", "summary", "window_start", "window_end", "duration_ms", "model", "created_at"])
             for s in response_data["scans"]:
                 writer.writerow([s["scan_id"], s["subsection"], s["status"], s["summary"],

@@ -1,5 +1,4 @@
 """Runtime file-prompting utilities: validate, save, and raise clear HTTP errors."""
-import os
 import shutil
 from pathlib import Path
 from fastapi import HTTPException, UploadFile

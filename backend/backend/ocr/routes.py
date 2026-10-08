@@ -1,7 +1,6 @@
 """OCR + LLM extraction API routes."""
 import os
 import logging
-from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from sqlmodel import Session
@@ -9,7 +8,6 @@ from sqlmodel import Session
 from core.database import get_session
 from ocr import (
     process_uploaded_pdf,
-    extract_text_from_pdf,
 )
 from core.files import validate_upload, save_upload
 
@@ -70,7 +68,7 @@ async def extract_timetable(
         raise
     except Exception as e:
         logger.error(f"Timetable extraction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {e!s}") from e
 
 
 @router.post("/extract/exam")
@@ -124,7 +122,7 @@ async def extract_exam(
         raise
     except Exception as e:
         logger.error(f"Exam extraction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {e!s}") from e
 
 
 @router.post("/debug/extract-text")
@@ -151,7 +149,7 @@ async def debug_extract_text(
         
     except Exception as e:
         logger.error(f"Debug extraction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Debug extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Debug extraction failed: {e!s}") from e
 
 
 @router.get("/models")

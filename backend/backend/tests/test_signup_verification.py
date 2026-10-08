@@ -20,10 +20,10 @@ from sqlmodel import Session, SQLModel, create_engine, delete, select
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import core.database as database  # noqa: E402
-from main import app  # noqa: E402
-from models import PendingSignup, User, UserProfile  # noqa: E402
-from features.auth import signup as svc  # noqa: E402
+import core.database as database
+from main import app
+from models import PendingSignup, User, UserProfile
+from features.auth import signup as svc
 
 EMAIL = "newstudent@iiitdmj.ac.in"
 USERNAME = "newstudent"
@@ -188,7 +188,7 @@ class TestVerifyStep:
         assert "expired" in response.json()["detail"].lower()
 
     def test_guessing_is_cut_off(self, client, db):
-        code, _ = svc.start(db, EMAIL)
+        _code, _ = svc.start(db, EMAIL)
         for _ in range(svc.MAX_ATTEMPTS):
             response = client.post("/auth/signup/verify", json={"email": EMAIL, "code": "000000"})
             assert response.status_code == 400

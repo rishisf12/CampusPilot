@@ -100,14 +100,13 @@ def test_not_null_is_enforced(require_postgres):
     """
     from core.database import engine
 
-    with engine.begin() as conn:
-        with pytest.raises(sa.exc.IntegrityError):
-            conn.execute(
-                sa.text(
-                    'INSERT INTO "user" (email, password_hash, username, role) '
-                    "VALUES ('nn@x.io', 'x', 'nn_probe', NULL)"
-                )
+    with engine.begin() as conn, pytest.raises(sa.exc.IntegrityError):
+        conn.execute(
+            sa.text(
+                'INSERT INTO "user" (email, password_hash, username, role) '
+                "VALUES ('nn@x.io', 'x', 'nn_probe', NULL)"
             )
+        )
 
 
 def test_unique_constraints_are_enforced(require_postgres):
@@ -218,7 +217,6 @@ def test_alembic_metadata_matches_models(require_postgres):
     from alembic.migration import MigrationContext
 
     from core.database import engine
-    import models  # noqa: F401  - registers tables on SQLModel.metadata
     from sqlmodel import SQLModel
 
     with engine.connect() as conn:

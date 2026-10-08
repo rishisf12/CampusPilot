@@ -15,12 +15,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 from pydantic import BaseModel
 
-from features.monitoring.api.schemas import ScanResult
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,6 @@ class OllamaConfig(BaseModel):
 
 class LLMError(Exception):
     """LLM-related error."""
-    pass
 
 
 class OllamaClient:
@@ -120,14 +118,14 @@ class OllamaClient:
             # Parse and validate
             return response_model.model_validate_json(content)
 
-        except httpx.TimeoutException:
-            raise LLMError(f"LLM request timed out after {self.config.timeout}s")
+        except httpx.TimeoutException as e:
+            raise LLMError(f"LLM request timed out after {self.config.timeout}s") from e
         except httpx.HTTPStatusError as e:
-            raise LLMError(f"LLM HTTP error: {e.response.status_code} - {e.response.text}")
+            raise LLMError(f"LLM HTTP error: {e.response.status_code} - {e.response.text}") from e
         except json.JSONDecodeError as e:
-            raise LLMError(f"Failed to parse LLM response as JSON: {e}")
+            raise LLMError(f"Failed to parse LLM response as JSON: {e}") from e
         except Exception as e:
-            raise LLMError(f"LLM call failed: {e}")
+            raise LLMError(f"LLM call failed: {e}") from e
 
     async def health_check(self) -> bool:
         """Check if Ollama is reachable and the model is available."""
@@ -138,7 +136,7 @@ class OllamaClient:
             data = response.json()
             models = [m.get("name", "") for m in data.get("models", [])]
             return any(self.config.model in m for m in models)
-        except Exception:
+        except Exception:  # noqa: BLE001 - local Ollama failure means 'stage 2 unavailable'
             return False
 
 
@@ -154,7 +152,7 @@ def load_system_prompt() -> str:
         match = re.search(r"## 1\. System prompt\s*\n```text\n(.*?)\n```", content, re.DOTALL)
         if match:
             return match.group(1).strip()
-    except Exception:
+    except Exception:  # noqa: BLE001 - local Ollama failure means 'stage 2 unavailable'
         pass
     # Fallback - minimal prompt
     return """You are a monitoring analyst for CampusPilot. Produce a structured status report per invocation.
@@ -178,7 +176,6 @@ SUBSECTION_PROMPTS = {
 
 def build_user_prompt(subsection: str, stage1_verdict: dict, collected_data: dict) -> str:
     """Build the user prompt for the LLM with Stage 1 verdict and collected data."""
-    from features.monitoring.thresholds import ScanVerdict
 
     # The LLM receives the Stage 1 verdict and collected data
     # It should produce the final ScanResult with summary, root_causes, actions

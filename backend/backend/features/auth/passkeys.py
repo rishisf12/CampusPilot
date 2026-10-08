@@ -246,9 +246,11 @@ def complete_registration(
         )
     except PasskeyError:
         raise
-    except Exception as exc:  # the library raises many exception types
+        # range of error types for a failed ceremony; every one of them
+        # is the same user-facing outcome, so they collapse to PasskeyError.
+    except Exception as exc:
         logger.info("Passkey enrolment rejected: %s", exc)
-        raise PasskeyError("This device could not be enrolled. Please try again.")
+        raise PasskeyError("This device could not be enrolled. Please try again.") from exc
 
     record = PasskeyCredential(
         user_id=user.id,
@@ -363,9 +365,10 @@ def complete_authentication(
         )
     except PasskeyError:
         raise
+        # the specific webauthn exception is not actionable to the caller.
     except Exception as exc:
         logger.info("Passkey sign-in rejected: %s", exc)
-        raise PasskeyError("That passkey could not be verified. Please try again.")
+        raise PasskeyError("That passkey could not be verified. Please try again.") from exc
 
     # A counter that goes backwards means two devices share a credential, which
     # should not happen and is worth refusing.

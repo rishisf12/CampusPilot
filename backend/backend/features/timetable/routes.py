@@ -63,8 +63,9 @@ async def upload_timetable(
     try:
         result = parse_timetable_file(saved_path, is_csv=is_csv)
     except Exception as e:
+        # user-facing 400, and the parser can raise anything.
         logger.error(f"Parse failed: {e}")
-        raise HTTPException(status_code=400, detail=f"Failed to parse timetable: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse timetable: {e}") from e
 
     # Refuse before touching stored data. A file that yields no usable rows would
     # otherwise wipe the timetable and still answer "parsed successfully", which
@@ -194,7 +195,7 @@ def clear_timetable(session: Session = Depends(get_session)):
     session.exec(delete(TimetableSlot))
     session.exec(delete(TimetableUpload))
     session.commit()
-    return None
+    return
 
 
 def _latest_timetable_upload(session: Session) -> Optional[TimetableUpload]:

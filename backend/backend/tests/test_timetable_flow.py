@@ -13,10 +13,10 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete, select
 
 # The database URL is set by tests/conftest.py before any import of the app.
-from core.database import create_db_and_tables, engine  # noqa: E402
-from main import app  # noqa: E402
-from models import Course, TimetableSlot, User, UserProfile  # noqa: E402
-from features.auth.routes import create_access_token  # noqa: E402
+from core.database import create_db_and_tables, engine
+from main import app
+from models import Course, TimetableSlot, User, UserProfile
+from features.auth.routes import create_access_token
 
 TIMETABLE_CSV = """day,start_time,end_time,room,course_code,branch_or_program,semester
 Monday,09:00,10:00,L-101,CS5031,BTech CSE,5

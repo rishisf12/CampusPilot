@@ -1,14 +1,13 @@
 """Room service: vacant room finder logic."""
 import logging
 from datetime import time, datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from sqlmodel import Session, select
 
 from core.config import (
     COLLEGE_END_HOUR,
     COLLEGE_START_HOUR,
     DAYS_ORDER,
-    DAY_TO_INT,
     LUNCH_END_HOUR,
     LUNCH_START_HOUR,
     settings,
@@ -136,7 +135,9 @@ def get_vacant_rooms_manual(session: Session, day: str, hour: str) -> Dict[str, 
     try:
         h, mi = map(int, hour.split(":"))
         query_time = time(h, mi)
-    except Exception:
-        raise ValueError(f"Invalid time format: {hour}. Use HH:MM (24h)")
+    except Exception:  # noqa: BLE001 - raw query string in, one clear ValueError out
+        # from None: the message below already states what was wrong with the
+        # input, so chaining the underlying error adds no diagnostic value.
+        raise ValueError(f"Invalid time format: {hour}. Use HH:MM (24h)") from None
 
     return get_vacant_rooms(session, day, query_time)

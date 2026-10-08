@@ -5,9 +5,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import date, datetime, time, timedelta
 import pdfplumber
-import pandas as pd
 
-from core.config import DAYS_ORDER, DAY_TO_INT, COLLEGE_START_HOUR, COLLEGE_END_HOUR
+from core.config import DAYS_ORDER, COLLEGE_START_HOUR
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +51,7 @@ def normalize_room(room: str) -> str:
     # Insert dash between letters and digits if missing
     room = re.sub(r"([A-Z]+)\s*(\d+)", r"\1-\2", room)
     # Collapse multiple spaces/dashes
-    room = re.sub(r"\s+", " ", room).replace(" - ", "-").replace(" -", "-").replace("- ", "-")
-    return room
+    return re.sub(r"\s+", " ", room).replace(" - ", "-").replace(" -", "-").replace("- ", "-")
 
 
 # A course code is letters then digits, optionally with an elective prefix:
@@ -130,10 +128,7 @@ def _is_course(token: str) -> bool:
 
     # A trailing letter on a full-length code: a lab paper ("CS3010L"), or a
     # combined course the grid splits by letter ("EC203a/EC203b" -> "EC204A").
-    if re.match(r"^[A-Z]{2,4}\d{3,4}[A-Z]\d{0,3}$", token):
-        return True
-
-    return False
+    return bool(re.match(r"^[A-Z]{2,4}\d{3,4}[A-Z]\d{0,3}$", token))
 
 
 def _is_room(token: str) -> bool:
@@ -207,9 +202,7 @@ def _is_room_token(token: str) -> bool:
     # A building joined to a floor: "CC-GF", "CC-3F", "CC-FF".
     if re.fullmatch(rf"[A-Z]{{1,3}}-?{FLOOR_PATTERN}", candidate):
         return True
-    if candidate in {"AUDITORIUM", "AUDI", "SEMINARHALL"}:
-        return True
-    return False
+    return candidate in {"AUDITORIUM", "AUDI", "SEMINARHALL"}
 
 
 def _prefix_can_be_a_building(prefix: str, digits: str) -> bool:
@@ -228,9 +221,7 @@ def _prefix_can_be_a_building(prefix: str, digits: str) -> bool:
         return False
     if len(prefix) == 1 and len(digits) == 1:
         return False
-    if prefix in ("OE", "OI") and not re.fullmatch(r"[A-Z]\d{2}", digits):
-        return False
-    return True
+    return not (prefix in ("OE", "OI") and not re.fullmatch(r"[A-Z]\d{2}", digits))
 
 
 def _merge_room_fragments(tokens: List[str]) -> List[str]:
@@ -348,7 +339,7 @@ def _rejoin_split_course_code(tokens: List[str]) -> List[str]:
     if len(tokens) >= 2 and re.fullmatch(r"[A-Za-z]{1,4}", tokens[0]) and re.fullmatch(
         r"\d{2,4}", tokens[1]
     ):
-        return [f"{tokens[0]}{tokens[1]}"] + tokens[2:]
+        return [f"{tokens[0]}{tokens[1]}", *tokens[2:]]
     return tokens
 
 
@@ -649,9 +640,8 @@ def _resolve_instructor(parts: List[str], course_code: str) -> str:
 
         if lowered in CLASS_NOISE_WORDS or lowered in VENUE_NOISE_WORDS:
             # "Batch A" is one label, not two tokens: drop the letter too.
-            if lowered == "batch" and index + 1 < len(tokens):
-                if re.fullmatch(r"[A-Za-z]", tokens[index + 1].strip()):
-                    index += 1
+            if lowered == "batch" and index + 1 < len(tokens) and re.fullmatch(r"[A-Za-z]", tokens[index + 1].strip()):
+                index += 1
             index += 1
             continue
 
@@ -697,9 +687,8 @@ def _resolve_instructor(parts: List[str], course_code: str) -> str:
     # finds three rows for the one person, and the attendance-by-teacher report
     # the admin section will need splits them too.
     parts = name.split()
-    if len(parts) > 1:
-        if parts[0].upper() in {"T", "TA"}:
-            parts = parts[1:]
+    if len(parts) > 1 and parts[0].upper() in {"T", "TA"}:
+        parts = parts[1:]
     while len(parts) > 1 and parts[-1].lower() in BATCH_SUFFIXES:
         parts = parts[:-1]
     name = " ".join(parts).strip()
@@ -782,9 +771,7 @@ def _is_branch_label(text: str) -> bool:
         return False
     if SEMESTER_BAND_RE.match(text):
         return False
-    if TIME_HEADER_RE.search(text) or TIME_SINGLE_RE.match(text):
-        return False
-    return True
+    return not (TIME_HEADER_RE.search(text) or TIME_SINGLE_RE.match(text))
 
 
 #: A room token: a building code plus a number or floor, or a named venue.
@@ -808,9 +795,7 @@ def _looks_like_entry(chunk: str) -> bool:
     """Is this fragment a class entry rather than a stray word or number?"""
     if not chunk or _NOISE_RE.match(chunk):
         return False
-    if chunk.lower() in EMPTY_CELL_VALUES:
-        return False
-    return True
+    return chunk.lower() not in EMPTY_CELL_VALUES
 
 
 def _split_cell_entries(cell: str) -> List[str]:
@@ -1013,8 +998,6 @@ def parse_grid_timetable(tables: List[List[List[str]]]) -> tuple[List[Dict], Lis
             warnings.append("Could not find day header row in table")
             continue
 
-        # Determine time slots from first column (or a time column)
-        time_col_idx = 0
         # Look for time patterns in first column
         time_slots = []
         for row in table[header_row_idx + 1:]:
@@ -1109,7 +1092,7 @@ def parse_csv_timetable(csv_path: Path) -> tuple[List[Dict], List[str]]:
                     "branch_or_program": row["branch_or_program"].strip(),
                     "semester": int(row["semester"]),
                 })
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - a bad row becomes a per-row warning, not a failed upload
                 warnings.append(f"Row {i}: {e}")
 
     return slots, warnings

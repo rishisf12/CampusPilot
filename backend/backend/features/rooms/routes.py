@@ -40,10 +40,11 @@ def vacant_rooms(
             result = get_vacant_rooms_manual(session, day, hour)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        # into a 500; the detail is logged, never returned.
         logger.error(f"Failed to get vacant rooms: {e}")
-        raise HTTPException(status_code=500, detail="Could not compute vacant rooms")
+        raise HTTPException(status_code=500, detail="Could not compute vacant rooms") from e
 
 
 @router.get("/all")

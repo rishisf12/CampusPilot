@@ -1,7 +1,7 @@
 """Auth routes: signup, verify-email, login, me, logout."""
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 from pydantic import BaseModel, EmailStr, field_validator
@@ -231,14 +231,14 @@ async def start_signup(
     """
     _check_auth_rate_limit(request)
     try:
-        code, retry_after = signup_verification_service.start(session, data.email)
+        code, _retry_after = signup_verification_service.start(session, data.email)
     except signup_verification_service.SignupVerificationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if code is not None:
         try:
             await send_verification_email(data.email.lower(), code)
-        except Exception:  # noqa: BLE001 - a mail failure must not leak the account
+        except Exception:  # noqa: BLE001
             logger.error("Signup verification email failed for %s", data.email.lower())
 
     # `retry_after` is deliberately not returned: it would reveal that something
@@ -260,7 +260,7 @@ async def verify_signup(
     try:
         signup_verification_service.verify(session, data.email, data.code)
     except signup_verification_service.SignupVerificationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     existing = session.exec(
         select(User).where(User.email == data.email.lower())
@@ -619,7 +619,7 @@ async def passkey_register_options(
             session, user, user_agent=request.headers.get("user-agent")
         )
     except passkey_service.PasskeyError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/passkeys/register")
@@ -639,7 +639,7 @@ async def passkey_register(
             session, user, body.credential, body.challenge, body.label
         )
     except passkey_service.PasskeyError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {"message": "Passkey set up.", "passkey": passkey_service.describe(record)}
 
@@ -659,7 +659,7 @@ async def passkey_login_options(
     try:
         return passkey_service.authentication_options(session, body.username)
     except passkey_service.PasskeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/passkeys/login")
@@ -681,7 +681,7 @@ async def passkey_login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
     if not user.is_email_verified:
         raise HTTPException(
@@ -727,7 +727,7 @@ async def forgot_password(
         user = password_reset_service.find_account(session, body.identifier)
         try:
             await send_password_reset_email(user.email, code)
-        except Exception:  # noqa: BLE001 - SMTP failure must not leak the account
+        except Exception:  # noqa: BLE001
             logger.error("Reset email failed; the code is on file and still usable")
         else:
             # The code was emailed, so it must not linger in the log.
@@ -754,7 +754,7 @@ async def reset_password(
             session, body.identifier, body.code, body.new_password
         )
     except password_reset_service.PasswordResetError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {
         "message": "Password updated. Please sign in with your new password.",
@@ -778,5 +778,5 @@ async def delete_passkey(
     try:
         passkey_service.delete_credential(session, user, credential_id)
     except passkey_service.PasskeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"message": "Passkey removed."}

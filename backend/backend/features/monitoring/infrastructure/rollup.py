@@ -19,11 +19,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlmodel import Session, select, func, delete, text, Column
-from sqlalchemy.dialects import postgresql, sqlite
-from sqlalchemy.sql import expression
+from sqlmodel import Session, select, func, delete, Column
 
-from core.config import get_settings
 from features.monitoring.domain.models import Event, EventHourly
 
 
@@ -43,9 +40,8 @@ def _hour_bucket_expr(dialect: str):
     """
     if dialect == "postgresql":
         return func.date_trunc("hour", Event.ts)
-    else:
-        # SQLite: strftime('%Y-%m-%d %H:00:00', ts)
-        return func.strftime("%Y-%m-%d %H:00:00", Event.ts)
+    # SQLite: strftime('%Y-%m-%d %H:00:00', ts)
+    return func.strftime("%Y-%m-%d %H:00:00", Event.ts)
 
 
 def _coalesce_dim(col: Column, dialect: str = ""):
@@ -98,7 +94,6 @@ def rollup(session: Session, lookback_hours: int = 48, now: datetime | None = No
     Returns:
         Dict with summary: start, end, buckets, rows_written, events_scanned
     """
-    settings = get_settings()
     if now is None:
         now = _now_utc()
     # Include the current hour by using the NEXT hour boundary as end
@@ -142,12 +137,9 @@ def rollup(session: Session, lookback_hours: int = 48, now: datetime | None = No
     total_events = 0
     rows_written = 0
 
-    for bucket, event_count in raw:
+    for bucket, _event_count in raw:
         # bucket may be a string (SQLite strftime) or datetime (PostgreSQL date_trunc)
-        if isinstance(bucket, str):
-            bucket_dt = datetime.fromisoformat(bucket)
-        else:
-            bucket_dt = bucket
+        bucket_dt = datetime.fromisoformat(bucket) if isinstance(bucket, str) else bucket
 
         # Get all dimension combinations for this hour
         # Use the same bucket expression comparison as the raw query

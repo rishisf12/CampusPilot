@@ -197,16 +197,20 @@ class TestNormalizeBranch:
 class TestExamRowVisible:
     """Rule 1: the filter stays in sync with the student's profile."""
 
-    profile = {"branch": "CSE A", "semester": 5, "elective_codes": []}
+    # Use tuple to avoid mutable class attribute (RUF012)
+    profile = (("branch", "CSE A"), ("semester", 5), ("elective_codes", []))
+
+    def _as_dict(self):
+        return dict(self.profile)
 
     def test_same_branch_and_semester(self):
-        assert exam_row_visible({"branch": "CSE", "semester": 5, "course_code": "CS5031"}, self.profile)
+        assert exam_row_visible({"branch": "CSE", "semester": 5, "course_code": "CS5031"}, self._as_dict())
 
     def test_other_branch_is_hidden(self):
-        assert not exam_row_visible({"branch": "ME", "semester": 5, "course_code": "ME5011"}, self.profile)
+        assert not exam_row_visible({"branch": "ME", "semester": 5, "course_code": "ME5011"}, self._as_dict())
 
     def test_other_semester_is_hidden(self):
-        assert not exam_row_visible({"branch": "CSE", "semester": 7, "course_code": "CS7036"}, self.profile)
+        assert not exam_row_visible({"branch": "CSE", "semester": 7, "course_code": "CS7036"}, self._as_dict())
 
     def test_pg_row_is_visible_to_a_pg_student(self):
         """Semester 9 marks PG/PhD rows, which are not tied to a BTech semester."""
@@ -216,11 +220,11 @@ class TestExamRowVisible:
     def test_pg_row_is_hidden_from_a_cse_student(self):
         """...but a CSE student must not see PG papers."""
         assert not exam_row_visible(
-            {"branch": "PG", "semester": 9, "course_code": "MT5003"}, self.profile
+            {"branch": "PG", "semester": 9, "course_code": "MT5003"}, self._as_dict()
         )
 
     def test_open_elective_is_always_visible(self):
-        assert exam_row_visible({"branch": None, "semester": None, "course_code": "OE3E33"}, self.profile)
+        assert exam_row_visible({"branch": None, "semester": None, "course_code": "OE3E33"}, self._as_dict())
 
     def test_elected_course_is_visible_across_branches(self):
         profile = {"branch": "CSE A", "semester": 5, "elective_codes": ["OE3E33"]}
@@ -230,7 +234,7 @@ class TestExamRowVisible:
         assert exam_row_visible({"branch": "ME", "semester": 7, "course_code": "ME7011"}, None)
 
     def test_missing_metadata_shows_everything(self):
-        assert exam_row_visible({"branch": None, "semester": None, "course_code": "NS1001"}, self.profile)
+        assert exam_row_visible({"branch": None, "semester": None, "course_code": "NS1001"}, self._as_dict())
 
 
 class TestBranchMatches:

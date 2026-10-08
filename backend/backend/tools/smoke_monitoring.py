@@ -8,7 +8,6 @@ asserted. Run from ``backend/backend``::
 """
 from __future__ import annotations
 
-import os
 import random
 from datetime import datetime, timedelta, timezone
 
@@ -202,9 +201,9 @@ def main() -> None:
         print(f"  sessions          {a['sessions']} (prev {a['sessions_prev']})")
         print(f"  events (rollup)   {a['events']}")
         print(f"  new / returning   {a['new_vs_returning']}")
-        print(f"  retention day1-3  " + ", ".join(
+        print("  retention day1-3  " + ", ".join(
             f"d{k}={v['pct']}%(n={v['cohort']})" for k, v in list(a['retention'].items())[:3]))
-        print(f"  top countries     " + ", ".join(
+        print("  top countries     " + ", ".join(
             f"{c['value']}={c['events']}" for c in a['countries'][:4]))
         print(f"  freshness         rollup={ov['data_freshness']['latest_rollup_hour']} "
               f"lag={ov['data_freshness']['rollup_lag_minutes']}min")
@@ -229,7 +228,7 @@ def main() -> None:
         fb = client.get("/monitoring/feedback?days=3650", headers=headers).json()
         print(f"  total             {fb['total']} (sampled {fb['sampled']}, truncated {fb['truncated']})")
         print(f"  sentiment         {fb['sentiment']}")
-        print(f"  topics            " + ", ".join(f"{t['topic']}={t['count']}" for t in fb['topics'][:5]))
+        print("  topics            " + ", ".join(f"{t['topic']}={t['count']}" for t in fb['topics'][:5]))
 
         print("\n--- monetisation ---")
         mo = client.get("/monitoring/monetisation?days=30", headers=headers).json()
@@ -261,8 +260,8 @@ def main() -> None:
 
         print("\n--- metrics ---")
         m = client.get("/metrics")
-        lines = [l for l in m.text.splitlines() if l.startswith("campuspilot_")]
-        names = sorted({l.split("{")[0].split(" ")[0] for l in lines})
+        lines = [line for line in m.text.splitlines() if line.startswith("campuspilot_")]
+        names = sorted({line.split("{")[0].split(" ")[0] for line in lines})
         print(f"  {len(lines)} samples across {len(names)} series")
         for n in names:
             print(f"    {n}")

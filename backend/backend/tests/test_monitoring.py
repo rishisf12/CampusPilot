@@ -22,9 +22,9 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete, select
 
 from core.config import get_settings
-from core.database import create_db_and_tables, engine  # noqa: F401
+from core.database import engine
 from features.monitoring.infrastructure import collector
-from features.monitoring.services import queries, rollup, prune, _aggregate_stmt, _hour_bucket_expr, _coalesce_dim
+from features.monitoring.services import queries, rollup, prune, _aggregate_stmt, _hour_bucket_expr
 from features.monitoring.domain.models import (
     AdEvent,
     CrashReport,
@@ -37,7 +37,7 @@ from features.monitoring.domain.models import (
     StatusTransition,
 )
 from features.monitoring.infrastructure.ratelimit import SlidingWindowLimiter
-from main import app  # noqa: F401
+from main import app
 
 UTC = timezone.utc
 NOW = datetime.now(UTC).replace(tzinfo=None, microsecond=0)

@@ -12,8 +12,8 @@ from .extractor import (
 )
 
 __all__ = [
-    "process_uploaded_pdf",
+    "extract_exam_with_llm",
     "extract_text_from_pdf",
     "extract_timetable_with_llm",
-    "extract_exam_with_llm",
+    "process_uploaded_pdf",
 ]

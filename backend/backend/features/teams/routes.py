@@ -353,7 +353,7 @@ def match_teams(
                 "same_branch": item["same_branch"],
                 "reason": item["reason"],
             }
-            for item, team_out in zip(ranked, decorated)
+            for item, team_out in zip(ranked, decorated, strict=False)
         ]
     }
 
@@ -373,7 +373,7 @@ def my_teams(
                 "is_owner": item["is_owner"],
                 "role": item["role"],
             }
-            for item, team_out in zip(rows, decorated)
+            for item, team_out in zip(rows, decorated, strict=False)
         ]
     }
 

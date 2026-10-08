@@ -1,8 +1,8 @@
 """Schedule service: live schedule logic based on system time and user profile."""
 import logging
-from datetime import datetime, time, date, timedelta
+from datetime import datetime, time
 from typing import List, Optional, Dict, Any
-from sqlmodel import Session, select, and_
+from sqlmodel import Session, select
 from zoneinfo import ZoneInfo
 
 from core.config import settings, DAY_TO_INT
@@ -119,9 +119,11 @@ def get_current_and_next_class(session: Session) -> Dict[str, Any]:
     for slot in today_slots:
         if is_time_between(current_time, slot.start_time, slot.end_time):
             current_class = slot
-        elif time_to_minutes(slot.start_time) > time_to_minutes(current_time):
-            if next_class is None:
-                next_class = slot
+        elif (
+            time_to_minutes(slot.start_time) > time_to_minutes(current_time)
+            and next_class is None
+        ):
+            next_class = slot
 
     # If no next class today, check tomorrow
     if next_class is None:
@@ -135,8 +137,7 @@ def get_current_and_next_class(session: Session) -> Dict[str, Any]:
     def slot_to_dict(slot: Optional[TimetableSlot]) -> Optional[Dict]:
         if not slot:
             return None
-        course = session.get(Course, slot.course_code) if hasattr(Course, 'code') else None
-        # Actually course is looked up by code, not id
+        # Course is looked up by code, not id
         course_obj = session.exec(select(Course).where(Course.code == slot.course_code)).first()
         return {
             "course_code": slot.course_code,

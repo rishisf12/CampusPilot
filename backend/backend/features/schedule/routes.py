@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 from core.database import get_session
 from models import Course
@@ -43,8 +43,9 @@ def live_schedule(session: Session = Depends(get_session)):
     try:
         return get_current_and_next_class(session)
     except Exception as e:
+        # schedule becomes a 500 with a generic message.
         logger.error(f"Failed to get live schedule: {e}")
-        raise HTTPException(status_code=500, detail="Could not compute schedule")
+        raise HTTPException(status_code=500, detail="Could not compute schedule") from e
 
 
 @router.post("/courses/extra", response_model=ExtraCourseResponse, status_code=status.HTTP_201_CREATED)
@@ -81,8 +82,7 @@ def add_extra_course(payload: ExtraCourseCreate, session: Session = Depends(get_
 @router.get("/courses/extra", response_model=List[ExtraCourseResponse])
 def list_extra_courses(session: Session = Depends(get_session)):
     """List all extra courses."""
-    courses = session.exec(select(Course).where(Course.is_extra == True)).all()
-    return courses
+    return session.exec(select(Course).where(Course.is_extra == True)).all()
 
 
 @router.delete("/courses/extra/{course_code}", status_code=status.HTTP_204_NO_CONTENT)
@@ -94,4 +94,4 @@ def remove_extra_course(course_code: str, session: Session = Depends(get_session
     course.is_extra = False
     session.add(course)
     session.commit()
-    return None
+    return

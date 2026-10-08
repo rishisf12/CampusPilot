@@ -20,12 +20,12 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, delete, select
 
 # The database URL is set by tests/conftest.py before any import of the app.
-from core.config import get_settings  # noqa: E402
-from core.database import engine  # noqa: E402
-from main import app  # noqa: E402
-from models import PendingSignup, User  # noqa: E402
-from features.auth import routes as auth_routes  # noqa: E402
-from features.auth import signup as svc  # noqa: E402
+from core.config import get_settings
+from core.database import engine
+from main import app
+from models import PendingSignup, User
+from features.auth import routes as auth_routes
+from features.auth import signup as svc
 
 ALLOWED = get_settings().ALLOWED_EMAIL_DOMAIN
 

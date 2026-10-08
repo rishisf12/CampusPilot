@@ -49,7 +49,7 @@ def declared_course_codes(session: Session, profile: Optional[Dict[str, Any]] = 
         for code in (profile or {}).get("elective_codes", [])
         if code and str(code).strip()
     }
-    for course in session.exec(select(Course).where(Course.is_extra == True)).all():  # noqa: E712
+    for course in session.exec(select(Course).where(Course.is_extra == True)).all():
         if course.code:
             codes.add(course.code.strip().upper())
     return codes
@@ -203,5 +203,8 @@ def clash_summary(clashes: List[Dict[str, Any]]) -> Dict[str, Any]:
 # Kept for callers that pass time objects rather than "HH:MM" strings.
 def overlaps(a_start: time_type, a_end: time_type, b_start: time_type, b_end: time_type) -> bool:
     """True when two time ranges overlap (start-inclusive, end-exclusive)."""
-    to_minutes = lambda t: t.hour * 60 + t.minute  # noqa: E731
+
+    def to_minutes(t) -> int:
+        return t.hour * 60 + t.minute
+
     return to_minutes(a_start) < to_minutes(b_end) and to_minutes(b_start) < to_minutes(a_end)

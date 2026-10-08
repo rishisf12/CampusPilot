@@ -1,18 +1,18 @@
 """Exam seating PDF generator using ReportLab."""
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 from io import BytesIO
 
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.units import mm, cm
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 
 logger = logging.getLogger(__name__)
 

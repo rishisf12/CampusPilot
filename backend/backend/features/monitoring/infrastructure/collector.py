@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -91,10 +90,9 @@ def ip_hash(pepper: str, ip: str | None) -> str | None:
 
 def _clean_scalar(v: Any) -> Any:
     """Reduce a prop value to something bounded and scalar."""
-    if isinstance(v, bool) or isinstance(v, (int, float)):
+    if isinstance(v, (bool, int, float)):
         return v
-    s = str(v)[:MAX_PROP_LEN]
-    return s
+    return str(v)[:MAX_PROP_LEN]
 
 
 def validate_event(raw: dict[str, Any]) -> dict[str, Any]:
@@ -141,7 +139,9 @@ def validate_event(raw: dict[str, Any]) -> dict[str, Any]:
         try:
             when = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).replace(tzinfo=None)
         except ValueError:
-            raise CollectError("bad ts")
+            # from None: a caller-facing validation complaint, not an internal
+            # fault, so the chained ValueError would only be noise.
+            raise CollectError("bad ts") from None
 
     return {
         "ts": when,
@@ -164,7 +164,7 @@ def _price_micros(value: Any) -> int:
     it is rounded once, here, and stored as an integer.
     """
     try:
-        return max(0, int(round(float(value) * 1_000_000)))
+        return max(0, round(float(value) * 1_000_000))
     except (TypeError, ValueError):
         return 0
 
@@ -305,14 +305,14 @@ def _side_effects(db: Session, ev: Event, *, pepper: str, ip: str | None) -> Non
 
 # Re-export rate limiters for use in routes
 __all__ = [
-    "validate_event",
-    "user_hash",
-    "ip_hash",
-    "collect",
-    "record_security_event",
-    "CollectError",
     "COLLECT_BATCH_LIMIT",
     "CRASH_LIMIT",
+    "CollectError",
+    "collect",
+    "ip_hash",
+    "record_security_event",
+    "user_hash",
+    "validate_event",
 ]
 
 

@@ -147,7 +147,7 @@ def update_profile(
     profile = get_profile_for_user(session, user)
 
     data = payload.model_dump(exclude_unset=True)
-    if "branch" in data and data["branch"]:
+    if data.get("branch"):
         normalized = normalize_branch(data["branch"])
         if not normalized:
             raise HTTPException(

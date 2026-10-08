@@ -7,7 +7,6 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import pdfplumber
 
-from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +67,7 @@ def normalize_room(room: str) -> str:
         return ""
     room = room.strip().upper()
     room = re.sub(r"([A-Z]+)\s*(\d+)", r"\1-\2", room)
-    room = re.sub(r"\s+", " ", room).replace(" - ", "-").replace(" -", "-").replace("- ", "-")
-    return room
+    return re.sub(r"\s+", " ", room).replace(" - ", "-").replace(" -", "-").replace("- ", "-")
 
 
 def parse_time_str(s: str) -> Optional[time]:
@@ -251,7 +249,7 @@ def parse_slot_range(value: str) -> tuple[Optional[time], Optional[time]]:
 #: Covers NS1001, CS8036, DS1002, MT5003 and the MDes-style EC5M03 / ME5D03.
 COURSE_CODE_RE = re.compile(r"\b([A-Z]{2,3}\s?\d{1,4}[A-Z]?\d{0,2})\b")
 #: Hall codes that collide with the course-code pattern (``CR103`` is a room).
-ROOM_CODE_PREFIXES = {"CR", "LH", "LT", "AB", "LH"}
+ROOM_CODE_PREFIXES = {"CR", "LH", "LT", "AB"}
 #: A batch/elective annotation such as "(Batch-A)" or "(OE3E33)".
 GROUP_SUFFIX_RE = re.compile(r"\(([^)]{1,24})\)")
 #: Prefix used for open-elective courses, which belong to no single branch.
@@ -277,7 +275,7 @@ def split_course_codes(value: str) -> List[str]:
     codes: List[str] = []
     for token in re.split(r"[,\s]+", working):
         token = token.strip().strip("/").upper()
-        if not token or "/" == token:
+        if not token or token == "/":
             continue
         if not re.fullmatch(r"[A-Z]{2,3}\s?\d{1,4}[A-Z]?\d{0,2}", token):
             continue
@@ -448,7 +446,7 @@ def parse_exam_table(table: List[List[str]]) -> List[Dict[str, Any]]:
                 "end_time": end_time,
                 "course_code": course.strip() if course else "UNKNOWN",
             })
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - one malformed row must not abort the whole file
             logger.warning(f"Failed to parse row {row}: {e}")
 
     return rows
@@ -496,7 +494,7 @@ def parse_csv_exam(csv_path: Path) -> List[Dict[str, Any]]:
                     "end_time": end_time,
                     "course_code": course if course else "UNKNOWN",
                 })
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - one malformed row must not abort the whole file
                 logger.warning(f"CSV row {i} parse error: {e}")
 
     return rows
@@ -627,7 +625,7 @@ def parse_indexing_table(table: List[List[str]], context: Optional[Dict[str, Any
             continue
 
         # --- data row ----------------------------------------------------------
-        def cell_for(key: str) -> str:
+        def cell_for(key: str, cells=cells) -> str:
             index = columns.get(key)
             if index is None or index >= len(cells):
                 return ""
@@ -768,7 +766,7 @@ def parse_mid_sem_table(table: List[List[str]], context: Optional[Dict[str, Any]
             continue
 
         lowered = joined.lower()
-        if lowered.startswith("pdpm") or lowered.startswith("date time course"):
+        if lowered.startswith(("pdpm", "date time course")):
             continue
 
         # DAY markers advance the block but carry no date themselves.
@@ -887,7 +885,7 @@ def normalize_branch(value: Optional[str]) -> Optional[str]:
     elif re.search(r"\bA\b", text):
         section = "A"
 
-    if "CSE" in text or "CSE" in text.replace(" ", "") or "BCS" in text or "CS" == text[:2]:
+    if "CSE" in text or "CSE" in text.replace(" ", "") or "BCS" in text or text[:2] == "CS":
         return f"CSE {section}" if section else "CSE A"
     if "MDS" in text or "MDES" in text or "M-DES" in text or "DESIGN" in text:
         return "MDes"
@@ -1059,9 +1057,13 @@ def exam_row_visible(
     # Semester filter (skip if either side is unknown)
     row_semester = row.get("semester")
     profile_semester = profile.get("semester")
-    if row_semester is not None and profile_semester is not None:
-        if row_semester != 9 and row_semester != profile_semester:
-            return False
+    if (  # noqa: SIM103 - explicit if/return is clearer than negated condition
+        row_semester is not None
+        and profile_semester is not None
+        and row_semester != 9
+        and row_semester != profile_semester
+    ):
+        return False
     return True
 
 
@@ -1091,7 +1093,7 @@ def parse_seating_index_file(file_path: Path, is_csv: bool = False) -> Dict[str,
     """
     if is_csv:
         rows: List[Dict[str, Any]] = []
-        for index, raw in enumerate(_parse_csv_rows(file_path, SEATING_CSV_COLUMNS), 1):
+        for _index, raw in enumerate(_parse_csv_rows(file_path, SEATING_CSV_COLUMNS), 1):
             roll_tokens = extract_roll_tokens(raw.get("roll_range", ""))
             if not roll_tokens:
                 continue

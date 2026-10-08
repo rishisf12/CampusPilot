@@ -14,9 +14,8 @@ The flow:
 from __future__ import annotations
 
 import hashlib
-import json
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlmodel import Session, select, func
@@ -28,11 +27,7 @@ from features.monitoring.domain.models import (
     HealthMetric,
     CrashReport,
     SecurityEvent,
-    FeedbackAnalysis,
     Purchase,
-    AdEvent,
-    EventHourly,
-    Session as MonitorSession,
 )
 from features.monitoring.services import queries
 from features.monitoring.domain.thresholds import ScanStatus, ScanVerdict, run_stage1_scan
@@ -42,7 +37,6 @@ from features.monitoring.services.llm_client import (
     OllamaConfig,
     load_system_prompt,
     build_user_prompt,
-    SUBSECTION_PROMPTS,
     LLMError,
 )
 from core.config import get_settings
@@ -66,7 +60,6 @@ def _reconcile_findings(
     # For each finding, re-query the source and verify
     for finding in verdict.findings:
         for ev in finding.evidence:
-            metric_name = ev.metric
 
             # Skip non-numeric or already-verified metrics
             if ev.source in ("crash_report", "security_event", "feedback", "session", "purchase", "ssl_check", "uptime_kuma"):
@@ -75,7 +68,6 @@ def _reconcile_findings(
 
             # For Prometheus metrics, we'd re-query here
             # For now, we trust the collected values since they come from the DB
-            pass
 
     return verdict
 
@@ -92,9 +84,6 @@ def _collect_a_w_health_data(session: Session, start: datetime, end: datetime, p
             HealthMetric.platform == platform,
         ).order_by(HealthMetric.ts.desc()).limit(1)
     ).first()
-
-    http_data = queries.health_detail(session, start, end, platform)
-    crashes = queries.crashes_overview(session, start, end, platform)
 
     if not latest:
         return {}
@@ -359,7 +348,7 @@ def run_stage2_scan(
     if settings.scan_enabled:
         try:
             llm_verdict = _run_llm_stage(subsection, verdict, collected_data, start, end)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - stage 2 is an enhancement; failures degrade to stage 1
             # LLM failed - log and fall back to Stage 1 only
             import logging
             logging.warning(f"LLM stage failed for {subsection}: {e}")

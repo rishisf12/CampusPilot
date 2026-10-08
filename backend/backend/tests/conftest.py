@@ -26,6 +26,7 @@ The marker ``postgres`` skips a test that only means something on PostgreSQL
 """
 import os
 import tempfile
+import contextlib
 from pathlib import Path
 
 import pytest
@@ -89,10 +90,8 @@ def _schema():
 
         cfg = alembic_config()
         # Base first: a previous interrupted run may have left tables behind.
-        try:
+        with contextlib.suppress(Exception):
             command.downgrade(cfg, "base")
-        except Exception:  # noqa: BLE001 - nothing to downgrade is fine
-            pass
         command.upgrade(cfg, "head")
         yield
         return

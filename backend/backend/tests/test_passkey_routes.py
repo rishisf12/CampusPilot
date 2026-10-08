@@ -13,14 +13,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fastapi.testclient import TestClient  # noqa: E402
-from sqlmodel import Session, SQLModel, create_engine, delete, select  # noqa: E402
+from fastapi.testclient import TestClient
+from sqlmodel import Session, SQLModel, create_engine, select
 
-import core.database as database  # noqa: E402
-from main import app  # noqa: E402
-from models import PasskeyCredential, User  # noqa: E402
-from features.auth.routes import create_access_token, hash_password  # noqa: E402
-from test_passkeys import SoftwareAuthenticator, _purge  # noqa: E402
+import core.database as database
+from main import app
+from models import User
+from features.auth.routes import create_access_token, hash_password
+from test_passkeys import SoftwareAuthenticator, _purge
 
 
 @pytest.fixture()
