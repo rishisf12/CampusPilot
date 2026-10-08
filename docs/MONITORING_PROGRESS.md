@@ -14,7 +14,7 @@
 | 1 | Schema + Collectors + Read-Only Role | ✅ Done | 2026-10-08 | 2026-10-08 | Read-only role migration, collector hardened, web security signals added, all tests pass |
 | 2 | Web Health + Security + Rule Scans | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine, scan service, scan endpoint, rate limiting, brute force detection, all tests pass |
 | 3 | Analytics/Monetization + Web Activity + Android SDK | ✅ Done | 2026-10-08 | 2026-10-08 | Monetisation panel, Android SDK snippet, Activity panel monetization summary, all tests pass |
-| 4 | Android Health + Security | ⏳ Pending | — | — | |
+| 4 | Android Health + Security | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine evaluators for A_A_HEALTH and C_A_SECURITY, data collectors, scan endpoint integration, all tests pass |
 | 5 | Feedback Analysis | ⏳ Pending | — | — | |
 | 6 | History Dashboard | ⏳ Pending | — | — | |
 | 7 | Stage 2 LLM Summaries | ⏳ Pending | — | — | |
@@ -143,13 +143,26 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ---
 
-## Next Actions (Phase 4)
+## Phase 4 Progress (2026-10-08) — ✅ **COMPLETE**
 
-1. **Android Health + Security**: Android Health + Security rule scans (A_A_HEALTH, C_A_SECURITY)
-2. **Feedback Analysis**: NLP pipeline, topic model, D_W/D_A_FEEDBACK panels
-3. **History Dashboard**: Partitioned tables, history API, charts, calendar overlay, export
-4. **Stage 2 LLM**: Ollama integration, 8 prompts + schemas, Promptfoo evals
-5. **Alerting + Profiles + Hardening + Docs**
+### ✅ Completed
+1. **Android Health rule evaluator** (`thresholds.py`): `evaluate_a_a_health()` with crash-free rate, ANR rate, startup time, slow frames thresholds
+2. **Android Security rule evaluator** (`thresholds.py`): `evaluate_c_a_security()` with root/emulator/tamper signals, token misuse, replay attacks
+3. **Data collectors** (`scan_service.py`): `_collect_a_a_health_data()`, `_collect_c_a_security_data()` pulling from CrashReport and SecurityEvent
+4. **Scan endpoint integration**: `POST /scan/{subsection}` now supports A_A_HEALTH and C_A_SECURITY via existing scan service
+5. All 126 monitoring tests pass, all 13 admin tests pass, all 69 auth tests pass
+6. Full backend test suite: 784 passed, 9 skipped
+
+### 📋 Phase 4 Complete — Ready for Phase 5
+
+---
+
+## Next Actions (Phase 5)
+
+1. **Feedback Analysis**: NLP pipeline, topic model, D_W/D_A_FEEDBACK panels
+2. **History Dashboard**: Partitioned tables, history API, charts, calendar overlay, export
+3. **Stage 2 LLM**: Ollama integration, 8 prompts + schemas, Promptfoo evals
+4. **Alerting + Profiles + Hardening + Docs**
 
 ## Test Results Log
 
