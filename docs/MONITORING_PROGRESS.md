@@ -13,7 +13,7 @@
 | 0 | Foundation & Plan | ✅ Done | 2026-10-08 | 2026-10-08 | Codebase explored, plan written, AGENTS.md drafted |
 | 1 | Schema + Collectors + Read-Only Role | ✅ Done | 2026-10-08 | 2026-10-08 | Read-only role migration, collector hardened, web security signals added, all tests pass |
 | 2 | Web Health + Security + Rule Scans | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine, scan service, scan endpoint, rate limiting, brute force detection, all tests pass |
-| 3 | Analytics/Monetization + Web Activity | ⏳ Pending | — | — | |
+| 3 | Analytics/Monetization + Web Activity + Android SDK | ✅ Done | 2026-10-08 | 2026-10-08 | Monetisation panel, Android SDK snippet, Activity panel monetization summary, all tests pass |
 | 4 | Android Health + Security | ⏳ Pending | — | — | |
 | 5 | Feedback Analysis | ⏳ Pending | — | — | |
 | 6 | History Dashboard | ⏳ Pending | — | — | |
@@ -116,6 +116,19 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ---
 
+## Phase 3 Progress (2026-10-08) — ✅ **COMPLETE**
+
+### ✅ Completed
+1. **Monetisation panel** (`Monetisation.jsx`): Full revenue breakdown (verified/unverified/ad), subscriptions, ad metrics (impressions, clicks, CTR, eCPM), breakdowns by product/country
+2. **Monitoring.jsx integration**: Monetisation fetch added to load function, passed to ActivityPanel
+3. **ActivityPanel monetisation summary**: Inline revenue/subscription/ad metrics in Activity panel
+4. **Android SDK snippet** (`android-sdk-snippet/CampusPilotMonitoring.kt`): Full Kotlin SDK with event tracking, purchase/ad recording, crash/ANR reporting, security signals, session lifecycle, background flush, rate limit handling
+5. All 126 monitoring tests pass, all 69 auth tests pass, full suite 784/784 pass
+
+### 📋 Phase 3 Complete — Ready for Phase 4
+
+---
+
 ## Open Issues
 
 | # | Issue | Blocking | Owner |
@@ -130,14 +143,13 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ---
 
-## Next Actions (Phase 3)
+## Next Actions (Phase 4)
 
-1. **Analytics/Monetization + Web Activity**: Web event SDK, analytics queries, B_W_ACTIVITY panel
-2. **Android Health + Security**: Android SDK helper, A_A_HEALTH + C_A_SECURITY rule scans
-3. **Feedback Analysis**: NLP pipeline, topic model, D_W/D_A_FEEDBACK panels
-4. **History Dashboard**: Partitioned tables, history API, charts, calendar overlay, export
-5. **Stage 2 LLM**: Ollama integration, 8 prompts + schemas, Promptfoo evals
-6. **Alerting + Profiles + Hardening + Docs**
+1. **Android Health + Security**: Android Health + Security rule scans (A_A_HEALTH, C_A_SECURITY)
+2. **Feedback Analysis**: NLP pipeline, topic model, D_W/D_A_FEEDBACK panels
+3. **History Dashboard**: Partitioned tables, history API, charts, calendar overlay, export
+4. **Stage 2 LLM**: Ollama integration, 8 prompts + schemas, Promptfoo evals
+5. **Alerting + Profiles + Hardening + Docs**
 
 ## Test Results Log
 
