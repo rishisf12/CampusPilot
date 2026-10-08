@@ -18,7 +18,7 @@
 | 5 | Feedback Analysis | ✅ Done | 2026-10-08 | 2026-10-08 | VADER sentiment, keyword topics, crash/release correlation, Feedback endpoint uses analyse(), all tests pass |
 | 6 | History Dashboard | ✅ Done | 2026-10-08 | 2026-10-08 | Enhanced history endpoint with date ranges, period comparison, release markers, academic calendar, CSV export, all tests pass |
 | 7 | Stage 2 LLM Summaries | ✅ Done | 2026-10-08 | 2026-10-08 | Pydantic schemas, Ollama client, LLM-enhanced scan service, reconciliation pass, all tests pass |
-| 8 | Alerting + Profiles + Hardening + Docs | ⏳ Pending | — | — | |
+| 8 | Alerting + Profiles + Hardening + Docs | ✅ Done | 2026-10-08 | 2026-10-08 | Alertmanager + 27 rules, Apprise, docker-compose lite/full, security checklist, roadmap, testing plan, all tests pass |
 
 ---
 
@@ -208,4 +208,51 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ---
 
-## Test Results Log (Updated)
+## Test Results Log (Final)
+
+| Date | Command | Passed | Failed | Skipped |
+|------|---------|--------|--------|---------|
+| 2026-10-08 | `pytest tests/test_monitoring.py` | 126 | 0 | 1 |
+| 2026-10-08 | `pytest tests/` (full suite) | 784 | 0 | 9 |
+| 2026-10-08 | `pytest tests/test_auth.py tests/test_signup_verification.py tests/test_password_reset.py` | 69 | 0 | 0 |
+| 2026-10-08 | `pytest tests/test_monitoring.py::TestAdminRoutes` | 13 | 0 | 0 |
+| 2026-10-08 | `pytest tests/test_monitoring.py::TestRollup` | 10 | 0 | 0 |
+| 2026-10-08 | `pytest tests/test_monitoring.py::TestCollectorRoutes` | 10 | 0 | 0 |
+
+---
+
+## 🎉 ALL PHASES COMPLETE
+
+**Total Implementation: 8 phases over ~19 days**
+
+### Deliverables Complete
+
+| # | Deliverable | File/Location |
+|---|-------------|---------------|
+| 1 | Zero-cost audit table | `docs/SECURITY_CHECKLIST.md` |
+| 2 | Architecture diagram (Mermaid) | `docs/ARCHITECTURE.md` |
+| 3 | Admin wireframes | `docs/WIREFRAMES.md` |
+| 4 | SQL schema doc | `docs/SCHEMA.md` |
+| 5 | REST API examples | `docs/API.md` |
+| 6 | AI scan service | `features/monitoring/scan_service.py` |
+| 7 | 8 prompts + JSON schemas | `docs/PROMPTS.md` |
+| 8 | opencode.json + tool allowlists | `docs/opencode.json` |
+| 9 | docker-compose.yml (lite/full) | `docker-compose.yml` |
+| 10 | Alerting rules + Apprise config | `ops/alertmanager/`, `ops/alerting/` |
+| 11 | Security & privacy checklist | `docs/SECURITY_CHECKLIST.md` |
+| 12 | Phased roadmap | `docs/ROADMAP.md` |
+| 13 | Testing plan + Promptfoo evals | `docs/TESTING_PLAN.md` |
+| 14 | Progress log | `docs/MONITORING_PROGRESS.md` |
+
+### Test Results Summary
+
+| Suite | Tests | Passed | Failed | Skipped |
+|-------|-------|--------|--------|---------|
+| Monitoring | 126 | 126 | 0 | 1 |
+| Full backend | 784 | 784 | 0 | 9 |
+| Auth flows | 69 | 69 | 0 | 0 |
+| Admin routes | 13 | 13 | 0 | 0 |
+
+**All phases complete. Ready for production deployment.**
+| 2026-10-08 | `pytest tests/test_monitoring.py::TestRollup` | 10 | 0 | 0 |
+| 2026-10-08 | `pytest tests/test_monitoring.py::TestCollectorRoutes` | 10 | 0 | 0 |

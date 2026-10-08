@@ -1,0 +1,214 @@
+{
+  "dashboard": {
+    "uid": "campuspilot-overview",
+    "title": "CampusPilot Overview",
+    "tags": ["campuspilot", "overview"],
+    "timezone": "Asia/Kolkata",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Status",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "up{job=\"campuspilot-api\"}",
+            "legendFormat": "API Status"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+              {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"}
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Web DAU",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "campuspilot_active_users_web",
+            "legendFormat": "Web DAU"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Android DAU",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "campuspilot_active_users_android",
+            "legendFormat": "Android DAU"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Crash-Free Rate (Android)",
+        "type": "gauge",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "campuspilot_crash_free_rate_pct_android",
+            "legendFormat": "Crash-Free %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 99},
+                {"color": "green", "value": 99.5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "API p95 Latency",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(campuspilot_http_request_duration_seconds_bucket{job=\"campuspilot-api\"}[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(campuspilot_http_request_duration_seconds_bucket{job=\"campuspilot-api\"}[5m]))",
+            "legendFormat": "p50"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.5},
+                {"color": "red", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "HTTP Error Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(campuspilot_http_requests_total{job=\"campuspilot-api\",status=~\"5..\"}[5m])) / sum(rate(campuspilot_http_requests_total{job=\"campuspilot-api\"}[5m]))",
+            "legendFormat": "5xx rate"
+          },
+          {
+            "expr": "sum(rate(campuspilot_http_requests_total{job=\"campuspilot-api\",status=~\"4..\"}[5m])) / sum(rate(campuspilot_http_requests_total{job=\"campuspilot-api\"}[5m]))",
+            "legendFormat": "4xx rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.01},
+                {"color": "red", "value": 0.05}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "HTTP Requests by Route",
+        "type": "barchart",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (route) (rate(campuspilot_http_requests_total{job=\"campuspilot-api\"}[5m]))",
+            "format": "table"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Crash-Free Rate by Version (Android)",
+        "type": "table",
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "campuspilot_crash_free_rate_pct_android_by_version",
+            "format": "table"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "System Resources",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+            "legendFormat": "Memory Usage"
+          },
+          {
+            "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))",
+            "legendFormat": "CPU Usage"
+          },
+          {
+            "expr": "(node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"} - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"}) / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"}",
+            "legendFormat": "Disk Usage"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "max": 1
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Security Events",
+        "type": "bargauge",
+        "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (kind) (rate(campuspilot_security_events_total[1h]))",
+            "legendFormat": "{{kind}}"
+          }
+        ]
+      }
+    ]
+  }
+}

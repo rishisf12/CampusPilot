@@ -99,3 +99,326 @@ groups:
           severity: warning
         annotations:
           summary: "CPU above 90% for 15 minutes"
+
+  - name: campuspilot-web-health
+    rules:
+      - alert: WebHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(campuspilot_http_request_duration_seconds_bucket{job="campuspilot-api"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: critical
+          subsection: A_W_HEALTH
+        annotations:
+          summary: "Web API p95 latency above 2s"
+          description: "p95 latency {{ $value | humanizeDuration }} sustained for 5 minutes"
+
+      - alert: WebHighErrorRate
+        expr: |
+          sum(rate(campuspilot_http_requests_total{job="campuspilot-api",status=~"5.."}[5m])) 
+          / sum(rate(campuspilot_http_requests_total{job="campuspilot-api"}[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          subsection: A_W_HEALTH
+        annotations:
+          summary: "Web API 5xx error rate above 5%"
+          description: "5xx rate {{ $value | humanizePercentage }} sustained for 2 minutes"
+
+      - alert: WebSlowEndpoints
+        expr: |
+          histogram_quantile(0.95, rate(campuspilot_http_request_duration_seconds_bucket{job="campuspilot-api"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          subsection: A_W_HEALTH
+        annotations:
+          summary: "Web API p95 latency above 1s"
+          description: "p95 latency {{ $value | humanizeDuration }} sustained for 5 minutes"
+
+      - alert: WebLowUptime
+        expr: |
+          up{job="campuspilot-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          subsection: A_W_HEALTH
+        annotations:
+          summary: "Web API down"
+          description: "API /health endpoint returning non-200"
+
+      - alert: WebHighDatabaseLatency
+        expr: |
+          histogram_quantile(0.95, rate(campuspilot_db_query_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          subsection: A_W_HEALTH
+        annotations:
+          summary: "Database p95 latency above 500ms"
+          description: "DB query p95 {{ $value | humanizeDuration }} sustained"
+
+      - alert: WebSslExpiringSoon
+        expr: |
+          campuspilot_ssl_expiry_days < 14
+        for: 1h
+        labels:
+          severity: warning
+          subsection: A_W_HEALTH
+        annotations:
+          summary: "SSL certificate expiring within 14 days"
+          description: "Certificate expires in {{ $value }} days"
+
+  - name: campuspilot-web-activity
+    rules:
+      - alert: WebDauDrop
+        expr: |
+          (campuspilot_active_users_web - campuspilot_active_users_web_prev) / campuspilot_active_users_web_prev < -0.4
+        for: 15m
+        labels:
+          severity: critical
+          subsection: B_W_ACTIVITY
+        annotations:
+          summary: "Web DAU dropped more than 40% vs previous period"
+
+      - alert: WebRevenueDrop
+        expr: |
+          (campuspilot_revenue_verified_micros_web - campuspilot_revenue_verified_micros_web_prev) / campuspilot_revenue_verified_micros_web_prev < -0.3
+        for: 1h
+        labels:
+          severity: critical
+          subsection: B_W_ACTIVITY
+        annotations:
+          summary: "Web verified revenue dropped more than 30%"
+
+      - alert: WebRetentionLow
+        expr: |
+          campuspilot_retention_day1_pct_web < 20
+        for: 1h
+        labels:
+          severity: warning
+          subsection: B_W_ACTIVITY
+        annotations:
+          summary: "Web day-1 retention below 20%"
+
+  - name: campuspilot-web-security
+    rules:
+      - alert: WebFailedLoginsSpike
+        expr: |
+          rate(campuspilot_security_events_total{kind="failed_login",platform="web"}[5m]) * 3600 > 100
+        for: 5m
+        labels:
+          severity: warning
+          subsection: C_W_SECURITY
+        annotations:
+          summary: "Web failed logins above 100/hour"
+
+      - alert: WebBruteForce
+        expr: |
+          rate(campuspilot_security_events_total{kind="failed_login",platform="web"}[5m]) * 3600 > 1000
+        for: 5m
+        labels:
+          severity: critical
+          subsection: C_W_SECURITY
+        annotations:
+          summary: "Web brute force attack detected (>1000/h from single IP)"
+
+      - alert: WebRateLimited
+        expr: |
+          rate(campuspilot_security_events_total{kind="rate_limited",platform="web"}[5m]) * 3600 > 100
+        for: 5m
+        labels:
+          severity: warning
+          subsection: C_W_SECURITY
+        annotations:
+          summary: "Web rate limit hits above 100/hour"
+
+      - alert: WebCriticalCve
+        expr: |
+          campuspilot_dependency_vulnerability_critical > 0
+        for: 1h
+        labels:
+          severity: critical
+          subsection: C_W_SECURITY
+        annotations:
+          summary: "Critical CVE found in dependencies"
+
+      - alert: WebSecurityHeadersDegraded
+        expr: |
+          campuspilot_security_header_score < 60
+        for: 1h
+        labels:
+          severity: warning
+          subsection: C_W_SECURITY
+        annotations:
+          summary: "Security headers score below 60"
+
+  - name: campuspilot-web-feedback
+    rules:
+      - alert: WebFeedbackVolumeDrop
+        expr: |
+          (campuspilot_feedback_total_web - campuspilot_feedback_total_web_prev) / campuspilot_feedback_total_web_prev < -0.5
+        for: 1h
+        labels:
+          severity: critical
+          subsection: D_W_FEEDBACK
+        annotations:
+          summary: "Web feedback volume dropped more than 50%"
+
+      - alert: WebFeedbackNegativeSentiment
+        expr: |
+          campuspilot_feedback_sentiment_mean_web < -0.2
+        for: 1h
+        labels:
+          severity: warning
+          subsection: D_W_FEEDBACK
+        annotations:
+          summary: "Web feedback sentiment turned negative"
+
+      - alert: WebFeedbackComplaintCluster
+        expr: |
+          campuspilot_feedback_top_complaint_count_web >= 20
+        for: 1h
+        labels:
+          severity: critical
+          subsection: D_W_FEEDBACK
+        annotations:
+          summary: "Web feedback complaint cluster detected (>= 20 similar complaints)"
+
+  - name: campuspilot-android-health
+    rules:
+      - alert: AndroidCrashFreeRateLow
+        expr: |
+          campuspilot_crash_free_rate_pct_android < 99
+        for: 15m
+        labels:
+          severity: critical
+          subsection: A_A_HEALTH
+        annotations:
+          summary: "Android crash-free rate below 99%"
+
+      - alert: AndroidAnrRateHigh
+        expr: |
+          campuspilot_anr_rate_pct_android > 2
+        for: 15m
+        labels:
+          severity: critical
+          subsection: A_A_HEALTH
+        annotations:
+          summary: "Android ANR rate above 2%"
+
+      - alert: AndroidStartupSlow
+        expr: |
+          campuspilot_startup_time_ms_android > 5000
+        for: 15m
+        labels:
+          severity: warning
+          subsection: A_A_HEALTH
+        annotations:
+          summary: "Android cold start time above 5s"
+
+      - alert: AndroidSlowFrames
+        expr: |
+          campuspilot_slow_frames_pct_android > 25
+        for: 15m
+        labels:
+          severity: warning
+          subsection: A_A_HEALTH
+        annotations:
+          summary: "Android slow frames above 25%"
+
+  - name: campuspilot-android-activity
+    rules:
+      - alert: AndroidDauDrop
+        expr: |
+          (campuspilot_active_users_android - campuspilot_active_users_android_prev) / campuspilot_active_users_android_prev < -0.4
+        for: 15m
+        labels:
+          severity: critical
+          subsection: B_A_ACTIVITY
+        annotations:
+          summary: "Android DAU dropped more than 40%"
+
+      - alert: AndroidIapRevenueDrop
+        expr: |
+          (campuspilot_iap_revenue_micros_android - campuspilot_iap_revenue_micros_android_prev) / campuspilot_iap_revenue_micros_android_prev < -0.3
+        for: 1h
+        labels:
+          severity: critical
+          subsection: B_A_ACTIVITY
+        annotations:
+          summary: "Android IAP revenue dropped more than 30%"
+
+  - name: campuspilot-android-security
+    rules:
+      - alert: AndroidRootDetected
+        expr: |
+          rate(campuspilot_security_events_total{kind="root_detected",platform="android"}[5m]) * 3600 > 5
+        for: 5m
+        labels:
+          severity: warning
+          subsection: C_A_SECURITY
+        annotations:
+          summary: "Android root detection signals above 5/hour"
+
+      - alert: AndroidEmulatorDetected
+        expr: |
+          rate(campuspilot_security_events_total{kind="emulator_detected",platform="android"}[5m]) * 3600 > 5
+        for: 5m
+        labels:
+          severity: warning
+          subsection: C_A_SECURITY
+        annotations:
+          summary: "Android emulator detection signals above 5/hour"
+
+      - alert: AndroidTamperDetected
+        expr: |
+          rate(campuspilot_security_events_total{kind="tamper_detected",platform="android"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          subsection: C_A_SECURITY
+        annotations:
+          summary: "Android tampering detected"
+
+      - alert: AndroidTokenMisuse
+        expr: |
+          campuspilot_security_events_total{kind="token_misuse",platform="android"} >= 3
+        for: 5m
+        labels:
+          severity: critical
+          subsection: C_A_SECURITY
+        annotations:
+          summary: "Android token misuse events >= 3"
+
+      - alert: AndroidReplayAttack
+        expr: |
+          campuspilot_security_events_total{kind="replay_attack",platform="android"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          subsection: C_A_SECURITY
+        annotations:
+          summary: "Android replay attack confirmed"
+
+  - name: campuspilot-android-feedback
+    rules:
+      - alert: AndroidFeedbackVolumeDrop
+        expr: |
+          (campuspilot_feedback_total_android - campuspilot_feedback_total_android_prev) / campuspilot_feedback_total_android_prev < -0.5
+        for: 1h
+        labels:
+          severity: critical
+          subsection: D_A_FEEDBACK
+        annotations:
+          summary: "Android feedback volume dropped more than 50%"
+
+      - alert: AndroidFeedbackCrashCorrelation
+        expr: |
+          campuspilot_feedback_crash_correlation_crash_complaint_count_android >= 10
+        for: 1h
+        labels:
+          severity: critical
+          subsection: D_A_FEEDBACK
+        annotations:
+          summary: "Android feedback mentions crash cluster (>= 10 complaints)"

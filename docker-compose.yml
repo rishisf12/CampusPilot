@@ -1,53 +1,66 @@
-# Production-ish stack: PostgreSQL + API + nginx frontend.
-# Usage: docker compose up --build
+# CampusPilot - Production-ish stack with Lite/Full profiles
+# Usage: docker compose [--profile lite|--profile full] up --build
 #
-# MIGRATION FROM SQLITE (read this once, then delete the sqlite volume):
-#   1. docker compose up -d postgres      # start the database alone
+# Profiles:
+#   lite   - 4 GB RAM: postgres + backend + frontend + prometheus + node_exporter + alerting
+#   full   - 16 GB RAM: lite + cAdvisor + blackbox_exporter + Grafana + Ollama + VictoriaLogs
+#
+# MIGRATION FROM SQLITE:
+#   1. docker compose up -d postgres
 #   2. docker compose run --rm backend python -m alembic -c /app/backend/alembic.ini upgrade head
 #   3. docker compose run --rm backend python tools/migrate_sqlite_to_postgres.py \
 #        --source /app/database/classpilot.db --dry-run
 #   4. drop the --dry-run and run it for real
-#   5. docker compose up -d
-# Step 3 is not optional. The SQLite file has rows that violate the current
-# schema (see the NULL->default repair in the script), and the verification pass
-# at the end of the migration is what tells you the copy actually completed.
+#   5. docker compose --profile lite up -d
+
+version: "3.9"
 
 services:
+  # ================================================================
+  # Core Infrastructure
+  # ================================================================
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-campuspilot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-campuspilot}
       POSTGRES_DB: ${POSTGRES_DB:-campuspilot}
-      # data-checksums turns on page checksums, so a silently-corrupted page is
-      # detected instead of read as valid. Costs a little write throughput,
-      # which is not a concern at this scale.
       POSTGRES_INITDB_ARGS: --data-checksums
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Not published to the host by default: the API reaches it over the compose
-    # network, and a database with a default password should not be reachable
-    # from the internet. Uncomment for psql access during development.
-    # ports:
-    #   - "5432:5432"
     healthcheck:
-      # The API's depends_on waits for this, which is what stops the app
-      # crash-looping while Postgres is still initialising.
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-campuspilot} -d ${POSTGRES_DB:-campuspilot}"]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
     restart: unless-stopped
-    # Postgres is happier with modest shared_buffers on a small VPS than with a
-    # value derived from a host with far more RAM than the container can use.
     command:
       - postgres
       - -c
       - max_connections=100
       - -c
       - shared_buffers=256MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - random_page_cost=1.1
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
+  # ================================================================
+  # Application Services
+  # ================================================================
   backend:
     build:
       context: .
@@ -58,19 +71,17 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production-min-32-chars}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=10080
-      # Host is the compose service name, not localhost: inside a container,
-      # localhost is that container.
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-campuspilot}:${POSTGRES_PASSWORD:-campuspilot}@postgres:5432/${POSTGRES_DB:-campuspilot}
       - DB_POOL_SIZE=10
       - DB_MAX_OVERFLOW=10
       - DB_POOL_RECYCLE=1800
       - ALLOWED_EMAIL_DOMAIN=@iiitdmj.ac.in
-      - SMTP_HOST=smtp.gmail.com
-      - SMTP_PORT=587
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - EMAIL_FROM=noreply@iiitdmj.ac.in
-      - FRONTEND_URL=http://localhost:5173
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
       - TIMEZONE=Asia/Kolkata
       - COLLEGE_START=09:00
       - COLLEGE_END=17:00
@@ -82,27 +93,23 @@ services:
       - ALLOWED_EXTENSIONS=.pdf,.csv
       - BRANCH_OPTIONS=CSE A,CSE B,DS,ECE,ME,SM,PG,MDes
       - ADMISSION_YEAR=21
-      # --- Monitoring / observability -------------------------------------
-      # Generate with:
-      #   python -c "import secrets; print(secrets.token_hex(32))"
-      # The API refuses to accept telemetry with the default value, because a
-      # known pepper makes every user_hash in the database reversible.
+      # Monitoring / observability
       - TELEMETRY_PEPPER=${TELEMETRY_PEPPER:-}
-      # Off by default: /collect/events is an unauthenticated write endpoint
-      # and should only be open once a client is actually sending to it.
       - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-false}
       - TELEMETRY_MAX_BATCH=100
       - METRICS_ENABLED=${METRICS_ENABLED:-true}
-      # Exactly one process must own the hourly rollup timer. With multiple
-      # replicas, leave this off and run the rollup as its own service instead.
       - ROLLUP_INLINE=${ROLLUP_INLINE:-true}
-      # AI scan subsystem. Off until a local model server is configured; see
-      # docs/observability/ARCHITECTURE.md.
       - SCAN_ENABLED=${SCAN_ENABLED:-false}
       - ENABLE_STORE_VERIFY=${ENABLE_STORE_VERIFY:-false}
+      # Alerting
+      - ALERT_TELEGRAM_BOT_TOKEN=${ALERT_TELEGRAM_BOT_TOKEN:-}
+      - ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID:-}
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      # LLM
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-240}
     volumes:
-      # Mounted read-write: uploads and the legacy SQLite file both live here.
-      # The SQLite file is only needed for the one-shot migration.
       - ./database:/app/database
       - ./backend/backend/uploads:/app/backend/uploads
     depends_on:
@@ -115,6 +122,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   frontend:
     build:
@@ -126,91 +141,169 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
-  # Optional: IMAP poller for email-to-feedback
-  # Uncomment and configure IMAP_* env vars to enable
-  # imap-poller:
-  #   build:
-  #     context: .
-  #     dockerfile: backend/Dockerfile
-  #   command: python tools/imap_feedback_poller.py
-  #   environment:
-  #     - IMAP_HOST=imap.gmail.com
-  #     - IMAP_USER=${IMAP_USER:-}
-  #     - IMAP_PASS=${IMAP_PASS:-}
-  #     - IMAP_FOLDER=INBOX
-  #     - INGEST_URL=http://backend:8001/feedback/ingest
-  #     - INGEST_SECRET=${INGEST_SECRET:-}
-  #     - PROCESSED_LABEL=Processed/Feedback
-  #   depends_on:
-  #     backend:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-
-# ---------------------------------------------------------------------
-  # Observability. Everything here is optional and off by default:
-  #   docker compose --profile monitoring up -d
-  #
-  # On a small VPS prefer the `lite` profile, which is node_exporter plus the
-  # API's own /metrics and needs roughly 400 MB of RAM:
-  #   docker compose --profile monitoring-lite up -d
-  #
-  # The `full` profile adds container metrics and HTTP probing. It costs about
-  # 1.5 GB, which a 2 GB VPS cannot spare.
-  #
-  # None of these are published to the host. Prometheus reaches them over the
-  # compose network; publishing a metrics port would put internal route names
-  # and request counts on the open internet.
-  # ---------------------------------------------------------------------
-
+  # ================================================================
+  # Observability Stack - Lite Profile (4 GB target)
+  # ================================================================
   prometheus:
     image: prom/prometheus:v2.54.1
-    profiles: ["monitoring", "monitoring-full"]
+    profiles: ["lite", "full"]
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=30d
-      # A single-campus app does not need one-minute resolution for 30 days of
-      # metrics. This is the setting that decides whether Prometheus fits in
-      # RAM, and it is the one most worth lowering first.
       - --storage.tsdb.retention.size=2GB
+      - --web.enable-lifecycle
+      - --web.enable-admin-api
     volumes:
-      # The whole directory, not just prometheus.yml. `rule_files` points at
-      # alerts.yml, and mounting files one at a time means every new rule file
-      # has to be added here too - where the failure mode is Prometheus
-      # refusing to start with a message that does not mention compose.
       - ./ops/prometheus:/etc/prometheus:ro
       - prometheus_data:/prometheus
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   node-exporter:
     image: prom/node-exporter:v1.8.2
-    profiles: ["monitoring", "monitoring-full"]
-    # --path.rootfs makes the host filesystem readable as "/" inside the
-    # container. Without it every metric describes the container's own mount
-    # namespace, so disk and network figures are quietly wrong.
-    #
-    # Mounted `:ro` and deliberately NOT `:ro,rslave`. The slave propagation
-    # only matters when host mounts are added or removed while the exporter is
-    # running, which never happens on a single-VPS deployment - and it is
-    # rejected outright by Docker Desktop ("not a shared or slave mount"), so
-    # using it makes the stack impossible to start locally. A portable config
-    # that is right 99% of the time beats a correct one that will not boot on
-    # half the machines someone will try it on.
+    profiles: ["lite", "full"]
     command:
       - --path.rootfs=/host
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+      - --collector.systemd
+      - --collector.processes
     volumes:
       - /:/host:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
-  cadvisor:
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    profiles: ["lite", "full"]
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./ops/alertmanager:/etc/alertmanager:ro
+      - alertmanager_data:/alertmanager
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Alerting via Apprise (Telegram, Webhook, Email)
+  alerting:
+    image: carlosedp/notify:latest
+    profiles: ["lite", "full"]
+    environment:
+      - NOTIFY_TELEGRAM_BOT_TOKEN=${ALERT_TELEGRAM_BOT_TOKEN:-}
+      - NOTIFY_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID:-}
+      - NOTIFY_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - NOTIFY_SMTP_HOST=${SMTP_HOST:-}
+      - NOTIFY_SMTP_PORT=${SMTP_PORT:-587}
+      - NOTIFY_SMTP_USER=${SMTP_USER:-}
+      - NOTIFY_SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - NOTIFY_SMTP_FROM=${EMAIL_FROM:-}
+    volumes:
+      - ./ops/alerting:/etc/notify:ro
+    depends_on:
+      alertmanager:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # ================================================================
+  # Observability Stack - Full Profile (16 GB target)
+  # ================================================================
+  victoria-logs:
+    image: victoriametrics/victoria-logs:v1.10.0
+    profiles: ["full"]
+    command:
+      - --httpListenAddr=:9428
+      - --retentionPeriod=30d
+      - --storageDataPath=/victoria-logs-data
+    volumes:
+      - victoria_logs_data:/victoria-logs-data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    profiles: ["full"]
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-sqlite-datasource
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+      victoria-logs:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  cAdvisor:
     image: gcr.io/cadvisor/cadvisor:v0.51.0
-    profiles: ["monitoring-full"]
-    # read_only on /etc is what lets cAdvisor read the container metadata; the
-    # root filesystem must stay writable for its own state.
+    profiles: ["full"]
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -218,33 +311,94 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     privileged: true
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.25.0
-    profiles: ["monitoring-full"]
+    profiles: ["full"]
     command:
       - --config.file=/etc/blackbox_exporter/config.yml
     volumes:
       - ./ops/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
-  # Standalone rollup worker. Use this instead of ROLLUP_INLINE when running
-  # more than one backend replica, so exactly one process owns the timer.
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["full"]
+    environment:
+      - OLLAMA_KEEP_ALIVE=0
+      - OLLAMA_HOST=0.0.0.0:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 10G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # ================================================================
+  # Maintenance
+  # ================================================================
   rollup:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    profiles: ["rollup"]
+    profiles: ["lite", "full", "rollup"]
     command: python -m features.monitoring.rollup --loop --prune
     environment:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-campuspilot}:${POSTGRES_PASSWORD:-campuspilot}@postgres:5432/${POSTGRES_DB:-campuspilot}
+      - ROLLUP_INTERVAL_HOURS=1
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
+  # ================================================================
+  # Networks
+  # ================================================================
+networks:
+  default:
+    name: campuspilot-network
+    driver: bridge
+    # Internal network with no internet access for security services
+    # internet-facing services should use a separate network
+
+# ================================================================
+# Volumes
+# ================================================================
 volumes:
   postgres_data:
   database:
   uploads:
   prometheus_data:
+  alertmanager_data:
+  victoria_logs_data:
+  grafana_data:
+  ollama_data:
