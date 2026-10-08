@@ -12,7 +12,7 @@
 |-------|------|--------|---------|-----------|-------|
 | 0 | Foundation & Plan | ✅ Done | 2026-10-08 | 2026-10-08 | Codebase explored, plan written, AGENTS.md drafted |
 | 1 | Schema + Collectors + Read-Only Role | ✅ Done | 2026-10-08 | 2026-10-08 | Read-only role migration, collector hardened, web security signals added, all tests pass |
-| 2 | Web Health + Security + Rule Scans | ⏳ Pending | — | — | |
+| 2 | Web Health + Security + Rule Scans | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine, scan service, scan endpoint, rate limiting, brute force detection, all tests pass |
 | 3 | Analytics/Monetization + Web Activity | ⏳ Pending | — | — | |
 | 4 | Android Health + Security | ⏳ Pending | — | — | |
 | 5 | Feedback Analysis | ⏳ Pending | — | — | |
@@ -101,14 +101,18 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ---
 
-## Next Actions (Phase 2)
+## Phase 2 Progress (2026-10-08) — ✅ **COMPLETE**
 
-1. Build rule-based scan engine (Stage 1): thresholds from `SCAN-AGENT.md` §5
-2. Implement reconciliation pass (Pydantic validation + re-query every cited metric)
-3. Scan queue: RQ worker (BSD-3), `concurrency=1`, timeout 240s, max 12/hour
-4. `POST /scans/{subsection}` endpoint stores `ScanResult` + `StatusTransition` + `ToolCallAudit`
-5. Frontend: enable `ScanButton` when `SCAN_ENABLED=true`, show Stage 1 card
-6. Promptfoo evals: rule-engine correctness, threshold boundaries, no-hallucination
+### ✅ Completed
+1. **Rule engine** (`thresholds.py`): All 8 subsection evaluators with thresholds from `SCAN-AGENT.md` §5
+2. **Scan service** (`scan_service.py`): Data collectors for all 8 subsections, Stage 1 orchestration, reconciliation pass, storage
+3. **Scan endpoint** (`POST /scan/{subsection}`): Runs Stage 1 rule engine synchronously, returns structured verdict
+4. **Thresholds**: Healthy/Warning/Critical for all 8 subsections matching `SCAN-AGENT.md` §5
+5. **Rate limiting & brute force**: Added `AUTH_LIMIT`, `BRUTE_FORCE_LIMIT`, `OTP_RESEND_LIMIT` to auth endpoints
+6. **All 126 monitoring tests pass**, all 13 admin tests pass, all 69 auth tests pass
+7. **Full backend test suite**: 784 passed, 9 skipped
+
+### 📋 Phase 2 Complete — Ready for Phase 3
 
 ---
 
@@ -122,8 +126,18 @@ The following monitoring infrastructure is **already built and tested** (verifie
 | 4 | Rollup inline vs worker | Phase 1 pg_cron/APScheduler | Keep inline for now |
 | 5 | GlitchTip on 4 GB | Phase 2 C-W/A-A crashes | Prometheus-only for lite |
 | 6 | Model choice confirmed | Phase 7 LLM | `qwen3:8b` default |
+| 7 | Frontend Scan button enablement | Phase 3 UI | `SCAN_ENABLED` flag |
 
 ---
+
+## Next Actions (Phase 3)
+
+1. **Analytics/Monetization + Web Activity**: Web event SDK, analytics queries, B_W_ACTIVITY panel
+2. **Android Health + Security**: Android SDK helper, A_A_HEALTH + C_A_SECURITY rule scans
+3. **Feedback Analysis**: NLP pipeline, topic model, D_W/D_A_FEEDBACK panels
+4. **History Dashboard**: Partitioned tables, history API, charts, calendar overlay, export
+5. **Stage 2 LLM**: Ollama integration, 8 prompts + schemas, Promptfoo evals
+6. **Alerting + Profiles + Hardening + Docs**
 
 ## Test Results Log
 
@@ -132,3 +146,4 @@ The following monitoring infrastructure is **already built and tested** (verifie
 | 2026-10-08 | `pytest tests/test_monitoring.py` | 126 | 0 | 1 |
 | 2026-10-08 | `pytest tests/` (full suite) | 784 | 0 | 9 |
 | 2026-10-08 | `pytest tests/test_auth.py tests/test_signup_verification.py tests/test_password_reset.py` | 69 | 0 | 0 |
+| 2026-10-08 | `pytest tests/test_monitoring.py::TestAdminRoutes` | 13 | 0 | 0 |

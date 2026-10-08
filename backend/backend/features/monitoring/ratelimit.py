@@ -83,3 +83,13 @@ COLLECT_BATCH_LIMIT = SlidingWindowLimiter(limit=30, window_s=60.0)
 #: tighter budget. Separate on purpose: a client stuck in a crash loop must not
 #: be able to exhaust the budget for ordinary telemetry.
 CRASH_LIMIT = SlidingWindowLimiter(limit=10, window_s=60.0)
+
+#: Auth endpoints: signup, verify-email, resend-code, login
+#: 5 attempts per minute per IP, then 429
+AUTH_LIMIT = SlidingWindowLimiter(limit=5, window_s=60.0)
+
+#: Brute force detection: 20 failed logins per 5 minutes per IP triggers a signal
+BRUTE_FORCE_LIMIT = SlidingWindowLimiter(limit=20, window_s=300.0)
+
+#: OTP resend: 3 resends per 10 minutes per IP
+OTP_RESEND_LIMIT = SlidingWindowLimiter(limit=3, window_s=600.0)

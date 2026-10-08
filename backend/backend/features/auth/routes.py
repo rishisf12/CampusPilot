@@ -18,6 +18,7 @@ from core.config import get_settings
 from core.deps import get_current_user
 from features.auth import passkeys as passkey_service, password_reset as password_reset_service, signup as signup_verification_service
 from features.monitoring import collector as monitoring_collector
+from features.monitoring.ratelimit import AUTH_LIMIT, BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])
@@ -205,9 +206,20 @@ def hash_password(password: str) -> str:
 
 # ---------- Routes ----------
 
+def _check_auth_rate_limit(request: Request):
+    """Check auth endpoint rate limit and raise 429 if exceeded."""
+    client_ip = request.client.host if request and request.client else "unknown"
+    if not AUTH_LIMIT.allow(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many auth attempts. Please wait before trying again.",
+            headers={"Retry-After": str(AUTH_LIMIT.retry_after(client_ip))},
+        )
+
+
 @router.post("/signup/start", response_model=dict)
 async def start_signup(
-    data: StartSignupRequest, session: Session = Depends(get_session)
+    data: StartSignupRequest, session: Session = Depends(get_session), request: Request = None
 ):
     """
     Step 1 of registration: prove the address before any account exists.
@@ -217,6 +229,7 @@ async def start_signup(
     turn this into a way to enumerate students; it is answered later, by
     ``/auth/signup``, once the requester has proved they can read mail there.
     """
+    _check_auth_rate_limit(request)
     try:
         code, retry_after = signup_verification_service.start(session, data.email)
     except signup_verification_service.SignupVerificationError as exc:
@@ -235,7 +248,7 @@ async def start_signup(
 
 @router.post("/signup/verify", response_model=dict)
 async def verify_signup(
-    data: VerifySignupRequest, session: Session = Depends(get_session)
+    data: VerifySignupRequest, session: Session = Depends(get_session), request: Request = None
 ):
     """
     Step 2: confirm the code, which marks the address proven.
@@ -243,6 +256,7 @@ async def verify_signup(
     Also completes any account left unverified by the old signup order, so a
     student who abandoned the previous flow is not stranded.
     """
+    _check_auth_rate_limit(request)
     try:
         signup_verification_service.verify(session, data.email, data.code)
     except signup_verification_service.SignupVerificationError as exc:
@@ -359,6 +373,7 @@ async def signup(data: SignupRequest, session: Session = Depends(get_session), r
 @router.post("/verify-email", response_model=dict)
 async def verify_email(data: VerifyEmailRequest, session: Session = Depends(get_session), request: Request = None):
     """Verify email with 6-digit code."""
+    _check_auth_rate_limit(request)
     email = data.email.lower()
     record = verification_codes.get(email)
     settings = get_settings()
@@ -382,6 +397,18 @@ async def verify_email(data: VerifyEmailRequest, session: Session = Depends(get_
             ip=client_ip,
             detail={"reason": "invalid_otp", "email": email},
         )
+        # Track brute force
+        client_ip = request.client.host if request and request.client else "unknown"
+        if not BRUTE_FORCE_LIMIT.allow(client_ip):
+            monitoring_collector.record_security_event(
+                session,
+                "brute_force",
+                platform="web",
+                user_id=record.get("user_id"),
+                pepper=settings.telemetry_pepper,
+                ip=client_ip,
+                detail={"reason": "otp_brute_force", "email": email},
+            )
         raise HTTPException(status_code=400, detail="Invalid verification code")
 
     # Mark user as verified
@@ -402,6 +429,7 @@ async def verify_email(data: VerifyEmailRequest, session: Session = Depends(get_
 @router.post("/resend-code", response_model=dict)
 async def resend_code(data: ResendCodeRequest, session: Session = Depends(get_session), request: Request = None):
     """Resend verification code."""
+    _check_auth_rate_limit(request)
     email = data.email.lower()
     user = session.exec(select(User).where(User.email == email)).first()
     settings = get_settings()
@@ -413,7 +441,24 @@ async def resend_code(data: ResendCodeRequest, session: Session = Depends(get_se
     if user.is_email_verified:
         raise HTTPException(status_code=400, detail="Email already verified")
 
-    # Record resend attempt (potential abuse)
+    # Check OTP resend limit
+    if not OTP_RESEND_LIMIT.allow(client_ip):
+        monitoring_collector.record_security_event(
+            session,
+            "rate_limited",
+            platform="web",
+            user_id=user.id,
+            pepper=settings.telemetry_pepper,
+            ip=client_ip,
+            detail={"reason": "otp_resend_limit_exceeded", "email": email},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many resend attempts. Please wait before trying again.",
+            headers={"Retry-After": str(OTP_RESEND_LIMIT.retry_after(client_ip))},
+        )
+
+    # Record resend attempt
     monitoring_collector.record_security_event(
         session,
         "rate_limited",

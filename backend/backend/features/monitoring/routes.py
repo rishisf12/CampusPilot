@@ -19,7 +19,7 @@ from sqlmodel import Session, func, select
 from core.config import get_settings
 from core.database import get_session
 from core.deps import get_current_admin
-from features.monitoring import collector, queries, rollup as rollup_mod
+from features.monitoring import collector, queries, rollup as rollup_mod, scan_service
 from features.monitoring.models import (
     AdEvent,
     CrashReport,
@@ -548,31 +548,47 @@ async def trigger_scan(
     session: Session = Depends(get_session),
     _admin=Depends(get_current_admin),
 ):
-    """Trigger an AI scan for one subsection. Returns the scan result."""
+    """Trigger a Stage 1 rule-based scan for one subsection.
+
+    Returns the scan result synchronously. In Phase 3 this will be
+    enqueued via RQ and return a pending status immediately.
+    """
     # Validate subsection
     valid_ids = {s["id"] for s in SUBSECTIONS}
     if subsection not in valid_ids:
         raise HTTPException(status_code=404, detail=f"Unknown subsection: {subsection}")
 
-    # TODO: Enqueue scan job via RQ, return immediately with pending status
-    # For now, return a stub response
-    scan_id = f"{subsection}-{int(datetime.now(timezone.utc).timestamp())}"
-    start, end = _window(payload.window_days)
+    # Check if scanning is enabled
+    settings = get_settings()
+    if not settings.scan_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI scanning is disabled. Set SCAN_ENABLED=true to enable.",
+        )
 
+    # Run the scan
+    result = scan_service.run_scan(
+        session,
+        subsection,
+        window_days=payload.window_days,
+        platform=None,  # Auto-detected from subsection
+    )
+
+    # Convert to ScanResponse
     return ScanResponse(
-        scan_id=scan_id,
-        subsection=subsection,
-        status="pending",
-        summary="Scan queued; worker will pick up shortly.",
-        findings=[],
-        root_causes=[],
-        actions=[],
-        confidence={},
-        window_start=start,
-        window_end=end,
-        duration_ms=0,
-        model=payload.model or "local-llm",
-        created_at=_now_utc(),
+        scan_id=result.scan_id,
+        subsection=result.subsection,
+        status=result.status,
+        summary=result.summary,
+        findings=result.findings,
+        root_causes=result.root_causes,
+        actions=result.actions,
+        confidence=result.confidence,
+        window_start=result.window_start,
+        window_end=result.window_end,
+        duration_ms=result.duration_ms,
+        model=result.model,
+        created_at=result.created_at,
     )
 
 

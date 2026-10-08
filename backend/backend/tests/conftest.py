@@ -99,3 +99,24 @@ def _schema():
 
     SQLModel.metadata.create_all(engine)
     yield
+
+    # Reset rate limiters between test runs
+    from features.monitoring.ratelimit import (
+        COLLECT_BATCH_LIMIT, CRASH_LIMIT, AUTH_LIMIT,
+        BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT
+    )
+    for limiter in [COLLECT_BATCH_LIMIT, CRASH_LIMIT, AUTH_LIMIT, BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT]:
+        limiter.reset()
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """Reset in-memory rate limiters before each test."""
+    from features.monitoring.ratelimit import (
+        COLLECT_BATCH_LIMIT, CRASH_LIMIT, AUTH_LIMIT,
+        BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT
+    )
+    for limiter in [COLLECT_BATCH_LIMIT, CRASH_LIMIT, AUTH_LIMIT, BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT]:
+        limiter.reset()
+    yield
+    for limiter in [COLLECT_BATCH_LIMIT, CRASH_LIMIT, AUTH_LIMIT, BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT]:
+        limiter.reset()
