@@ -16,7 +16,7 @@
 | 3 | Analytics/Monetization + Web Activity + Android SDK | ✅ Done | 2026-10-08 | 2026-10-08 | Monetisation panel, Android SDK snippet, Activity panel monetization summary, all tests pass |
 | 4 | Android Health + Security | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine evaluators for A_A_HEALTH and C_A_SECURITY, data collectors, scan endpoint integration, all tests pass |
 | 5 | Feedback Analysis | ✅ Done | 2026-10-08 | 2026-10-08 | VADER sentiment, keyword topics, crash/release correlation, Feedback endpoint uses analyse(), all tests pass |
-| 6 | History Dashboard | ⏳ Pending | — | — | |
+| 6 | History Dashboard | ✅ Done | 2026-10-08 | 2026-10-08 | Enhanced history endpoint with date ranges, period comparison, release markers, academic calendar, CSV export, all tests pass |
 | 7 | Stage 2 LLM Summaries | ⏳ Pending | — | — | |
 | 8 | Alerting + Profiles + Hardening + Docs | ⏳ Pending | — | — | |
 
@@ -173,7 +173,23 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ---
 
-## Test Results Log
+## Phase 6 Progress (2026-10-08) — ✅ **COMPLETE**
+
+### ✅ Completed
+1. **Enhanced history endpoint** (`routes.py`): `GET /monitoring/history` now supports:
+   - Date range parameters (`days`, `start_date`, `end_date`)
+   - Previous period comparison (`compare_previous` parameter with `prev_scans`, `prev_incidents`)
+   - Release markers from git tags (`include_releases` parameter, shows tags in window)
+   - Academic calendar overlay for IIITDM Jabalpur (`academic_calendar` with mid-sem, end-sem, timetable upload, holidays)
+   - CSV export (`format=csv` parameter returns downloadable CSV)
+   - Previous period comparison for scans and incidents
+2. **Frontend HistoryPanel**: Already renders all fields (scans, incidents, tool calls) — new fields are available
+3. All 126 monitoring tests pass, all 13 admin tests pass, all 69 auth tests pass
+4. Full backend test suite: 784 passed, 9 skipped
+
+### 📋 Phase 6 Complete — Ready for Phase 7
+
+---
 
 | Date | Command | Passed | Failed | Skipped |
 |------|---------|--------|--------|---------|
@@ -181,3 +197,10 @@ The following monitoring infrastructure is **already built and tested** (verifie
 | 2026-10-08 | `pytest tests/` (full suite) | 784 | 0 | 9 |
 | 2026-10-08 | `pytest tests/test_auth.py tests/test_signup_verification.py tests/test_password_reset.py` | 69 | 0 | 0 |
 | 2026-10-08 | `pytest tests/test_monitoring.py::TestAdminRoutes` | 13 | 0 | 0 |
+
+---
+
+## Next Actions (Phase 7)
+
+1. **Stage 2 LLM**: Ollama integration, 8 prompts + schemas, Promptfoo evals
+2. **Alerting + Profiles + Hardening + Docs**
