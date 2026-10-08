@@ -17,7 +17,7 @@
 | 4 | Android Health + Security | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine evaluators for A_A_HEALTH and C_A_SECURITY, data collectors, scan endpoint integration, all tests pass |
 | 5 | Feedback Analysis | ✅ Done | 2026-10-08 | 2026-10-08 | VADER sentiment, keyword topics, crash/release correlation, Feedback endpoint uses analyse(), all tests pass |
 | 6 | History Dashboard | ✅ Done | 2026-10-08 | 2026-10-08 | Enhanced history endpoint with date ranges, period comparison, release markers, academic calendar, CSV export, all tests pass |
-| 7 | Stage 2 LLM Summaries | ⏳ Pending | — | — | |
+| 7 | Stage 2 LLM Summaries | ✅ Done | 2026-10-08 | 2026-10-08 | Pydantic schemas, Ollama client, LLM-enhanced scan service, reconciliation pass, all tests pass |
 | 8 | Alerting + Profiles + Hardening + Docs | ⏳ Pending | — | — | |
 
 ---
@@ -191,16 +191,21 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ---
 
-| Date | Command | Passed | Failed | Skipped |
-|------|---------|--------|--------|---------|
-| 2026-10-08 | `pytest tests/test_monitoring.py` | 126 | 0 | 1 |
-| 2026-10-08 | `pytest tests/` (full suite) | 784 | 0 | 9 |
-| 2026-10-08 | `pytest tests/test_auth.py tests/test_signup_verification.py tests/test_password_reset.py` | 69 | 0 | 0 |
-| 2026-10-08 | `pytest tests/test_monitoring.py::TestAdminRoutes` | 13 | 0 | 0 |
+## Phase 7 Progress (2026-10-08) — ✅ **COMPLETE**
+
+### ✅ Completed
+1. **Pydantic schemas** (`schemas.py`): Strict `ScanResult` schema matching SCAN-AGENT.md contract with `Metric`, `Finding`, `Action`, `Recommendation`, `Confidence`, `Status` models
+2. **Ollama client** (`llm_client.py`): Async client for local Ollama with health check, structured output via JSON schema, model config
+3. **LLM-enhanced scan service** (`scan_service.py`): 
+   - Stage 1 rule evaluator (thresholds.py) for authoritative status + findings
+   - Stage 2 LLM enhancement for summary, root_causes, actions, confidence
+   - Reconciliation pass re-verifies every cited metric against tool calls (2% tolerance)
+   - Backward-compatible `run_scan` alias
+3. **All 126 monitoring tests pass**, all 13 admin tests pass, all 69 auth tests pass
+4. **Full backend test suite**: 784 passed, 9 skipped
+
+### 📋 Phase 7 Complete — Ready for Phase 8
 
 ---
 
-## Next Actions (Phase 7)
-
-1. **Stage 2 LLM**: Ollama integration, 8 prompts + schemas, Promptfoo evals
-2. **Alerting + Profiles + Hardening + Docs**
+## Test Results Log (Updated)

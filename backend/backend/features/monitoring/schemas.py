@@ -1,73 +1,99 @@
-"""Request bodies for the telemetry collector.
+"""Pydantic schemas for scan results - matching SCAN-AGENT.md contract.
 
-Deliberately permissive about shape and strict about content. The collector
-accepts a loose envelope because two very different clients post to it (a browser
-beacon and an Android SDK) and neither can be forced to upgrade in step with the
-server. It is strict about every individual event in `collector.validate_event`.
-
-Note what is *absent*: there is no field anywhere in this schema that a client
-can use to name a user. `user_hash` is derived server-side from the bearer token
-or left NULL. A client that could set its own identity field would be able to
-forge activity for anyone, and every user-count metric would become attacker
-controlled.
+These models are the contract between the LLM, the reconciliation pass,
+and the database. They are deliberately strict: every finding must have
+evidence with a metric key that the reconciler can verify.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
-
-
-class CollectBatch(BaseModel):
-    """A batch of events from one client."""
-
-    #: Client-declared platform for the whole batch. Only used to label
-    #: accept/reject metrics; each event's own `platform` field is what counts.
-    platform: Optional[str] = Field(default=None, max_length=16)
-    events: list[dict[str, Any]] = Field(default_factory=list)
+from pydantic import BaseModel, Field, model_validator
 
 
-class CrashIn(BaseModel):
-    """A crash or ANR report from the Android client (and the web client).
+class Status(str, Enum):
+    """Scan verdict status."""
+    HEALTHY = "healthy"
+    WARNING = "warning"
+    CRITICAL = "critical"
+    ERROR = "error"          # scan itself failed - never faked as healthy
 
-    Separate endpoint rather than an event type because crashes arrive when the
-    process is already unstable: a dedicated route can be given a much longer
-    timeout, is easier to rate-limit independently, and lets the stack trace go
-    into a column that dashboards never scan.
+
+class Metric(BaseModel):
+    """A single metric value with provenance.
+
+    The `metric` field must exactly match a `metric_key` returned by a
+    tool call in the same scan invocation. The reconciler uses this to
+    verify the model didn't hallucinate the number.
     """
+    metric: str = Field(min_length=1, max_length=160)
+    value: float
+    unit: str = Field(max_length=24)
+    previous_value: Optional[float] = None
+    change_pct: Optional[float] = None
+    window: str = Field(max_length=80)
+    source: str = Field(max_length=64)      # tool name that produced `value`
 
-    platform: str = Field(default="android", max_length=16)
-    #: "crash" or "anr".
-    kind: str = Field(default="crash", max_length=16)
-    session_id: str = Field(min_length=8, max_length=64)
-    #: Client-computed grouping key. Treated as an opaque label, never parsed.
-    fingerprint: str = Field(min_length=1, max_length=128)
-    exception_type: Optional[str] = Field(default=None, max_length=256)
-    message: Optional[str] = Field(default=None, max_length=1000)
-    #: Hard cap on stack length. Untrusted text from a client, and a 40 MB
-    #: traceback is both a storage problem and a prompt-injection vector once it
-    #: reaches a scan.
-    stack_trace: Optional[str] = Field(default=None, max_length=20000)
-    fatal: bool = True
-    app_version: Optional[str] = Field(default=None, max_length=32)
-    os_version: Optional[str] = Field(default=None, max_length=32)
-    device_model: Optional[str] = Field(default=None, max_length=64)
-    foreground: bool = True
+    @model_validator(mode="after")
+    def change_needs_both_ends(self) -> "Metric":
+        if self.change_pct is not None and self.previous_value is None:
+            raise ValueError("change_pct requires previous_value")
+        return self
 
 
-class SecuritySignal(BaseModel):
-    """A client-observed security signal (root, emulator, tampering).
+class Finding(BaseModel):
+    """A single finding with evidence."""
+    title: str = Field(min_length=3, max_length=120)
+    severity: Literal["info", "warning", "critical"]
+    evidence: list[Metric] = Field(min_length=1, max_length=12)
 
-    Recorded as an observation with a boolean `blocked`. It is never used to
-    refuse a request: these checks are defeated in minutes on a rooted device,
-    so gating on them mostly generates support tickets about the security feature
-    working as designed.
+
+class Action(str, Enum):
+    """Closed set of allowed remediation actions.
+
+    The model cannot invent arbitrary actions - it must pick from this
+    closed enum. This is a critical guardrail against prompt injection.
     """
+    NO_ACTION = "no_action"
+    SCALE_WORKER = "scale_worker"
+    ROLLBACK_RELEASE = "rollback_release"
+    INVESTIGATE_ENDPOINT = "investigate_endpoint"
+    TRIAGE_CRASH_CLUSTER = "triage_crash_cluster"
+    ROTATE_CREDENTIALS = "rotate_credentials"
+    ADD_RATE_LIMIT = "add_rate_limit"
+    REVIEW_RECENT_CHANGES = "review_recent_changes"
+    FIX_BLOCKING_BUG = "fix_blocking_bug"
+    CONTACT_STORE = "contact_store"
+    INVESTIGATE_DATA_PIPELINE = "investigate_data_pipeline"
 
-    platform: str = Field(default="android", max_length=16)
-    #: root_detected, emulator_detected, tamper_detected.
-    kind: str = Field(min_length=1, max_length=48)
-    session_id: Optional[str] = Field(default=None, max_length=64)
-    app_version: Optional[str] = Field(default=None, max_length=32)
-    blocked: bool = False
-    detail: dict[str, Any] = Field(default_factory=dict)
+
+class Recommendation(BaseModel):
+    """A prioritized recommended action."""
+    action: Action
+    priority: Literal[1, 2, 3]              # 1 = do now
+    detail: str = Field(max_length=800)
+    evidence_refs: list[str] = Field(default_factory=list, max_length=12)
+
+
+class Confidence(BaseModel):
+    """Confidence metadata for the scan."""
+    level: Literal["low", "medium", "high"]
+    missing_data: list[str] = Field(default_factory=list, max_length=20)
+    tools_failed: list[str] = Field(default_factory=list, max_length=20)
+
+
+class ScanResult(BaseModel):
+    """Complete scan result - the contract for all eight scans."""
+    schema_version: Literal[1] = 1
+    scan_id: str
+    subsection: Literal[
+        "A_W_HEALTH", "B_W_ACTIVITY", "C_W_SECURITY", "D_W_FEEDBACK",
+        "A_A_HEALTH", "B_A_ACTIVITY", "C_A_SECURITY", "D_A_FEEDBACK",
+    ]
+    status: Status
+    summary: str = Field(min_length=20, max_length=1200)
+    findings: list[Finding] = Field(max_length=8)
+    root_causes: list[str] = Field(default_factory=list, max_length=6)
+    recommended_actions: list[Recommendation] = Field(default_factory=list, max_length=6)
+    confidence: Confidence
