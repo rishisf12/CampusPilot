@@ -125,7 +125,7 @@ function Shell() {
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {offline && !online && (
             <ErrorBanner
-              message="Backend offline - start it with: uvicorn main:app --port 8001"
+              message="Backend offline - start it with: uvicorn main:app --port 8000"
               onDismiss={() => setConnectionError(null)}
               className="mb-4"
             />
@@ -281,7 +281,7 @@ function Shell() {
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {offline && !online && (
           <ErrorBanner
-            message="Backend offline - start it with: uvicorn main:app --port 8001"
+            message="Backend offline - start it with: uvicorn main:app --port 8000"
             onDismiss={() => setConnectionError(null)}
             className="mb-4"
           />
