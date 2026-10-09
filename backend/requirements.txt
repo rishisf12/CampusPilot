@@ -22,7 +22,7 @@ email-validator==2.2.0
 # prometheus_client is the reference Python client, Apache-2.0. It gives us
 # /metrics, which is what Prometheus scrapes - the "DB performance" and "slow
 # endpoints" numbers in the Health subsection come out of these instruments.
-prometheus-client==0.21.0
+prometheus-client==0.26.0
 
 # --- Observability: scan queue ----------------------------------------------
 # RQ is BSD-3-Clause and deliberately small (~2k lines). A scan is a linear,
