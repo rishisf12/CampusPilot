@@ -30,7 +30,7 @@ prometheus-client==0.21.0
 # queue and Celery would bring a result backend and beat scheduler we never use.
 # Concurrency is pinned to 1 so scans cannot overload a small VPS.
 rq==1.16.2
-redis==5.2.1
+redis==8.1.0
 
 # --- Feedback NLP (all local, no model downloads at runtime) ----------------
 # VADER is a lexicon-based sentiment model from NLTK (Apache-2.0). It runs in
