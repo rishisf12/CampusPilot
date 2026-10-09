@@ -56,6 +56,6 @@ cbor2==6.1.5
 # OCR + LLM dependencies
 pytesseract==0.3.10
 pdf2image==1.17.0
-requests==2.31.0
+requests==2.34.2
 # pillow pinned without a version: 10.3.0 fails to build from source on 3.12+
 pillow
