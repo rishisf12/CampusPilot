@@ -57,8 +57,22 @@ def upgrade() -> None:
         # SQLite doesn't support roles; skip in tests
         return
 
-    # Create read-only role for monitoring scans and dashboards
-    op.execute("CREATE ROLE monitoring_ro NOINHERIT")
+    # Create read-only role for monitoring scans and dashboards.
+    #
+    # Roles are cluster-wide in PostgreSQL, not per-database. A fresh
+    # test database that shares a cluster with the development database
+    # therefore already has this role, and a bare CREATE ROLE would fail
+    # with DuplicateObject. Make the creation idempotent so a clean test
+    # database can be migrated in a cluster the development database
+    # already uses.
+    op.execute(
+        "DO $$ "
+        "BEGIN "
+        "  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'monitoring_ro') THEN "
+        "    CREATE ROLE monitoring_ro NOINHERIT; "
+        "  END IF; "
+        "END $$;"
+    )
     op.execute("ALTER ROLE monitoring_ro SET default_transaction_read_only = on")
 
     # Grant SELECT on all monitoring tables that actually exist
