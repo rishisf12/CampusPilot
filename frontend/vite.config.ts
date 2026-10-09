@@ -3,10 +3,22 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 /**
- * Dev server on 5173 with backend requests proxied to FastAPI on 8001, so the
+ * Dev server on 5173 with backend requests proxied to FastAPI on 8000, so the
  * app can use same-origin paths and stay free of CORS problems.
+ *
+ * The literal 127.0.0.1 is load-bearing, not a style choice. `localhost`
+ * resolves to `::1` first on Windows (and on any host with IPv6 enabled), but
+ * `uvicorn` binds IPv4-only unless you pass `--host 0.0.0.0`. Node's proxy then
+ * dials `::1`, gets ECONNREFUSED, and every single proxied path returns 500
+ * with an empty body - while the backend is perfectly healthy and answers 200
+ * on 127.0.0.1. That is the "Backend offline" banner in the UI with no useful
+ * error anywhere.
+ *
+ * Override with VITE_DEV_BACKEND if you run the backend somewhere else, e.g.
+ * `VITE_DEV_BACKEND=http://localhost:8002` when using the Docker stack. Keep
+ * the IP literal in that case too, for the same reason.
  */
-const BACKEND = 'http://localhost:8000';
+const BACKEND = process.env.VITE_DEV_BACKEND || 'http://127.0.0.1:8000';
 
 /**
  * Backend path prefixes proxied to FastAPI.

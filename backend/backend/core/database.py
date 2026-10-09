@@ -24,7 +24,7 @@ swap:
 import logging
 from contextlib import contextmanager
 
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, create_engine
 from sqlalchemy import text
 
 from core.config import settings
@@ -65,9 +65,20 @@ _engine_kwargs = engine_kwargs
 
 
 def create_engine_with_retry(url: str, max_retries: int = 30, base_delay: float = 1.0):
-    """Create engine with retry logic for transient connection failures."""
+    """Create an engine, retrying transient connection failures.
+
+    The container and the local machine both hit a real race: the app process
+    frequently wins the startup race against Postgres, so the first connection
+    attempt fails while the database is still finishing its own init. Without
+    this the API crashes on boot and, under compose, restart-loops until Postgres
+    happens to win instead - a failure that looks intermittent and is really
+    just ordering.
+
+    Backoff is exponential and capped at 30s so a genuinely wrong URL still
+    fails fast enough to be noticed instead of hanging forever.
+    """
     import time
-    last_exception = None
+
     for attempt in range(1, max_retries + 1):
         try:
             engine = create_engine(
@@ -76,18 +87,29 @@ def create_engine_with_retry(url: str, max_retries: int = 30, base_delay: float 
                 future=True,
                 **engine_kwargs(),
             )
-            # Test the connection
+            # Force the connection now; create_engine alone is lazy and would
+            # defer the failure to the first request instead.
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            logger.info("Database connection established on attempt %d", attempt)
-            return engine
-        except Exception as e:
+        except Exception as exc:
             if attempt == max_retries:
                 logger.exception("Failed to connect to database after %d attempts", max_retries)
                 raise
-            delay = min(base_delay * (2 ** (attempt - 1)), 30.0)  # exponential backoff, max 30s
-            logger.warning("Database connection attempt %d/%d failed: %s. Retrying in %.1fs...", attempt, max_retries, e, min(base_delay * (2 ** (attempt - 1)), 30.0))
-            time.sleep(min(base_delay * (2 ** (attempt - 1)), 30.0))
+            delay = min(base_delay * (2 ** (attempt - 1)), 30.0)
+            logger.warning(
+                "Database connection attempt %d/%d failed: %s. Retrying in %.1fs...",
+                attempt,
+                max_retries,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
+            continue
+
+        logger.info("Database connection established on attempt %d", attempt)
+        return engine
+
+    # Unreachable: the loop either returns or raises on its final attempt.
     raise RuntimeError("Failed to create database engine after max retries")
 
 
@@ -197,9 +219,6 @@ def get_session() -> Session:
     """FastAPI dependency: yields a session and ensures close."""
     with Session(engine) as session:
         yield session
-
-
-from contextlib import contextmanager
 
 
 @contextmanager

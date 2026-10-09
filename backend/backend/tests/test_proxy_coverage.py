@@ -26,7 +26,12 @@ from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
 REPO = BACKEND.parents[1]
-VITE_CONFIG = REPO / "frontend" / "vite.config.js"
+VITE_CONFIG = REPO / "frontend" / "vite.config.ts"
+#: A stale compiled/shadowing config silently wins over vite.config.ts: Vite
+#: resolves `.js` before `.ts`, so the file you edit is not the file that runs.
+#: That happened here - vite.config.js pointed at port 8001 while vite.config.ts
+#: pointed at 8000, so every proxied request 500'd with an empty body.
+VITE_CONFIG_SHADOWS = (REPO / "frontend" / "vite.config.js",)
 NGINX_CONF = REPO / "frontend" / "nginx.conf"
 MAIN = BACKEND / "main.py"
 
@@ -90,6 +95,21 @@ class TestProxyCoverage:
         assert VITE_CONFIG.is_file(), f"missing {VITE_CONFIG}"
         assert NGINX_CONF.is_file(), f"missing {NGINX_CONF}"
 
+    def test_no_vite_config_shadows_the_typescript_one(self):
+        """Only one Vite config may exist.
+
+        Vite looks for `vite.config.js` before `vite.config.ts`. If both are
+        present the `.js` wins, so edits to the `.ts` are ignored with no error
+        anywhere - the dev server keeps proxying to whatever the dead file says.
+        That shipped a 500 on every endpoint while the file everyone edits
+        looked correct.
+        """
+        present = [p.name for p in VITE_CONFIG_SHADOWS if p.exists()]
+        assert not present, (
+            f"{present} shadows {VITE_CONFIG.name}, which Vite resolves first. "
+            "Delete it and keep a single vite.config.ts."
+        )
+
     def test_backend_prefixes_are_discoverable(self):
         """Guards the discovery itself.
 
@@ -105,7 +125,7 @@ class TestProxyCoverage:
     def test_every_backend_prefix_is_proxied_by_vite(self):
         missing = sorted(_backend_prefixes() - _vite_prefixes())
         assert not missing, (
-            f"vite.config.js does not proxy {missing}. Under `npm run dev` these "
+            f"{VITE_CONFIG.name} does not proxy {missing}. Under `npm run dev` these "
             "endpoints 404 from the SPA origin, which looks like a missing "
             "endpoint rather than a missing proxy rule."
         )
@@ -119,7 +139,7 @@ class TestProxyCoverage:
         """
         extra = sorted(_vite_prefixes() - _backend_prefixes())
         assert not extra, (
-            f"vite.config.js proxies {extra}, which the backend does not serve. "
+            f"{VITE_CONFIG.name} proxies {extra}, which the backend does not serve. "
             "Either a router was renamed or removed, or this list is stale."
         )
 
