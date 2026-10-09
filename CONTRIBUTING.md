@@ -19,12 +19,29 @@ cd ../frontend && npm install
 Run the two servers in separate terminals:
 
 ```bash
-cd backend/backend && python -m uvicorn main:app --port 8001
+cd backend/backend && python -m uvicorn main:app --port 8000
 cd frontend && npm run dev
 ```
 
-The backend port **must** match `frontend/vite.config.js` (`8001`). If you
-change one, change the other.
+The backend port **must** match the proxy target in
+`frontend/vite.config.ts` (`8000` by default, overridable with
+`VITE_DEV_BACKEND`). If you change one, change the other.
+
+Two traps worth knowing before you debug them:
+
+- Keep only **one** `vite.config` file. Vite resolves `vite.config.js` before
+  `vite.config.ts`, so a stale `.js` silently wins and your edits to the `.ts`
+  do nothing.
+- Use `127.0.0.1`, not `localhost`, as the proxy target. `localhost` resolves
+  to `::1` first on Windows and uvicorn binds IPv4-only, which turns every
+  proxied request into a 500 with an empty body.
+
+Migrations run from `backend/` (where `alembic.ini` lives), not
+`backend/backend/`:
+
+```bash
+cd backend && python -m alembic -c alembic.ini upgrade head
+```
 
 ## Before you open a pull request
 

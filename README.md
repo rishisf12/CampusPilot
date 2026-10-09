@@ -38,7 +38,7 @@ Backend: FastAPI + SQLModel + PostgreSQL 16. Frontend: React 18 + Vite.
 |---|---|
 | Python | 3.10+ (developed and tested on 3.10.10) |
 | Node.js | 18+ (tested on 24.14) |
-| Free ports | **8001** (backend), **5173** (frontend) |
+| Free ports | **8000** (backend), **5173** (frontend) |
 
 ### 1. Backend
 
@@ -68,17 +68,19 @@ Start the API:
 
 ```bash
 cd backend/backend
-python -m uvicorn main:app --port 8001
+python -m uvicorn main:app --port 8000
 ```
 
-The database file and all tables are created automatically on first boot, and
-older databases are migrated in place. Check it is alive:
+PostgreSQL is the only supported database. Point `DATABASE_URL` at your server
+(see [Environment variables](#environment-variables)); Alembic migrations run
+automatically at startup, so a fresh database is created and brought to head
+without a separate step. Check it is alive:
 
 ```bash
-curl http://127.0.0.1:8001/health     # {"status":"ok"}
+curl http://127.0.0.1:8000/health     # {"status":"ok"}
 ```
 
-Interactive API docs: <http://127.0.0.1:8001/docs>
+Interactive API docs: <http://127.0.0.1:8000/docs>
 
 ### 2. Frontend
 
@@ -90,8 +92,19 @@ npm run dev
 
 Open <http://localhost:5173>. The Vite dev server proxies every backend prefix
 (`/auth`, `/profile`, `/schedule`, `/timetable`, `/rooms`, `/attendance`,
-`/exam`, `/health`, `/ocr`, `/api`) to `http://localhost:8001`, so the app runs
-same-origin and needs no CORS setup.
+`/exam`, `/health`, `/ocr`, `/feedback`, `/teams`, `/hackathons`,
+`/monitoring`, `/collect`, `/metrics`) to `http://127.0.0.1:8000`, so the app
+runs same-origin and needs no CORS setup.
+
+Set `VITE_DEV_BACKEND` to point the proxy somewhere else, e.g.
+`http://127.0.0.1:8002` when the backend runs in Docker. Use the IP literal
+rather than `localhost`: on Windows `localhost` resolves to `::1` first and
+uvicorn binds IPv4-only, which makes every proxied request fail with a 500 and
+an empty body.
+
+There must be exactly **one** `vite.config` file. Vite resolves
+`vite.config.js` before `vite.config.ts`, so a leftover `.js` silently wins and
+the `.ts` you are editing has no effect.
 
 ### 3. First run
 
@@ -115,8 +128,12 @@ Backend reads `backend/backend/.env` (see `.env.example`).
 | `SECRET_KEY` | dev placeholder | JWT signing key. **Must be ≥ 32 bytes for HS256.** Set your own. |
 | `ALGORITHM` | `HS256` | JWT algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (7 days) | Token lifetime |
-| `DATABASE_URL` | `postgresql+psycopg://campuspilot:campuspilot@localhost:5432/campuspilot` | Database. Must be `postgresql+psycopg` — a bare `postgresql://` resolves to psycopg2, which is not installed. Pointing this at a `sqlite:///` file still works and is what the unit tests do. |
-| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `10` / `10` | Connection pool. Ignored on SQLite. |
+| `DATABASE_URL` | `postgresql+psycopg://campuspilot:campuspilot@localhost:5432/campuspilot` | Database. Must be `postgresql+psycopg` — only this dialect is supported.
+SQLite is not part of the project. Do not set `TEST_DATABASE_URL`; the conftest
+defaults to a scratch SQLite file, which is incompatible with the production
+engine and will silently pass tests that would fail on PostgreSQL. Always run
+pytest against PostgreSQL: ``TEST_DATABASE_URL=postgresql+psycopg://... python -m pytest``.
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `10` / `10` | Connection pool for PostgreSQL. Only applies when `TEST_DATABASE_URL` points at Postgres.
 | `DB_POOL_RECYCLE` | `1800` | Recycle a pooled connection after N seconds, before a NAT/firewall can drop it. |
 | `DB_SSLMODE` | `prefer` | TLS to the database. Use `require` off-host. |
 | `ALLOWED_EMAIL_DOMAIN` | `@iiitdmj.ac.in` | Only this domain may register |
@@ -168,73 +185,80 @@ CampusPilot/
 │       │   ├── profile/          # Programme, semester, branch, electives
 │       │   ├── rooms/            # Vacant room lookup
 │       │   ├── monitoring/       # Telemetry ingest, metrics, admin monitoring, AI scans
-│       │   │   ├── models.py     # 10 monitoring tables
-│       │   │   ├── collector.py  # /collect/* ingest + HMAC pseudonymisation
-│       │   │   ├── queries.py    # Read-only aggregates (the AI scan tool layer)
-│       │   │   ├── rollup.py     # event -> event_hourly, idempotent; also a CLI
-│       │   │   ├── metrics.py    # Prometheus instruments
-│       │   │   └── routes.py     # /monitoring/* admin endpoints
+│       │   │   ├── api/         # routes.py (/monitoring/*, /collect/*), schemas.py
+│       │   │   ├── domain/      # models.py (monitoring tables), thresholds.py
+│       │   │   ├── infrastructure/  # collector, rollup, metrics, ratelimit
+│       │   │   └── services/    # queries, scan_service, feedback_analysis, llm_client
 │       │   ├── schedule/         # Live schedule (current/next class)
 │       │   ├── teams/            # Hackathon teams & matching
 │       │   └── timetable/        # Class timetable upload & parsing
 │       ├── ocr/                  # Optional OCR extraction
 │       ├── scripts/seed.py       # Demo data
-│       ├── tests/                # 787 tests (SQLite and PostgreSQL)
+│       ├── tests/                # 790 tests (PostgreSQL)
 │       └── uploads/              # Runtime uploads (git-ignored)
 ├── frontend/
 │   ├── index.html                # Title, favicon, Tailwind palette, CSS reset
-│   ├── vite.config.js            # Port 5173, proxy → 8001
+│   ├── vite.config.ts            # Port 5173, proxy → 127.0.0.1:8000
+│   ├── nginx.conf                # Container proxy; uses try_files, no per-router list
+│   ├── tsconfig.json
 │   ├── public/
 │   │   ├── logo.svg              # Lightbulb lockup + wordmark
 │   │   └── logo-icon.svg         # Icon: 9/11/2 rings, smile, teal
-│   └── src/
-│       ├── main.jsx
-│       ├── App.jsx               # Single header, nav, footer
-│       ├── api.js                # fetch wrapper + all endpoints
-│       ├── constants.js          # Branches, programmes, semesters
+│   └── src/                      # TypeScript (.tsx) — the .jsx migration is complete
+│       ├── main.tsx
+│       ├── App.tsx               # Single header, nav, footer
+│       ├── api.ts                # fetch wrapper + all endpoints
+│       ├── constants.ts          # Branches, programmes, semesters
+│       ├── telemetry.ts          # /collect/events batched sender
 │       ├── index.css             # Component classes
+│       ├── types/api.ts          # Shared API response types
 │       ├── components/           # Shared UI components
-│       │   ├── AuthWrapper.jsx   # Session context, /auth/me retry
-│       │   ├── LoginForm.jsx
-│       │   ├── SignupForm.jsx
-│       │   ├── VerifyEmail.jsx   # 6-digit OTP + resend cooldown
-│       │   ├── FileUpload.jsx
-│       │   ├── ErrorBanner.jsx
-│       │   ├── Spinner.jsx
-│       │   ├── StatusCard.jsx
-│       │   ├── StartScreen.jsx
-│       │   ├── SignupEmail.jsx
-│       │   ├── PasswordReset.jsx
-│       │   ├── PasskeyPrompt.jsx
-│       │   ├── PasskeyRecovery.jsx
-│       │   ├── ManagePasskeys.jsx
-│       │   └── UploadPreview.jsx
+│       │   ├── AuthWrapper.tsx   # Session context, /auth/me retry
+│       │   ├── LoginForm.tsx
+│       │   ├── SignupForm.tsx
+│       │   ├── VerifyEmail.tsx   # 6-digit OTP + resend cooldown
+│       │   ├── FileUpload.tsx
+│       │   ├── ErrorBanner.tsx
+│       │   ├── Spinner.tsx
+│       │   ├── StatusCard.tsx
+│       │   ├── StartScreen.tsx
+│       │   ├── SignupEmail.tsx
+│       │   ├── PasswordReset.tsx
+│       │   ├── PasskeyPrompt.tsx
+│       │   ├── PasskeyRecovery.tsx
+│       │   ├── ManagePasskeys.tsx
+│       │   ├── NavIcons.tsx
+│       │   └── UploadPreview.tsx
 │       ├── features/             # Feature-specific UI
-│       │   ├── admin/            # AdminLogin, AdminPanel
+│       │   ├── admin/            # AdminPanel
 │       │   ├── classroom/        # Attendance, ExamSeating, LiveSchedule, VacantRoomLookup
 │       │   ├── feedback/         # Feedback form + history
-│       │   ├── monitoring/       # Web + Android monitoring sections
-│       │   │   ├── Monitoring.jsx  # Section shell, subsection nav, freshness badge
-│       │   │   ├── Health.jsx      # A: Health & Performance
-│       │   │   ├── Activity.jsx    # B: User Activity
-│       │   │   ├── Security.jsx    # C: Security
-│       │   │   ├── Feedback.jsx    # D: Feedback
-│       │   │   ├── History.jsx     # Scan history + incident log
-│       │   │   └── components.jsx  # StatTile, Panel, StatusPill, AwaitingData, ...
+│       │   ├── profile/          # Profile page
+│       │   ├── monitoring/       # Admin monitoring dashboard
+│       │   │   ├── Monitoring.tsx        # Section shell, subsection nav, freshness badge
+│       │   │   ├── panels/Health.tsx     # A: Health & Performance
+│       │   │   ├── panels/Activity.tsx   # B: User Activity
+│       │   │   ├── panels/Security.tsx   # C: Security
+│       │   │   ├── panels/Feedback.tsx   # D: Feedback
+│       │   │   ├── panels/Monetisation.tsx
+│       │   │   ├── panels/History.tsx    # Scan history + incident log
+│       │   │   └── components/components.tsx  # StatTile, Panel, StatusPill, ...
 │       │   └── myteam/           # Teams, Hackathons, CreateTeam, MatchScore
 │       ├── hooks/                # React hooks
-│       │   ├── useLiveDay.js
-│       │   ├── useProfile.jsx
-│       │   ├── useProfileCourses.js
-│       │   └── useProfileVersion.js
+│       │   ├── useLiveDay.ts
+│       │   ├── useProfile.tsx
+│       │   ├── useProfileCourses.ts
+│       │   └── useProfileVersion.ts
 │       ├── lib/                  # Utilities
-│       │   ├── normalise.js
-│       │   ├── passkey.js
-│       │   ├── storage.js
-│       │   ├── sync.js
-│       │   └── time.js
+│       │   ├── normalise.ts
+│       │   ├── passkey.ts
+│       │   ├── storage.ts
+│       │   ├── sync.ts
+│       │   └── time.ts
 │       └── tests/
 │           └── passkey.test.js
+├── mcp-crash-monitor/            # Read-only MCP server over the monitoring tables
+│   └── src/index.ts
 ├── ops/
 │   └── prometheus/               # Prometheus config, alert rules, blackbox modules
 └── tools/                        # Maintenance scripts (not part of the app)
@@ -716,7 +740,7 @@ python -m pytest -q
 ```
 
 Tests that only mean something on PostgreSQL (constraint enforcement, dialect
-DDL) carry the `postgres` marker and are skipped on the SQLite run. CI runs
+DDL) carry the `postgres` marker and are skipped on the SQLite run. CI runs only against PostgreSQL. Migrate a SQLite file with ``docker compose run --rm backend python tools/migrate_sqlite_to_postgres.py`` if you need to move an existing database.
 both, plus an `alembic downgrade/upgrade` round-trip and `alembic check` for
 model/migration drift.
 
@@ -832,7 +856,7 @@ configured with your mail provider). The app includes:
    IMAP_HOST=imap.gmail.com
    IMAP_USER=your-email@gmail.com
    IMAP_PASS=your-app-password
-   INGEST_URL=http://localhost:8001/feedback/ingest
+   INGEST_URL=http://localhost:8000/feedback/ingest
    ```
 4. Run once: `python tools/imap_feedback_poller.py`
 5. For production: `sudo cp deploy/campuspilot-imap-poller.* /etc/systemd/system/`
@@ -865,7 +889,7 @@ These are real limitations rather than bugs:
 
 | Symptom | Fix |
 |---|---|
-| `Backend offline` dot in the header | Backend is not on port 8001. Start it and reload. |
+| `Backend offline` dot in the header | Backend is not on port 8000. Start it and reload. Confirm `curl http://127.0.0.1:8000/health` returns `{"status":"ok"}`. |
 | `/health` returns 500 at startup | A previous process still holds `classpilot.db`. Stop it, or delete the file — it is recreated with empty tables. |
 | Login always 401s | Token not attached, or `SECRET_KEY` changed after the token was issued. Log out and back in. |
 | Signup rejected | Email must end with `@iiitdmj.ac.in`; username and roll must be unique. |
@@ -873,7 +897,7 @@ These are real limitations rather than bugs:
 | Upload says "no rows found" | The file is a 0-byte download, or a scanned image with no text layer. Re-download and check the size. |
 | Live Schedule / Vacant Rooms empty | No class timetable uploaded yet — **Live Schedule → Timetable**. |
 | Attendance has no subjects | Subjects sync from the timetable; upload it, then *Refresh*. |
-| `401` on every request in dev | The Vite proxy points at 8000. `vite.config.js` targets 8001 — restart the dev server. |
+| `401` on every request in dev | The Vite proxy points at 8000. `vite.config.ts` targets 8000 — confirm the proxy is not being shadowed by a stale `vite.config.js`. |
 | Port already in use | `netstat -ano | findstr :8001` then `taskkill /f /pid <PID>`. |
 
 ---

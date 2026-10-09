@@ -23,26 +23,37 @@ This guide walks you through setting up CampusPilot for local development using 
 
 ```
 CampusPilot/
-├── docker-compose.yml          # Main compose file (at repo root)
+├── docker-compose.yml          # The only compose file (at repo root)
 ├── .env.example                # Copy to .env and fill in secrets
 ├── .env.imap.example           # IMAP-specific env vars
+├── .dockerignore               # Keeps node_modules, dist, .env out of images
+├── .gitattributes              # Pins .husky/** to LF (hooks are run by sh)
 ├── backend/
-│   ├── backend/                # FastAPI application package
-│   │   ├── core/               # Database, config, security
-│   │   ├── features/           # Feature modules (auth, monitoring, etc.)
-│   │   ├── main.py             # FastAPI entry point
-│   │   ├── requirements.txt    # Python deps
-│   │   ├── Dockerfile
-│   │   └── alembic/            # Database migrations
-│   └── alembic.ini
+│   ├── alembic.ini             # Migrations run from HERE
+│   ├── alembic/                # Database migrations
+│   ├── requirements.txt        # Python deps
+│   ├── Dockerfile              # Listens on container port 8001
+│   └── backend/                # FastAPI package — server & tests run from HERE
+│       ├── core/               # Database, config, security
+│       ├── features/           # Feature modules (auth, monitoring, etc.)
+│       ├── main.py             # FastAPI entry point
+│       └── tests/
 ├── frontend/                   # React + Vite + TypeScript
-│   ├── src/
+│   ├── src/                    # .tsx only — the .jsx migration is complete
+│   ├── vite.config.ts          # Dev proxy config (keep only this one file)
+│   ├── nginx.conf              # Container proxy (no per-router list)
 │   ├── package.json
-│   ├── Dockerfile
+│   ├── Dockerfile              # Serves on container port 80
 │   └── tsconfig.json
+├── mcp-crash-monitor/          # Read-only MCP server over monitoring tables
+│   └── src/index.ts
 ├── ops/                        # Observability configs (Prometheus, Grafana, Alertmanager)
 └── docs/                       # Documentation
 ```
+
+> **There is exactly one `vite.config` and one `docker-compose.yml`.** Both
+> used to have a stale duplicate that shadowed the real one. If you add a second
+> copy, check which file the tooling actually reads first.
 
 ---
 
@@ -101,16 +112,17 @@ This starts:
 
 ## Manual Backend Development (Without Docker)
 
-### 1. Enter Backend Directory
+> **Two directories, two purposes.** `backend/` holds `alembic.ini` and
+> `requirements.txt`, so migrations run from there. `backend/backend/` holds
+> `main.py` and the flat-import packages (`core`, `features`), so the server and
+> the tests run from there. The app uses flat imports (`from core.config import
+> ...`), which is why it must be started inside the package directory rather
+> than as `backend.main:app`.
+
+### 1. Create Virtual Environment (Python 3.10)
 
 ```powershell
 cd backend\backend
-```
-
-### 2. Create Virtual Environment (Python 3.10)
-
-```powershell
-# Create venv
 python -m venv .venv
 
 # Activate (VS Code Terminal)
@@ -120,17 +132,14 @@ python -m venv .venv
 python -m pip install --upgrade pip
 ```
 
-### 3. Install Dependencies
+### 2. Install Dependencies
 
 ```powershell
-# Install runtime deps
+# requirements.txt lives one level up, next to alembic.ini
 pip install -r ..\requirements.txt
-
-# Install dev deps (if you have requirements-dev.txt)
-pip install -r ..\requirements-dev.txt 2>$null
 ```
 
-### 4. Configure Local .env
+### 3. Configure Local .env
 
 ```powershell
 # Copy and edit
@@ -139,23 +148,32 @@ cp ..\.env.example .env
 # DATABASE_URL=postgresql+psycopg://campuspilot:campuspilot@localhost:5432/campuspilot
 ```
 
-### 5. Run Migrations
+### 4. Run Migrations
 
 ```powershell
-# From backend/backend/
+# From backend/  -- NOT backend/backend/, which has no alembic.ini
+cd backend
 python -m alembic -c alembic.ini upgrade head
 ```
 
-### 6. Run Backend
+Check where you are with `python -m alembic -c alembic.ini current`; it should
+print the current revision, not `FAILED: No config file 'alembic.ini' found`.
+
+### 5. Run Backend
 
 ```powershell
 # From backend/backend/
-python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001 --reload
+python -m uvicorn main:app --port 8000 --reload
 ```
 
-API available at: <http://localhost:8001> | Docs: <http://localhost:8001/docs>
+API available at: <http://127.0.0.1:8000> | Docs: <http://127.0.0.1:8000/docs>
 
-### 7. Run Tests
+> **Port 8000 is what the Vite dev proxy expects.** Keep it in step with
+> `VITE_DEV_BACKEND` in `frontend/vite.config.ts`. If you need a different
+> port, change the proxy target rather than only the server flag, or every
+> request through the dev server fails.
+
+### 6. Run Tests
 
 ```powershell
 # From backend/backend/
@@ -184,20 +202,45 @@ npm install
 npm run dev
 ```
 
-Frontend available at: <http://localhost:5173> (proxied to backend at 8001)
+Frontend available at: <http://localhost:5173> (proxied to the backend at 8000)
 
-### 3. Build for Production
+### 4. Build for Production
 
 ```powershell
 npm run build
 # Output in dist/
 ```
 
-### 4. Run Tests
+### 5. Run Tests
 
 ```powershell
 npm test
 ```
+
+### Pointing the Dev Server at a Different Backend
+
+The proxy target defaults to `http://127.0.0.1:8000` and can be overridden:
+
+```powershell
+# e.g. when the backend runs in Docker on 8002
+$env:VITE_DEV_BACKEND = "http://127.0.0.1:8002"
+npm run dev
+```
+
+> **Use the IP literal, not `localhost`.** `localhost` resolves to `::1` first
+> on Windows, and uvicorn binds IPv4-only, so the proxy gets `ECONNREFUSED`
+> and every endpoint returns a 500 with an empty body even though the backend
+> is healthy.
+
+### Only One `vite.config` May Exist
+
+Vite resolves `vite.config.js` **before** `vite.config.ts`. If both are
+present the `.js` wins and the file you are editing is ignored with no warning
+anywhere — the dev server keeps proxying to whatever the stale file says.
+
+There is a test that fails if a shadow reappears
+(`backend/backend/tests/test_proxy_coverage.py`), and it reads the `.ts` file,
+so it validates the config that actually runs.
 
 ---
 
@@ -273,8 +316,12 @@ psql -h localhost -U campuspilot -d campuspilot
 
 | Issue | Fix |
 |-------|-----|
-| `ModuleNotFoundError: No module named 'core'` | Ensure `PYTHONPATH=/app/backend` or run from `backend/backend` with venv active |
-| `psycopg.OperationalError: connection refused` | PostgreSQL not ready; check `docker logs campuspilot-postgres-1` |
+| `ModuleNotFoundError: No module named 'core'` | Wrong directory. Run the server from `backend/backend` (flat imports), or set `PYTHONPATH=/app/backend` in Docker |
+| `FAILED: No config file 'alembic.ini' found` | Running migrations from `backend/backend`. `alembic.ini` is in `backend/` — `cd backend` first |
+| `ModuleNotFoundError: No module named 'backend'` | Running `uvicorn backend.main:app` from `backend/backend`. Use `uvicorn main:app` there |
+| Every request through :5173 returns **500 with an empty body** | Proxy cannot reach the backend. Check `VITE_DEV_BACKEND` in `frontend/vite.config.ts`, and that no stale `vite.config.js` is shadowing the `.ts`. `localhost` resolves to `::1` and uvicorn is IPv4-only — use `127.0.0.1` |
+| `Backend offline` banner in the UI | The dev proxy cannot reach the backend; see the row above. Confirm `curl http://127.0.0.1:8000/health` returns `{"status":"ok"}` |
+| `psycopg.OperationalError: connection refused` | PostgreSQL not ready; check `docker logs campuspilot-postgres-1`. `create_engine_with_retry` retries with backoff at startup |
 | `Temporary failure in name resolution` | DNS issue in Docker network; retry logic in `create_engine_with_retry` handles this |
 | `port 5432 already allocated` | Kill local postgres: `taskkill /PID <pid> /F` (find with `netstat -ano \| findstr :5432`) |
 | `port 8002 already allocated` | `taskkill /PID <pid> /F` (find with `netstat -ano \| findstr :8002`) |
@@ -284,6 +331,19 @@ psql -h localhost -U campuspilot -d campuspilot
 ---
 
 ## Port Reference
+
+There are three different backend ports, which is the single most confusing
+thing about this project:
+
+| Context | Port | Where it comes from |
+|---------|------|--------------------|
+| **Local dev** (no Docker) | **8000** | What you pass to uvicorn, and what the Vite proxy targets |
+| **Docker** (host side) | **8002** | `ports: "8002:8001"` in `docker-compose.yml` |
+| **Docker** (container side) | **8001** | `EXPOSE`/`CMD` in `backend/Dockerfile`; nginx proxies to `http://backend:8001` |
+
+So the Vite proxy must point at **8000** locally, or **8002** if the backend is
+in Docker. It never points at 8001 — that port only exists inside the compose
+network.
 
 | Service | Host Port | Container Port | Notes |
 |---------|-----------|----------------|-------|
@@ -332,8 +392,8 @@ SCAN_ENABLED=false
 docker compose --profile lite up -d --build
 docker compose --profile lite down -v
 
-# Backend only
-cd backend\backend; .\.venv\Scripts\Activate.ps1; python -m uvicorn backend.main:app --reload
+# Backend only (from backend/backend, venv activated)
+.\.venv\Scripts\Activate.ps1; python -m uvicorn main:app --port 8000 --reload
 
 # Frontend only
 cd frontend; npm run dev
@@ -342,8 +402,12 @@ cd frontend; npm run dev
 cd backend\backend; python -m pytest tests/ -v
 cd frontend; npm test
 
-# Migrations
-cd backend\backend; python -m alembic -c alembic.ini upgrade head
+# Migrations (from backend/, NOT backend/backend/)
+cd backend; python -m alembic -c alembic.ini upgrade head
+
+# Lint
+python -m ruff check backend/backend/
+cd frontend; npm run lint
 
 # Logs
 docker logs campuspilot-backend-1 -f
@@ -362,6 +426,34 @@ docker system prune -f
 - **VS Code terminal** preserves environment across splits — use splits for parallel processes.
 - **Python 3.10 is mandatory** — the `as const` assertions and some typing features behave differently in 3.11+.
 - **Docker Desktop on Windows** can be flaky — if `docker compose` fails to connect, restart Docker Desktop and wait 60s.
+
+---
+
+## Optional: Crash-Monitor MCP Server
+
+`mcp-crash-monitor/` is a read-only MCP server over the app's own monitoring
+tables, so crash and telemetry analysis needs no third-party hosted service.
+It connects with the same PostgreSQL you already run.
+
+```powershell
+cd mcp-crash-monitor
+npm install
+npm run build     # tsc — dist/ is gitignored, so a fresh clone must build
+npm start
+```
+
+Configuration lives in `.env` (copy from `.env.example`):
+
+```bash
+DATABASE_URL=postgresql://campuspilot:campuspilot@localhost:5432/campuspilot
+```
+
+In a shared environment point `DATABASE_URL` at a `SELECT`-only role (for
+example `monitoring_ro`, created by migration
+`0c60d501467d`) rather than the application role.
+
+It is registered in `docs/observability/opencode.json` as the `crash-monitor`
+MCP server, and runs `node dist/index.js` from `./mcp-crash-monitor`.
 
 ---
 
