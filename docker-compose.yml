@@ -13,8 +13,6 @@
 #   4. drop the --dry-run and run it for real
 #   5. docker compose --profile lite up -d
 
-version: "3.9"
-
 services:
   # ================================================================
   # Core Infrastructure
@@ -28,6 +26,8 @@ services:
       POSTGRES_INITDB_ARGS: --data-checksums
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-campuspilot} -d ${POSTGRES_DB:-campuspilot}"]
       interval: 5s
@@ -66,7 +66,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "8001:8001"
+      - "8002:8001"
     environment:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production-min-32-chars}
       - ALGORITHM=HS256
@@ -110,7 +110,7 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-240}
     volumes:
-      - ./database:/app/database
+      - database:/app/database
       - ./backend/backend/uploads:/app/backend/uploads
     depends_on:
       postgres:
@@ -136,7 +136,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
-      - "5173:80"
+      - "5174:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -223,32 +223,33 @@ services:
           memory: 64M
 
   # Alerting via Apprise (Telegram, Webhook, Email)
-  alerting:
-    image: carlosedp/notify:latest
-    profiles: ["lite", "full"]
-    environment:
-      - NOTIFY_TELEGRAM_BOT_TOKEN=${ALERT_TELEGRAM_BOT_TOKEN:-}
-      - NOTIFY_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID:-}
-      - NOTIFY_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
-      - NOTIFY_SMTP_HOST=${SMTP_HOST:-}
-      - NOTIFY_SMTP_PORT=${SMTP_PORT:-587}
-      - NOTIFY_SMTP_USER=${SMTP_USER:-}
-      - NOTIFY_SMTP_PASSWORD=${SMTP_PASSWORD:-}
-      - NOTIFY_SMTP_FROM=${EMAIL_FROM:-}
-    volumes:
-      - ./ops/alerting:/etc/notify:ro
-    depends_on:
-      alertmanager:
-        condition: service_started
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 64M
+  # DISABLED: carlosedp/notify image is unavailable on Docker Hub
+  # alerting:
+  #   image: carlosedp/notify:latest
+  #   profiles: ["lite", "full"]
+  #   environment:
+  #     - NOTIFY_TELEGRAM_BOT_TOKEN=${ALERT_TELEGRAM_BOT_TOKEN:-}
+  #     - NOTIFY_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID:-}
+  #     - NOTIFY_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+  #     - NOTIFY_SMTP_HOST=${SMTP_HOST:-}
+  #     - NOTIFY_SMTP_PORT=${SMTP_PORT:-587}
+  #     - NOTIFY_SMTP_USER=${SMTP_USER:-}
+  #     - NOTIFY_SMTP_PASSWORD=${SMTP_PASSWORD:-}
+  #     - NOTIFY_SMTP_FROM=${EMAIL_FROM:-}
+  #   volumes:
+  #     - ./ops/alerting:/etc/notify:ro
+  #   depends_on:
+  #     alertmanager:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.5'
+  #         memory: 256M
+  #       reservations:
+  #         cpus: '0.1'
+  #         memory: 64M
 
   # ================================================================
   # Observability Stack - Full Profile (16 GB target)
@@ -326,7 +327,7 @@ services:
     command:
       - --config.file=/etc/blackbox_exporter/config.yml
     volumes:
-      - ./ops/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+      - ops/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     restart: unless-stopped
     deploy:
       resources:

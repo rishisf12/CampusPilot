@@ -25,6 +25,7 @@ import logging
 from contextlib import contextmanager
 
 from sqlmodel import Session, SQLModel, create_engine
+from sqlalchemy import text
 
 from core.config import settings
 
@@ -63,12 +64,34 @@ def engine_kwargs() -> dict:
 _engine_kwargs = engine_kwargs
 
 
-engine = create_engine(
-    settings.database_url,
-    echo=False,
-    future=True,
-    **engine_kwargs(),
-)
+def create_engine_with_retry(url: str, max_retries: int = 30, base_delay: float = 1.0):
+    """Create engine with retry logic for transient connection failures."""
+    import time
+    last_exception = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            engine = create_engine(
+                url,
+                echo=False,
+                future=True,
+                **engine_kwargs(),
+            )
+            # Test the connection
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("Database connection established on attempt %d", attempt)
+            return engine
+        except Exception as e:
+            if attempt == max_retries:
+                logger.exception("Failed to connect to database after %d attempts", max_retries)
+                raise
+            delay = min(base_delay * (2 ** (attempt - 1)), 30.0)  # exponential backoff, max 30s
+            logger.warning("Database connection attempt %d/%d failed: %s. Retrying in %.1fs...", attempt, max_retries, e, min(base_delay * (2 ** (attempt - 1)), 30.0))
+            time.sleep(min(base_delay * (2 ** (attempt - 1)), 30.0))
+    raise RuntimeError("Failed to create database engine after max retries")
+
+
+engine = create_engine_with_retry(settings.database_url)
 
 
 # --------------------------------------------------------------------------
@@ -137,13 +160,28 @@ def upgrade_schema() -> None:
     That is deliberate - ``create_all`` would build the *current* models and
     leave no revision stamp, which silently diverges from the migration files the
     moment the first real migration is written.
+
+    Includes retry logic for transient connection failures during startup.
     """
+    import time
     from alembic import command
 
-    logger.info("PostgreSQL detected: running migrations to head")
-    cfg = alembic_config()
-    command.upgrade(cfg, "head")
-    logger.info("Schema is at head")
+    max_retries = 10
+    base_delay = 1.0
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info("PostgreSQL detected: running migrations to head (attempt %d/%d)", attempt, max_retries)
+            cfg = alembic_config()
+            command.upgrade(cfg, "head")
+            logger.info("Schema is at head")
+            return
+        except Exception as e:
+            if attempt == max_retries:
+                logger.exception("Failed to run migrations after %d attempts", max_retries)
+                raise
+            delay = base_delay * (2 ** (attempt - 1))  # exponential backoff
+            logger.warning("Migration attempt %d/%d failed: %s. Retrying in %.1fs...", attempt, max_retries, e, delay)
+            time.sleep(delay)
 
 
 def create_db_and_tables() -> None:
