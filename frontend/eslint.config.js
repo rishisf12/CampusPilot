@@ -61,6 +61,27 @@ export default tseslint.config(
     },
   },
   {
+    // shared/ is the foundation layer: it may not reach up into a
+    // feature. Dependencies point one way - a feature imports from
+    // shared, never the reverse - and this rule is what keeps that
+    // boundary a rule rather than a comment.
+    files: ['src/shared/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/features/**'],
+              message:
+                'shared/ must not import from features/. Dependencies point the other way: a feature imports from shared.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     linterOptions: {
       // Surfaced through --max-warnings 0 so a stale directive fails CI.
       reportUnusedDisableDirectives: 'warn',
