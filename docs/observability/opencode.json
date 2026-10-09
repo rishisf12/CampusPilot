@@ -293,6 +293,16 @@
         "GLITCHTIP_READONLY_TOKEN": "${GLITCHTIP_READONLY_TOKEN}",
         "ADB_SERIAL": "${ADB_SERIAL:-emulator-5554}"
       }
+    },
+    "crash-monitor": {
+      "type": "local",
+      "command": ["node", "dist/index.js"],
+      "enabled": true,
+      "timeout": 30000,
+      "cwd": "./mcp-crash-monitor",
+      "environment": {
+        "DATABASE_URL": "${DATABASE_URL:-postgresql://campuspilot:campuspilot@localhost:5432/campuspilot}"
+      }
     }
   }
 }

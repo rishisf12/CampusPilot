@@ -1,0 +1,2 @@
+# Git hooks are executed by sh; CRLF endings would make them fail on checkout.
+.husky/** text eol=lf

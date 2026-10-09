@@ -86,3 +86,8 @@ dmypy.json
 # Poppler (if bundled)
 poppler/
 poppler-*/
+
+# Google / Firebase secrets — NEVER commit these
+service-account.json
+*-service-account.json
+**/google-services.json
