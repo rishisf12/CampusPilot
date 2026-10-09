@@ -1,6 +1,6 @@
 # Backend dependencies — pinned versions for reproducibility
 fastapi==0.115.0
-uvicorn[standard]==0.32.0
+uvicorn[standard]==0.54.0
 sqlmodel==0.0.22
 python-dotenv==1.0.1
 pdfplumber==0.11.4
