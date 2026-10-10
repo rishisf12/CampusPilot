@@ -1,16 +1,16 @@
 # Backend dependencies — pinned versions for reproducibility
-fastapi==0.115.0
+fastapi==0.142.2
 uvicorn[standard]==0.32.0
-sqlmodel==0.0.22
+sqlmodel==0.0.47
 python-dotenv==1.0.1
 pdfplumber==0.11.4
-reportlab==4.2.0
+reportlab==5.0.1
 pandas==2.2.3
 pydantic==2.10.0
 pydantic-settings==2.8.0
 pytest==8.3.0
 httpx==0.28.0
-python-multipart==0.0.9
+python-multipart==0.0.32
 
 # Auth: JWT tokens, password hashing, email verification codes
 pyjwt==2.8.0
@@ -22,7 +22,7 @@ email-validator==2.2.0
 # prometheus_client is the reference Python client, Apache-2.0. It gives us
 # /metrics, which is what Prometheus scrapes - the "DB performance" and "slow
 # endpoints" numbers in the Health subsection come out of these instruments.
-prometheus-client==0.21.0
+prometheus-client==0.26.0
 
 # --- Observability: scan queue ----------------------------------------------
 # RQ is BSD-3-Clause and deliberately small (~2k lines). A scan is a linear,
@@ -43,7 +43,7 @@ vaderSentiment==3.3.2
 # "postgresql+psycopg" driver name, and it is the actively developed line.
 # [binary] ships the libpq wheel, so no libpq-dev at build time - which is why
 # the Dockerfile keeps libpq-dev only as a belt-and-braces fallback.
-psycopg[binary]==3.2.3
+psycopg[binary]==3.3.6
 # Schema migrations. Replaces the ad-hoc ALTER TABLE pass that only ever worked
 # on SQLite; see core/database.py for why that mattered.
 alembic==1.14.0
