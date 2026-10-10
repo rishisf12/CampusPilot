@@ -43,7 +43,7 @@ vaderSentiment==3.3.2
 # "postgresql+psycopg" driver name, and it is the actively developed line.
 # [binary] ships the libpq wheel, so no libpq-dev at build time - which is why
 # the Dockerfile keeps libpq-dev only as a belt-and-braces fallback.
-psycopg[binary]==3.2.3
+psycopg[binary]==3.3.6
 # Schema migrations. Replaces the ad-hoc ALTER TABLE pass that only ever worked
 # on SQLite; see core/database.py for why that mattered.
 alembic==1.14.0
