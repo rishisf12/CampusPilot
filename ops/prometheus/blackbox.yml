@@ -1,0 +1,33 @@
+# blackbox_exporter configuration.
+#
+# Only used by the `monitoring-full` profile. Its job is answering the
+# question "does the site actually work from a user's machine?", which no
+# amount of in-container metrics can answer: a container can report healthy
+# while nginx returns a 502 because of a certificate or a proxy_pass typo.
+
+modules:
+  http_2xx:
+    prober: http
+    timeout: 10s
+    # Following redirects is correct here. The app redirects to the login page
+    # for an unauthenticated request, and treating that 302 as a failure would
+    # page someone every scrape.
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      method: GET
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: false
+
+  # For endpoints where the body must actually be right, not just reachable.
+  # Added because "the endpoint returns 200" and "the endpoint returns the data
+  # the dashboard needs" are different claims, and only the second one is
+  # useful.
+  http_json:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: false

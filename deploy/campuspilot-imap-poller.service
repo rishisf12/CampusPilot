@@ -1,0 +1,17 @@
+# Systemd service for IMAP feedback poller
+# Install: sudo cp deploy/campuspilot-imap-poller.service /etc/systemd/system/
+
+[Unit]
+Description=CampusPilot IMAP Feedback Poller
+After=network.target campuspilot-backend.service
+Requires=campuspilot-backend.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/campuspilot
+EnvironmentFile=/opt/campuspilot/.env
+ExecStart=/opt/campuspilot/.venv/bin/python tools/imap_feedback_poller.py
+StandardOutput=journal
+StandardError=journal

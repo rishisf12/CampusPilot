@@ -1,0 +1,16 @@
+# Systemd timer for IMAP feedback poller
+# Runs every 5 minutes
+# Install: sudo cp deploy/campuspilot-imap-poller.timer /etc/systemd/system/
+# Enable: sudo systemctl enable --now campuspilot-imap-poller.timer
+
+[Unit]
+Description=Run IMAP feedback poller every 5 minutes
+Requires=campuspilot-imap-poller.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

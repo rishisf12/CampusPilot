@@ -1,0 +1,5 @@
+# Fast, local gate: lint (with --fix) and format only what is being committed.
+# CI still runs the full typecheck / test / build, so a bypassed hook is caught
+# on push rather than silently shipping broken code.
+cd frontend
+npx lint-staged

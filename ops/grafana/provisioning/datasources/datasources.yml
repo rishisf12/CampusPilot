@@ -1,0 +1,61 @@
+# Grafana datasource configuration for CampusPilot
+apiVersion: 1
+
+datasources:
+  # Prometheus - primary metrics source
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      queryTimeout: "60s"
+      httpMethod: POST
+
+  # VictoriaLogs - log aggregation (full profile only)
+  - name: VictoriaLogs
+    type: victoriametrics-vlogs
+    uid: victorialogs
+    access: proxy
+    url: http://victoria-logs:9428
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      queryTimeout: "60s"
+
+  # Loki - alternative log source (if used instead of VictoriaLogs)
+  # - name: Loki
+  #   type: loki
+  #   uid: loki
+  #   access: proxy
+  #   url: http://loki:3100
+  #   editable: false
+
+  # PostgreSQL - for direct SQL queries (if postgres-mcp is enabled)
+  # - name: PostgreSQL
+  #   type: postgres
+  #   uid: postgres
+  #   access: proxy
+  #   url: postgres:5432
+  #   database: campuspilot
+  #   user: campuspilot
+  #   secureJsonData:
+  #     password: "${POSTGRES_PASSWORD}"
+  #   jsonData:
+  #     sslmode: disable
+  #     maxOpenConns: 10
+  #     maxIdleConns: 5
+  #     connMaxLifetime: 14400
+
+  # Alertmanager - for alert management UI
+  - name: Alertmanager
+    type: alertmanager
+    uid: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    editable: false
+    jsonData:
+      alertmanagerRefreshInterval: "30s"

@@ -1,0 +1,308 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "ollama/qwen3:8b",
+  "small_model": "ollama/qwen3:4b",
+  "autoupdate": false,
+  "instructions": ["docs/observability/SCAN-AGENT.md"],
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local, no API key, no egress)",
+      "options": {
+        "baseURL": "http://ollama:11434/v1",
+        "timeout": 240000
+      },
+      "models": {
+        "qwen3:8b": {
+          "name": "Qwen3 8B (lite profile)",
+          "tool_call": true,
+          "limit": { "context": 32768, "output": 4096 }
+        },
+        "qwen3:4b": {
+          "name": "Qwen3 4B (fallback, 4 GB box)",
+          "tool_call": true,
+          "limit": { "context": 16384, "output": 4096 }
+        }
+      }
+    }
+  },
+  "permission": {
+    "edit": "deny",
+    "webfetch": "deny",
+    "bash": {
+      "*": "deny",
+      "cat /prometheus/*.yml": "allow",
+      "cat /etc/ssl/certs/*.pem": "allow",
+      "df -h": "allow",
+      "free -m": "allow",
+      "uptime": "allow",
+      "docker ps --format *": "allow",
+      "docker stats --no-stream *": "allow",
+      "git -C /repo log *": "allow",
+      "git -C /repo describe *": "allow"
+    }
+  },
+  "agent": {
+    "scan-web-health": {
+      "description": "A-W: uptime, latency, error rates, host/container resources, DB, slow endpoints, SSL.",
+      "mode": "primary",
+      "tools": {
+        "promql_range": true,
+        "promql_instant": true,
+        "host_metrics": true,
+        "container_metrics": true,
+        "db_stats": true,
+        "slow_endpoints": true,
+        "uptime_status": true,
+        "ssl_info": true,
+        "release_markers": true,
+        "scan_history": true,
+        "bash": false,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0.1,
+      "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
+    },
+    "scan-web-activity": {
+      "description": "B-W: DAU/WAU/MAU, retention, funnels, geography, devices, revenue, subscriptions, ads.",
+      "mode": "primary",
+      "tools": {
+        "promql_instant": true,
+        "db_stats": true,
+        "event_aggregate": true,
+        "revenue_aggregate": true,
+        "funnel_aggregate": true,
+        "geo_aggregate": true,
+        "release_markers": true,
+        "scan_history": true,
+        "bash": false,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0.1,
+      "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
+    },
+    "scan-web-security": {
+      "description": "C-W: auth failures, brute force, blocked IPs, dependency CVEs, security headers, audit log.",
+      "mode": "primary",
+      "tools": {
+        "promql_range": true,
+        "uptime_status": true,
+        "ssl_info": true,
+        "auth_failures": true,
+        "audit_log": true,
+        "cve_report": true,
+        "log_query": true,
+        "release_markers": true,
+        "scan_history": true,
+        "bash": false,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0.1,
+      "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
+    },
+    "scan-web-feedback": {
+      "description": "D-W: sentiment, topics, rating trends, volume, complaints, correlation with releases.",
+      "mode": "primary",
+      "tools": {
+        "feedback_rows": true,
+        "sentiment_aggregate": true,
+        "topic_aggregate": true,
+        "rating_trend": true,
+        "db_stats": true,
+        "release_markers": true,
+        "scan_history": true,
+        "bash": false,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0.15,
+      "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
+    },
+    "scan-android-health": {
+      "description": "A-A: crash-free rate, crashes/ANRs, startup, slow frames, API failures, battery/memory, version breakdowns.",
+      "mode": "primary",
+      "tools": {
+        "crash_aggregate": true,
+        "anr_aggregate": true,
+        "startup_times": true,
+        "frame_times": true,
+        "api_failure_aggregate": true,
+        "battery_memory": true,
+        "version_breakdown": true,
+        "os_breakdown": true,
+        "device_breakdown": true,
+        "release_markers": true,
+        "scan_history": true,
+        "bash": false,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0.1,
+      "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
+    },
+    "scan-android-activity": {
+      "description": "B-A: DAU/WAU/MAU, retention, screens, funnels, geography, devices, IAP revenue, ad events.",
+      "mode": "primary",
+      "tools": {
+        "event_aggregate": true,
+        "revenue_aggregate": true,
+        "funnel_aggregate": true,
+        "geo_aggregate": true,
+        "version_breakdown": true,
+        "os_breakdown": true,
+        "device_breakdown": true,
+        "release_markers": true,
+        "scan_history": true,
+        "bash": false,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0.1,
+      "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
+    },
+    "scan-android-security": {
+      "description": "C-A: root/emulator signals, API abuse, token misuse, tampering, dependency CVEs.",
+      "mode": "primary",
+      "tools": {
+        "root_emulator_stats": true,
+        "tamper_signals": true,
+        "auth_failures": true,
+        "token_misuse": true,
+        "version_breakdown": true,
+        "audit_log": true,
+        "cve_report": true,
+        "release_markers": true,
+        "scan_history": true,
+        "bash": false,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0.1,
+      "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
+    },
+    "scan-android-feedback": {
+      "description": "D-A: in-app feedback sentiment, topics, ratings, correlation with crashes and releases.",
+      "mode": "primary",
+      "tools": {
+        "feedback_rows": true,
+        "sentiment_aggregate": true,
+        "topic_aggregate": true,
+        "rating_trend": true,
+        "version_breakdown": true,
+        "release_markers": true,
+        "scan_history": true,
+        "bash": false,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0.15,
+      "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
+    },
+    "explain-tooling": {
+      "description": "Read-only helper for inspecting stack and release state. No scan output.",
+      "mode": "primary",
+      "tools": {
+        "promql_instant": true,
+        "release_markers": true,
+        "bash": true,
+        "write": false,
+        "edit": false,
+        "webfetch": false
+      },
+      "temperature": 0,
+      "prompt": "Read-only inspection of this deployment. Do not modify state."
+    }
+  },
+  "mcp": {
+    "metrics": {
+      "type": "local",
+      "command": ["python", "-m", "obs.mcp.metrics"],
+      "enabled": true,
+      "timeout": 15000,
+      "environment": {
+        "PROMETHEUS_URL": "${PROMETHEUS_URL}",
+        "PROMETHEUS_READONLY_TOKEN": "${PROMETHEUS_READONLY_TOKEN}",
+        "SCAN_PLATFORM": "${SCAN_PLATFORM:-web}",
+        "SCAN_ID": "${SCAN_ID}"
+      }
+    },
+    "logs": {
+      "type": "local",
+      "command": ["python", "-m", "obs.mcp.logs"],
+      "enabled": true,
+      "timeout": 15000,
+      "environment": {
+        "LOGS_URL": "${LOGS_URL}",
+        "LOGS_READONLY_TOKEN": "${LOGS_READONLY_TOKEN}",
+        "SCAN_PLATFORM": "${SCAN_PLATFORM:-web}",
+        "SCAN_ID": "${SCAN_ID}"
+      }
+    },
+    "sqlite-ro": {
+      "type": "local",
+      "command": ["python", "-m", "obs.mcp.sqlite_ro"],
+      "enabled": true,
+      "timeout": 10000,
+      "environment": {
+        "SQLITE_PATH": "${SQLITE_PATH}",
+        "SQL_ALLOWLIST": "${SQL_ALLOWLIST}",
+        "SCAN_PLATFORM": "${SCAN_PLATFORM:-web}",
+        "SCAN_ID": "${SCAN_ID}"
+      }
+    },
+    "grafana": {
+      "type": "local",
+      "command": ["npx", "-y", "@grafana/mcp-grafana"],
+      "enabled": false,
+      "timeout": 20000,
+      "environment": {
+        "GRAFANA_URL": "${GRAFANA_URL}",
+        "GRAFANA_READONLY_TOKEN": "${GRAFANA_READONLY_TOKEN}"
+      }
+    },
+    "web-security": {
+      "type": "local",
+      "command": ["python", "-m", "obs.mcp.security"],
+      "enabled": false,
+      "timeout": 120000,
+      "environment": {
+        "TRIVY_BIN": "/usr/local/bin/trivy",
+        "OSV_OFFLINE_DB": "${OSV_OFFLINE_DB}",
+        "GITLEAKS_BIN": "/usr/local/bin/gitleaks",
+        "REPO_PATH": "/repo"
+      }
+    },
+    "android": {
+      "type": "local",
+      "command": ["python", "-m", "obs.mcp.android"],
+      "enabled": false,
+      "timeout": 30000,
+      "environment": {
+        "GLITCHTIP_URL": "${GLITCHTIP_URL}",
+        "GLITCHTIP_READONLY_TOKEN": "${GLITCHTIP_READONLY_TOKEN}",
+        "ADB_SERIAL": "${ADB_SERIAL:-emulator-5554}"
+      }
+    },
+    "crash-monitor": {
+      "type": "local",
+      "command": ["node", "dist/index.js"],
+      "enabled": true,
+      "timeout": 30000,
+      "cwd": "./mcp-crash-monitor",
+      "environment": {
+        "DATABASE_URL": "${DATABASE_URL:-postgresql://campuspilot:campuspilot@localhost:5432/campuspilot}"
+      }
+    }
+  }
+}
