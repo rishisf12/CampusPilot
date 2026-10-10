@@ -1,0 +1,25 @@
+Windows Registry Editor Version 5.00
+
+; Add "Open in OpenCode" to context menu for files
+[HKEY_CLASSES_ROOT\*\shell\OpenInOpenCode]
+@="Open in OpenCode"
+"Icon"="C:\\Users\\Appex\\AppData\\Local\\Programs\\opencode\\opencode.exe"
+
+[HKEY_CLASSES_ROOT\*\shell\OpenInOpenCode\command]
+@="\"C:\\Users\\Appex\\AppData\\Local\\Programs\\opencode\\opencode.exe\" \"%1\""
+
+; Add "Open in OpenCode" to context menu for folders
+[HKEY_CLASSES_ROOT\Directory\shell\OpenInOpenCode]
+@="Open in OpenCode"
+"Icon"="C:\\Users\\Appex\\AppData\\Local\\Programs\\opencode\\opencode.exe"
+
+[HKEY_CLASSES_ROOT\Directory\shell\OpenInOpenCode\command]
+@="\"C:\\Users\\Appex\\AppData\\Local\\Programs\\opencode\\opencode.exe\" \"%1\""
+
+; Add "Open in OpenCode" to context menu for folder background (right-click empty space in folder)
+[HKEY_CLASSES_ROOT\Directory\Background\shell\OpenInOpenCode]
+@="Open in OpenCode"
+"Icon"="C:\\Users\\Appex\\AppData\\Local\\Programs\\opencode\\opencode.exe"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shell\OpenInOpenCode\command]
+@="\"C:\\Users\\Appex\\AppData\\Local\\Programs\\opencode\\opencode.exe\" \"%V\""
