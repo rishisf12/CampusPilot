@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code. Alembic lives at backend/alembic, next to the package,
 # and the migration command in docker-compose refers to it by that path.
-COPY backend/backend ./backend
+COPY backend/app ./backend
 COPY backend/alembic.ini ./backend/alembic.ini
 COPY backend/alembic ./backend/alembic
 COPY tools ./tools
