@@ -2,9 +2,9 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 
 import { hackathonsApi, teamsApi } from '../../api';
-import { SKILL_OPTIONS } from '../../constants';
-import { useProfile } from '../../hooks/useProfile';
-import type { Hackathon } from '../../types/api';
+import { SKILL_OPTIONS } from '../../shared/constants';
+import { useProfile } from '../../shared/hooks/useProfile';
+import type { Hackathon, HackathonFeed } from '../../shared/types/api';
 
 interface TeamForm {
   name: string;
@@ -41,7 +41,7 @@ export default function CreateTeam({ onCreated, onCancel }: CreateTeamProps) {
   useEffect(() => {
     hackathonsApi
       .list()
-      .then(data => setHackathons(data.hackathons || []))
+      .then((data: HackathonFeed) => setHackathons(data.hackathons || []))
       .catch(() => setHackathons([]));
   }, []);
 

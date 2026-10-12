@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { roomsApi } from '../../api';
-import { DAYS } from '../../constants';
-import { formatTime } from '../../lib/time';
-import { dedupeRooms, normaliseRoom } from '../../lib/normalise';
-import useProfileVersion from '../../hooks/useProfileVersion';
-import ErrorBanner from '../../components/ErrorBanner';
-import Spinner from '../../components/Spinner';
+import { DAYS } from '../../shared/constants';
+import { formatTime } from '../../shared/lib/time';
+import { dedupeRooms, normaliseRoom } from '../../shared/lib/normalise';
+import useProfileVersion from '../../shared/hooks/useProfileVersion';
+import ErrorBanner from '../../shared/components/ErrorBanner';
+import Spinner from '../../shared/components/Spinner';
 
 interface VacantRoomResult {
   mode: 'live' | 'manual';

@@ -1,0 +1,28 @@
+# Development-only overrides. Docker Compose merges this on top of
+# docker-compose.yml automatically - the main file stays production-shaped.
+#
+# What it does:
+#   backend - bind-mounts the app source (backend/app -> /app/backend) and
+#            Alembic migrations, runs uvicorn with --reload
+#   frontend - NOT overridden; run Vite on host: cd frontend && npm run dev
+#
+# Delete this file, or pass `-f docker-compose.yml` to bypass it, to get the
+# production build behaviour back.
+
+services:
+  backend:
+    volumes:
+      - ./backend/app:/app/backend
+      - ./backend/alembic:/app/backend/alembic
+      - database:/app/database
+      - ./backend/app/uploads:/app/backend/uploads
+    command:
+      - uvicorn
+      - backend.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+      - --reload
+      - --reload-dir
+      - /app/backend

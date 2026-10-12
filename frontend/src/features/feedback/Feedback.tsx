@@ -1,9 +1,9 @@
 import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
 import { feedbackApi, profileApi } from '../../api';
-import { useAuth } from '../../components/AuthWrapper';
-import { useProfile } from '../../hooks/useProfile';
-import ErrorBanner from '../../components/ErrorBanner';
-import Spinner from '../../components/Spinner';
+import { useAuth } from '../auth/components/AuthWrapper';
+import { useProfile } from '../../shared/hooks/useProfile';
+import ErrorBanner from '../../shared/components/ErrorBanner';
+import Spinner from '../../shared/components/Spinner';
 
 interface FeedbackSubmission {
   id: number;

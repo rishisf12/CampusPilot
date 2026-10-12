@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { authApi } from '../api';
-import { createPasskey, isPasskeySupported } from '../lib/passkey';
-import { getToken } from '../lib/storage';
-import ErrorBanner from './ErrorBanner';
-import Spinner from './Spinner';
+import { authApi } from '../../../api';
+import { createPasskey, isPasskeySupported } from '../../../shared/lib/passkey';
+import { getToken } from '../../../shared/lib/storage';
+import ErrorBanner from '../../../shared/components/ErrorBanner';
+import Spinner from '../../../shared/components/Spinner';
 
 /**
  * Manage the passkeys on this account.

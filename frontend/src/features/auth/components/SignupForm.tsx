@@ -1,14 +1,20 @@
 import { useMemo, useState, FormEvent, ChangeEvent } from 'react';
-import { authApi } from '../api';
+import { authApi } from '../../../api';
 import {
   BRANCH_OPTIONS,
   GENDERS,
-  PROGRAMMES,
+  GROUP_DETAILS,
+  GROUP_PROGRAMMES,
+  PROGRAMME_BRANCHES,
   PROGRAMME_SEMESTERS,
   semesterLabel,
-} from '../constants';
-import ErrorBanner from './ErrorBanner';
-import Spinner from './Spinner';
+  type BranchOption,
+  type Programme,
+  type ProgrammeGroup,
+} from '../../../shared/constants';
+import ErrorBanner from '../../../shared/components/ErrorBanner';
+import Spinner from '../../../shared/components/Spinner';
+import SignupProgress from './SignupProgress';
 
 /** YYBBBNNN, e.g. 23BCS125. */
 const ROLL_PATTERN = /^\d{2}[A-Z]{3}\d{3}$/;
@@ -34,6 +40,8 @@ const STRENGTH_BARS = [
 
 interface SignupFormProps {
   verifiedEmail: string;
+  /** Chosen in step 0: narrows the programme and branch lists to one group. */
+  programmeGroup: ProgrammeGroup;
   onSwitchToLogin: () => void;
   onRegistered: () => void;
   onStartOver: () => void;
@@ -46,27 +54,35 @@ interface SignupFormProps {
  * shown read-only, because the address that owns the account has to be the one
  * that was verified - letting it be edited at this point would let someone prove
  * one mailbox and claim another.
+ *
+ * The programme group chosen in step 0 shapes this form: only that group's
+ * programmes are offered, the branch list follows the programme, and the branch
+ * transfer reveal appears only where a transfer can exist - BTech.
  */
 export default function SignupForm({
   verifiedEmail,
+  programmeGroup,
   onSwitchToLogin,
   onRegistered,
   onStartOver,
 }: SignupFormProps) {
+  // Start on the first programme of the chosen group, not always BTech.
+  const groupProgrammes = GROUP_PROGRAMMES[programmeGroup];
+  const firstProgramme = groupProgrammes[0];
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
     gender: 'Male' as const,
-    programme: 'BTech' as const,
+    programme: firstProgramme as Programme,
     semester: 1,
-    branch: 'CSE A',
+    branch: PROGRAMME_BRANCHES[firstProgramme][0] as BranchOption,
     username: '',
     roll_number: '',
     password: '',
     confirm_password: '',
   });
   const [showBranchChange, setShowBranchChange] = useState(false);
-  const [branchFrom, setBranchFrom] = useState('CSE A');
+  const [branchFrom, setBranchFrom] = useState<string>(PROGRAMME_BRANCHES[firstProgramme][0]);
   const [branchTo, setBranchTo] = useState('');
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
@@ -81,6 +97,13 @@ export default function SignupForm({
     PROGRAMME_SEMESTERS[form.programme as keyof typeof PROGRAMME_SEMESTERS] ||
     PROGRAMME_SEMESTERS.BTech;
 
+  /** Branches valid for the currently selected programme. */
+  const branchOptions: readonly BranchOption[] =
+    PROGRAMME_BRANCHES[form.programme as Programme] || BRANCH_OPTIONS;
+
+  /** A transfer only exists inside BTech, so it is offered nowhere else. */
+  const canChangeBranch = form.programme === 'BTech';
+
   const errors = useMemo(() => {
     const found: Record<string, string> = {};
     if (!form.first_name.trim()) found.first_name = 'First name is required';
@@ -92,10 +115,10 @@ export default function SignupForm({
     // No email check here: the address was proven in step 1 and is not editable.
     if (form.password.length < 8) found.password = 'At least 8 characters';
     if (form.password !== form.confirm_password) found.confirm_password = 'Passwords do not match';
-    if (showBranchChange && branchTo && branchTo === branchFrom)
+    if (canChangeBranch && showBranchChange && branchTo && branchTo === branchFrom)
       found.branchTo = 'Choose a different branch';
     return found;
-  }, [form, showBranchChange, branchFrom, branchTo]);
+  }, [form, canChangeBranch, showBranchChange, branchFrom, branchTo]);
 
   const invalid = (key: string) => (touched[key] && errors[key] ? errors[key] : null);
   const strength = scorePassword(form.password);
@@ -127,7 +150,7 @@ export default function SignupForm({
         programme: form.programme,
         semester: Number(form.semester),
         // A revealed branch change moves the student to the target branch.
-        branch: showBranchChange && branchTo ? branchTo : form.branch,
+        branch: canChangeBranch && showBranchChange && branchTo ? branchTo : form.branch,
         username: form.username.trim(),
         roll_number: form.roll_number.trim().toUpperCase(),
         // The proven address, not anything typed here.
@@ -154,6 +177,8 @@ export default function SignupForm({
         </div>
 
         <div className="card space-y-4">
+          <SignupProgress current="details" />
+
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
           <form onSubmit={submit} className="space-y-4">
@@ -201,13 +226,20 @@ export default function SignupForm({
                   ))}
                 </select>
               </Field>
-              <Field label="Programme">
+              <Field
+                label="Programme"
+                hint={
+                  groupProgrammes.length > 1
+                    ? `${GROUP_DETAILS[programmeGroup].title} programmes only.`
+                    : undefined
+                }
+              >
                 <select
                   id="su-programme"
                   className="select-field"
                   value={form.programme}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                    const programme = e.target.value;
+                    const programme = e.target.value as Programme;
                     const options =
                       PROGRAMME_SEMESTERS[programme as keyof typeof PROGRAMME_SEMESTERS] || [];
                     update('programme', programme);
@@ -217,9 +249,20 @@ export default function SignupForm({
                       ? form.semester
                       : options[0];
                     update('semester', nextSemester as string | number);
+                    // The branch list belongs to the programme, so a programme
+                    // change re-picks the first valid branch rather than
+                    // silently keeping one from another programme.
+                    const branches = PROGRAMME_BRANCHES[programme] || BRANCH_OPTIONS;
+                    const nextBranch = branches.includes(form.branch as BranchOption)
+                      ? form.branch
+                      : branches[0];
+                    update('branch', nextBranch);
+                    setBranchFrom(nextBranch);
+                    setBranchTo('');
+                    setShowBranchChange(false);
                   }}
                 >
-                  {PROGRAMMES.map(programme => (
+                  {groupProgrammes.map(programme => (
                     <option key={programme} value={programme}>
                       {programme}
                     </option>
@@ -246,7 +289,10 @@ export default function SignupForm({
                   ))}
                 </select>
               </Field>
-              <Field label="Branch">
+              <Field
+                label="Branch"
+                hint={branchOptions.length === 1 ? 'Fixed for this programme.' : undefined}
+              >
                 <select
                   id="su-branch"
                   className="select-field"
@@ -256,7 +302,7 @@ export default function SignupForm({
                     setBranchFrom(e.target.value);
                   }}
                 >
-                  {BRANCH_OPTIONS.map(branch => (
+                  {branchOptions.map(branch => (
                     <option key={branch} value={branch}>
                       {branch}
                     </option>
@@ -265,61 +311,63 @@ export default function SignupForm({
               </Field>
             </div>
 
-            {/* Branch change reveal */}
-            <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowBranchChange(value => !value)}
-                  className="btn-secondary text-sm"
-                >
-                  {showBranchChange ? 'Hide branch change' : 'Branch changed'}
-                </button>
-                <span className="text-xs text-gray-600">
-                  Already applied for a branch transfer? Add it now.
-                </span>
-              </div>
-
-              {showBranchChange && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                  <Field label="From branch">
-                    <select
-                      id="su-branch-from"
-                      className="select-field"
-                      value={branchFrom}
-                      onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                        setBranchFrom(e.target.value)
-                      }
-                    >
-                      <option value="">Select branch</option>
-                      {BRANCH_OPTIONS.map(branch => (
-                        <option key={branch} value={branch}>
-                          {branch}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="To branch" error={invalid('branchTo')}>
-                    <select
-                      id="su-branch-to"
-                      className="select-field"
-                      value={branchTo}
-                      onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                        setBranchTo(e.target.value);
-                        setTouched(t => ({ ...t, branchTo: true }));
-                      }}
-                    >
-                      <option value="">Select branch</option>
-                      {BRANCH_OPTIONS.map(branch => (
-                        <option key={branch} value={branch}>
-                          {branch}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+            {/* Branch change reveal - a BTech transfer only, so hidden elsewhere. */}
+            {canChangeBranch && (
+              <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowBranchChange(value => !value)}
+                    className="btn-secondary text-sm"
+                  >
+                    {showBranchChange ? 'Hide branch change' : 'Branch changed'}
+                  </button>
+                  <span className="text-xs text-gray-600">
+                    Already applied for a branch transfer? Add it now.
+                  </span>
                 </div>
-              )}
-            </div>
+
+                {showBranchChange && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    <Field label="From branch">
+                      <select
+                        id="su-branch-from"
+                        className="select-field"
+                        value={branchFrom}
+                        onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                          setBranchFrom(e.target.value)
+                        }
+                      >
+                        <option value="">Select branch</option>
+                        {BRANCH_OPTIONS.map(branch => (
+                          <option key={branch} value={branch}>
+                            {branch}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="To branch" error={invalid('branchTo')}>
+                      <select
+                        id="su-branch-to"
+                        className="select-field"
+                        value={branchTo}
+                        onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                          setBranchTo(e.target.value);
+                          setTouched(t => ({ ...t, branchTo: true }));
+                        }}
+                      >
+                        <option value="">Select branch</option>
+                        {BRANCH_OPTIONS.map(branch => (
+                          <option key={branch} value={branch}>
+                            {branch}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Username + roll */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

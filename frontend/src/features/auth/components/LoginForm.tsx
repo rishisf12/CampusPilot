@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
-import { clearEmailJustVerified, readEmailJustVerified } from '../lib/storage';
-import ErrorBanner from './ErrorBanner';
-import Spinner from './Spinner';
+import { clearEmailJustVerified, readEmailJustVerified } from '../../../shared/lib/storage';
+import ErrorBanner from '../../../shared/components/ErrorBanner';
+import Spinner from '../../../shared/components/Spinner';
 
 /**
  * Sign in. Username and password only - email is not accepted.

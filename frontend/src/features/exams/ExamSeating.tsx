@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react';
 import { authApi, examApi } from '../../api';
-import { BRANCH_OPTIONS } from '../../constants';
-import { formatDate, formatTime, todayIso } from '../../lib/time';
-import { isPostgraduate, normaliseRoom, splitCourseCodes } from '../../lib/normalise';
-import { readQuickLookup, writeQuickLookup } from '../../lib/storage';
-import { bumpProfileVersion } from '../../lib/storage';
-import useProfile from '../../hooks/useProfile';
-import useProfileVersion from '../../hooks/useProfileVersion';
-import ErrorBanner from '../../components/ErrorBanner';
-import FileUpload from '../../components/FileUpload';
-import Spinner from '../../components/Spinner';
-import UploadPreview from '../../components/UploadPreview';
+import { BRANCH_OPTIONS } from '../../shared/constants';
+import { formatDate, formatTime, todayIso } from '../../shared/lib/time';
+import { normaliseRoom, splitCourseCodes } from '../../shared/lib/normalise';
+import { readQuickLookup, writeQuickLookup } from '../../shared/lib/storage';
+import { bumpProfileVersion } from '../../shared/lib/storage';
+import useProfile from '../../shared/hooks/useProfile';
+import useProfileVersion from '../../shared/hooks/useProfileVersion';
+import ErrorBanner from '../../shared/components/ErrorBanner';
+import FileUpload from '../../shared/components/FileUpload';
+import Spinner from '../../shared/components/Spinner';
+import UploadPreview from '../../shared/components/UploadPreview';
 
 const SUB_TABS = [
   { id: 'timetable', label: 'Exam Timetable' },
@@ -188,12 +188,13 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
   /**
    * Semester/branch narrowing of the exam timetable.
    *
-   * PG papers are hidden from a UG student and vice versa, and a cell listing
-   * two codes ("OE3M27/ME5D02") counts as two papers rather than one.
+   * Programme separation happens at registration now, so a BTech student and a
+   * master's student never share a filter: the branch match alone decides. The
+   * old PG/UG cross-check that sat here is gone with it. A cell listing two
+   * codes ("OE3M27/ME5D02") still counts as two papers rather than one.
    */
   const visibleDays = useMemo(() => {
     if (!timetable?.days) return [];
-    const studentIsPg = isPostgraduate(branch);
 
     return timetable.days
       .map(day => ({
@@ -206,8 +207,6 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
           .filter(exam => {
             if (semester && String(exam.semester ?? '') !== semester) return false;
             if (!branch || !exam.branch) return true;
-            // A PG paper is not a UG student's, and vice versa.
-            if (isPostgraduate(exam.branch) !== studentIsPg) return false;
             return exam.branch === branch || exam.branch.split(' ')[0] === branch.split(' ')[0];
           }),
       }))

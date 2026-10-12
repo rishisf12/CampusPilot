@@ -46,7 +46,7 @@ function toBase64url(buffer: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-interface CreationOptionsFromServer {
+export interface CreationOptionsFromServer {
   _challenge: string;
   _label: string;
   challenge: string;
@@ -60,7 +60,7 @@ interface CreationOptionsFromServer {
   extensions?: AuthenticationExtensionsClientInputs;
 }
 
-interface RequestOptionsFromServer {
+export interface RequestOptionsFromServer {
   _challenge: string;
   challenge: string;
   rpId: string;

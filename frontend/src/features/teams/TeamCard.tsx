@@ -1,6 +1,6 @@
 /** One team in the grid. Layout and status pill follow the attendance card. */
 import MatchScore from './MatchScore';
-import type { Team } from '../../types/api';
+import type { Team } from '../../shared/types/api';
 
 /** Team as the discover/feed endpoints return it, with display fields added. */
 export interface TeamWithMeta extends Team {

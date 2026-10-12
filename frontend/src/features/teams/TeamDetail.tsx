@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { teamsApi } from '../../api';
 import { ScoreBreakdown } from './MatchScore';
-import type { TeamDetail, TeamMatchResult } from '../../types/api';
+import type { TeamDetail, TeamMatchResult } from '../../shared/types/api';
 
 const PILL = {
   success: 'bg-success-50 text-success-700',

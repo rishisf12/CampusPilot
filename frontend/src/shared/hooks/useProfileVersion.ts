@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getProfileVersion } from '../api';
+import { getProfileVersion } from '../../api';
 
 /**
  * The shared profile version, as a reactive value.

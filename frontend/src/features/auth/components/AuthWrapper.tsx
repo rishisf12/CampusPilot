@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { authApi, isUnauthorized } from '../api';
+import { authApi, isUnauthorized } from '../../../api';
 import {
   bumpProfileVersion,
   clearSession,
@@ -9,17 +9,19 @@ import {
   setEmailJustVerified,
   setToken,
   writeCachedUser,
-} from '../lib/storage';
+} from '../../../shared/lib/storage';
 import LoginForm from './LoginForm';
-import AdminLogin from '../features/admin/AdminLogin';
+import AdminLogin from '../../admin/AdminLogin';
 import PasskeyPrompt from './PasskeyPrompt';
 import PasskeyRecovery from './PasskeyRecovery';
 import PasswordReset from './PasswordReset';
 import SignupEmail from './SignupEmail';
 import SignupForm from './SignupForm';
+import SignupProgramme from './SignupProgramme';
 import StartScreen from './StartScreen';
 import VerifyEmail from './VerifyEmail';
-import Spinner from './Spinner';
+import Spinner from '../../../shared/components/Spinner';
+import type { ProgrammeGroup } from '../../../shared/constants';
 
 /**
  * Auth provider.
@@ -61,7 +63,15 @@ export function readPendingEmail(): string {
 }
 
 type Screen =
-  'start' | 'login' | 'admin-login' | 'signup-email' | 'signup' | 'verify' | 'recover' | 'reset';
+  | 'start'
+  | 'login'
+  | 'admin-login'
+  | 'signup-programme'
+  | 'signup-email'
+  | 'signup'
+  | 'verify'
+  | 'recover'
+  | 'reset';
 
 type Status = 'checking' | 'anonymous' | 'authenticated';
 
@@ -74,6 +84,10 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
   const [resetResult, setResetResult] = useState<string | null>(null);
   // The address proven by /signup/verify, which the details step then submits.
   const [verifiedEmail, setVerifiedEmail] = useState('');
+  // The programme group picked in step 0, which shapes the rest of signup -
+  // and, once signed in, the whole app. Held in state, not storage: a reload
+  // re-asks rather than trusting a value the page no longer holds.
+  const [signupGroup, setSignupGroup] = useState<ProgrammeGroup | null>(null);
   // Set after a password sign-in on an account with no passkey, to offer one.
   const [offerPasskey, setOfferPasskey] = useState(false);
 
@@ -217,7 +231,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
     if (screen === 'start') {
       return (
         <StartScreen
-          onChooseStudent={() => setScreen('login')}
+          onChooseStudent={() => setScreen('signup-programme')}
           onChooseAdmin={() => setScreen('admin-login')}
         />
       );
@@ -233,10 +247,24 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
       );
     }
 
+    if (screen === 'signup-programme') {
+      return (
+        <SignupProgramme
+          onChoose={group => {
+            setSignupGroup(group);
+            setScreen('signup-email');
+          }}
+          onBack={() => setScreen('login')}
+        />
+      );
+    }
+
     if (screen === 'signup-email') {
       return (
         <SignupEmail
           offline={offline}
+          programmeGroup={signupGroup}
+          onChangeProgramme={signupGroup ? () => setScreen('signup-programme') : undefined}
           onBack={() => setScreen('login')}
           onVerified={email => {
             // Proof of the address, so the details step below can create the
@@ -253,16 +281,23 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
       return (
         <SignupForm
           verifiedEmail={verifiedEmail}
+          // The details step always follows a programme choice; 'UG' is only a
+          // defensive fallback for a reload that somehow lands here directly.
+          programmeGroup={signupGroup || 'UG'}
           onSwitchToLogin={() => setScreen('login')}
           onRegistered={() => {
             // The address is already proven, so the flag only drives a welcome.
             setEmailJustVerified();
             setVerifiedEmail('');
+            setSignupGroup(null);
             setScreen('login');
           }}
           onStartOver={() => {
             setVerifiedEmail('');
-            setScreen('signup-email');
+            // Back to the very beginning: a new email may belong to someone in
+            // a different programme, so the group is re-asked too.
+            setSignupGroup(null);
+            setScreen('signup-programme');
           }}
         />
       );
@@ -308,7 +343,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
     }
     return (
       <LoginForm
-        onSwitchToSignup={() => setScreen('signup-email')}
+        onSwitchToSignup={() => setScreen('signup-programme')}
         onLogin={handleLogin}
         onForgotPassword={() => setScreen('recover')}
         onChangeRole={() => setScreen('start')}

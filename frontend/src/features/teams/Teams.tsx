@@ -8,14 +8,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { teamsApi, hackathonsApi } from '../../api';
-import { BRANCH_OPTIONS, TEAM_TABS, teamStatus } from '../../constants';
-import { useProfile } from '../../hooks/useProfile';
+import { BRANCH_OPTIONS, TEAM_TABS, teamStatus } from '../../shared/constants';
+import { useProfile } from '../../shared/hooks/useProfile';
 import CreateTeam from './CreateTeam';
 import Hackathons from './Hackathons';
 import TeamCard from './TeamCard';
 import type { TeamWithMeta } from './TeamCard';
 import TeamDetail from './TeamDetail';
-import type { Hackathon, MyTeam, TeamJoinRequest, TeamMatchResult } from '../../types/api';
+import type { Hackathon, MyTeam, TeamJoinRequest, TeamMatchResult } from '../../shared/types/api';
 
 const SUB_TABS = TEAM_TABS;
 

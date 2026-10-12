@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { profileApi, scheduleApi } from '../api';
+import { profileApi, scheduleApi } from '../../api';
 import useProfileVersion from './useProfileVersion';
 import type { ProfileResponse, ExtraCourseResponse } from '../types/api';
 

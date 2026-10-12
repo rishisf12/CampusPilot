@@ -98,7 +98,13 @@ export interface ProfileUpdate {
 export interface ProfileOptions {
   branches: string[];
   programmes: string[];
-  semester_labels: Record<string, string[]>;
+  /** Programme group (UG/PG/PHD) -> the programmes it contains. */
+  programme_groups: Record<string, string[]>;
+  /** Programme -> the branches it offers. */
+  programme_branches: Record<string, string[]>;
+  /** Programme -> the semesters it offers. */
+  programme_semesters: Record<string, number[]>;
+  semesters: Array<{ value: number; label: string }>;
 }
 
 export interface BranchChangeRequest {
@@ -127,17 +133,22 @@ export interface ScheduleClass {
 }
 
 export interface ExtraCourseResponse {
+  id: number;
   code: string;
   name: string;
-  semester: number;
-  branch: string;
+  instructor?: string;
+  is_elective: boolean;
+  is_extra: boolean;
+  semester?: number;
+  branch?: string;
 }
 
 export interface ExtraCourseCreate {
   code: string;
   name: string;
-  semester: number;
-  branch: string;
+  instructor?: string;
+  semester?: number;
+  branch?: string;
 }
 
 /** Attendance types */

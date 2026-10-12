@@ -101,7 +101,9 @@ body {
   border: none;
   border-radius: 0.5rem;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .btn-ghost:hover:not(:disabled) {
@@ -122,7 +124,9 @@ body {
   border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .select-field {
@@ -170,7 +174,9 @@ body {
   border-left: 0;
   border-right: 0;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .sub-tab-active {

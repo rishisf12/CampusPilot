@@ -1,7 +1,7 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
-import { authApi } from '../api';
-import ErrorBanner from './ErrorBanner';
-import Spinner from './Spinner';
+import { authApi } from '../../../api';
+import ErrorBanner from '../../../shared/components/ErrorBanner';
+import Spinner from '../../../shared/components/Spinner';
 
 /**
  * Password reset by emailed code - the fallback when the passkey route does not

@@ -1,6 +1,7 @@
 import { useEffect, useState, ChangeEvent } from 'react';
 import { feedbackApi } from '../../api';
-import ErrorBanner from '../../components/ErrorBanner';
+import ErrorBanner from '../../shared/components/ErrorBanner';
+import ReinforcementPatterns from './ReinforcementPatterns';
 
 interface FeedbackResponse {
   id: number;
@@ -31,6 +32,7 @@ interface AdminPanelProps {
  * feedback entry.
  */
 export default function AdminPanel({ onError }: AdminPanelProps) {
+  const [tab, setTab] = useState<'feedback' | 'patterns'>('feedback');
   const [items, setItems] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,73 +87,112 @@ export default function AdminPanel({ onError }: AdminPanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Feedback responses</h2>
-        <p className="text-sm text-gray-600 mt-1">
-          {items.length} submission{items.length === 1 ? '' : 's'} from students.
-        </p>
+      <div className="flex items-center gap-1 border-b border-gray-200 pb-3">
+        <button
+          type="button"
+          onClick={() => setTab('feedback')}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+            tab === 'feedback'
+              ? 'bg-primary-50 text-primary-600'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          }`}
+        >
+          Feedback Responses
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('patterns')}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+            tab === 'patterns'
+              ? 'bg-primary-50 text-primary-600'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          }`}
+        >
+          Reinforcement Patterns
+        </button>
       </div>
 
-      <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      {tab === 'feedback' && (
+        <>
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-gray-900">Feedback responses</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {items.length} submission{items.length === 1 ? '' : 's'} from students.
+            </p>
+          </div>
 
-      {items.length === 0 && (
-        <div className="card p-8 text-center text-sm text-gray-500">No feedback yet.</div>
-      )}
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      {items.map(item => (
-        <div key={item.id} className="card p-6 space-y-3">
-          <p className="text-sm text-gray-800">{item.message}</p>
-          <p className="text-xs text-gray-500">
-            {item.name} · {item.email}
-            {item.phone ? ` · ${item.phone}` : ''}
-            {item.attachment_original ? ` · 📎 ${item.attachment_original}` : ''}
-          </p>
+          {items.length === 0 && (
+            <div className="card p-8 text-center text-sm text-gray-500">No feedback yet.</div>
+          )}
 
-          {(item.replies || []).map(reply => (
-            <div
-              key={reply.id}
-              className="rounded-lg border border-primary-100 bg-primary-50 p-3 text-sm"
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary-500">
-                Admin response
+          {items.map(item => (
+            <div key={item.id} className="card p-6 space-y-3">
+              <p className="text-sm text-gray-800">{item.message}</p>
+              <p className="text-xs text-gray-500">
+                {item.name} · {item.email}
+                {item.phone ? ` · ${item.phone}` : ''}
+                {item.attachment_original ? ` · 📎 ${item.attachment_original}` : ''}
               </p>
-              <p className="mt-1 text-gray-800">{reply.message}</p>
-            </div>
-          ))}
 
-          {openId === item.id ? (
-            <div className="space-y-2">
-              <textarea
-                value={drafts[item.id] || ''}
-                onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                  setDrafts(prev => ({ ...prev, [item.id]: event.target.value }))
-                }
-                placeholder="Write your response…"
-                rows={3}
-                maxLength={5000}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              />
-              <div className="flex items-center gap-2">
+              {(item.replies || []).map(reply => (
+                <div
+                  key={reply.id}
+                  className="rounded-lg border border-primary-100 bg-primary-50 p-3 text-sm"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-500">
+                    Admin response
+                  </p>
+                  <p className="mt-1 text-gray-800">{reply.message}</p>
+                </div>
+              ))}
+
+              {openId === item.id ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={drafts[item.id] || ''}
+                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                      setDrafts(prev => ({ ...prev, [item.id]: event.target.value }))
+                    }
+                    placeholder="Write your response…"
+                    rows={3}
+                    maxLength={5000}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => send(item.id)}
+                      disabled={sending || !(drafts[item.id] || '').trim()}
+                      className="btn-primary text-sm disabled:opacity-60"
+                    >
+                      {sending ? 'Sending…' : 'Submit'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(null)}
+                      className="btn-ghost text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => send(item.id)}
-                  disabled={sending || !(drafts[item.id] || '').trim()}
-                  className="btn-primary text-sm disabled:opacity-60"
+                  onClick={() => setOpenId(item.id)}
+                  className="btn-ghost text-sm"
                 >
-                  {sending ? 'Sending…' : 'Submit'}
+                  Respond to feedback
                 </button>
-                <button type="button" onClick={() => setOpenId(null)} className="btn-ghost text-sm">
-                  Cancel
-                </button>
-              </div>
+              )}
             </div>
-          ) : (
-            <button type="button" onClick={() => setOpenId(item.id)} className="btn-ghost text-sm">
-              Respond to feedback
-            </button>
-          )}
-        </div>
-      ))}
+          ))}
+        </>
+      )}
+
+      {tab === 'patterns' && <ReinforcementPatterns onError={(msg: string) => setError(msg)} />}
     </div>
   );
 }

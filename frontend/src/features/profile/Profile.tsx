@@ -1,9 +1,19 @@
-import { useProfile } from '../../hooks/useProfile';
+import { useProfile } from '../../shared/hooks/useProfile';
 import { profileApi, scheduleApi } from '../../api';
-import { BRANCH_OPTIONS, PROGRAMME_SEMESTERS } from '../../constants';
+import {
+  BRANCH_OPTIONS,
+  GROUP_PROGRAMMES,
+  PROGRAMMES,
+  PROGRAMME_BRANCHES,
+  PROGRAMME_SEMESTERS,
+  programmeGroupOf,
+  type BranchOption,
+  type Programme,
+} from '../../shared/constants';
 import { useState, useMemo } from 'react';
-import Spinner from '../../components/Spinner';
-import type { ExtraCourseResponse } from '../../types/api';
+import Spinner from '../../shared/components/Spinner';
+import ManagePasskeys from '../auth/components/ManagePasskeys';
+import type { ExtraCourseResponse } from '../../shared/types/api';
 
 /**
  * Profile settings page.
@@ -12,6 +22,11 @@ import type { ExtraCourseResponse } from '../../types/api';
  * extra courses and attendance target. Branch change requests are handled
  * here as well. All data lives in the ProfileProvider context so changes
  * propagate to the timetable, attendance, rooms and exam views immediately.
+ *
+ * Programme and branch stay in step: the branch list follows the selected
+ * programme, the same pairing signup established, so a master's student can
+ * never land on an undergraduate branch. Changing the programme also changes
+ * the feature bundle on the next render - the shell reads it from here.
  */
 export default function Profile() {
   const {
@@ -19,10 +34,9 @@ export default function Profile() {
     error,
     refresh,
     branch,
-    semester,
-    programme,
+    semester: profileSemester,
+    programme: profileProgramme,
     attendanceTarget,
-    electiveCodes,
     extraCourses,
     branchChange,
   } = useProfile();
@@ -32,14 +46,19 @@ export default function Profile() {
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
+  // Local state for form fields that need immediate UI updates
+  const [programme, setProgramme] = useState(profileProgramme);
+  const [semester, setSemester] = useState(profileSemester);
+  const [branchState, setBranch] = useState(branch);
+
   // Branch change state
   const [branchFrom, setBranchFrom] = useState(branchChange.from || branch || '');
   const [branchTo, setBranchTo] = useState(branchChange.to || '');
   const [noBranchChange, setNoBranchChange] = useState(!branchChange.requested);
 
   // Elective/extra course state
-  const [electiveCodesText, setElectiveCodesText] = useState((electiveCodes || []).join(', '));
   const [extraCode, setExtraCode] = useState('');
+  const [extraInstructor, setExtraInstructor] = useState('');
   const [extraCoursesList, setExtraCoursesList] = useState<ExtraCourseResponse[]>(
     extraCourses || []
   );
@@ -53,7 +72,29 @@ export default function Profile() {
     [programme]
   );
 
-  const patch = (_key: string, _value: string | number) => {
+  /** Branches valid for the selected programme; the full list as fallback. */
+  const branchOptions = useMemo<readonly BranchOption[]>(() => {
+    if (programme && PROGRAMME_BRANCHES[programme as Programme]) {
+      return PROGRAMME_BRANCHES[programme as Programme];
+    }
+    return BRANCH_OPTIONS;
+  }, [programme]);
+
+  /**
+   * Programmes the student may switch between.
+   *
+   * The group chosen at signup is fixed: a BTech student may move to BDes (and
+   * an MTech student to MDes) but never across groups, so a master's student is
+   * not offered undergraduate branches and semesters. Derived from the *saved*
+   * programme (not the editable one) so the list cannot drift mid-edit. A
+   * profile with no programme yet keeps the full list so it can be set once.
+   */
+  const programmeChoices = useMemo<readonly string[]>(
+    () => (profileProgramme ? GROUP_PROGRAMMES[programmeGroupOf(profileProgramme)] : PROGRAMMES),
+    [profileProgramme]
+  );
+
+  const clearMessages = () => {
     setMessage(null);
     setLocalError(null);
   };
@@ -66,13 +107,13 @@ export default function Profile() {
       await profileApi.update({
         programme,
         semester: Number(semester),
-        branch,
-        elective_codes: electiveCodesText
-          .split(',')
-          .map(tag => tag.trim().toUpperCase())
-          .filter(Boolean),
+        branch: branchState,
         attendance_target: Number(target),
       });
+      // Update local state to match saved values
+      setProgramme(programme);
+      setSemester(Number(semester));
+      setBranch(branchState);
       // Refresh the profile context so all dependent screens update
       await refresh();
       setMessage('Profile saved');
@@ -114,16 +155,19 @@ export default function Profile() {
 
   const addExtraCourse = async () => {
     const code = extraCode.trim().toUpperCase();
+    const instructor = extraInstructor.trim();
     if (!code) return;
     try {
       const created = await scheduleApi.addExtra({
         code,
         name: code, // Use code as name placeholder; can be updated later
+        instructor: instructor || undefined,
         semester: Number(semester),
         branch,
       });
       setExtraCoursesList(prev => [...prev, created]);
       setExtraCode('');
+      setExtraInstructor('');
       await refresh();
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'Failed to add course');
@@ -165,8 +209,6 @@ export default function Profile() {
     );
   }
 
-  const branchOptions = BRANCH_OPTIONS;
-
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold text-gray-900">Profile Settings</h2>
@@ -180,12 +222,28 @@ export default function Profile() {
             <select
               className="select-field"
               value={programme || ''}
-              onChange={e => patch('programme', e.target.value)}
+              onChange={e => {
+                clearMessages();
+                const newProgramme = e.target.value;
+                setProgramme(newProgramme);
+                // Reset semester to first valid option for the new programme
+                const newSemesters =
+                  PROGRAMME_SEMESTERS[newProgramme as keyof typeof PROGRAMME_SEMESTERS] ||
+                  PROGRAMME_SEMESTERS.BTech;
+                setSemester(newSemesters[0]);
+                // The branch list belongs to the programme: keep the current
+                // branch only if the new programme allows it.
+                const allowed = PROGRAMME_BRANCHES[newProgramme as Programme];
+                if (allowed && branchState && !allowed.includes(branchState as BranchOption)) {
+                  setBranch(allowed[0]);
+                }
+              }}
             >
-              <option value="BTech">BTech</option>
-              <option value="MTech">MTech</option>
-              <option value="MBA">MBA</option>
-              <option value="PhD">PhD</option>
+              {programmeChoices.map(p => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -193,7 +251,10 @@ export default function Profile() {
             <select
               className="select-field"
               value={semester ?? ''}
-              onChange={e => patch('semester', Number(e.target.value))}
+              onChange={e => {
+                clearMessages();
+                setSemester(Number(e.target.value));
+              }}
             >
               {semesters.map(s => (
                 <option key={s} value={s}>
@@ -210,11 +271,14 @@ export default function Profile() {
         <h3 className="text-sm font-semibold text-gray-900">Branch</h3>
         <select
           className="select-field"
-          value={branch}
-          onChange={e => patch('branch', e.target.value)}
+          value={branchState}
+          onChange={e => {
+            clearMessages();
+            setBranch(e.target.value);
+          }}
         >
           <option value="">Select branch</option>
-          {BRANCH_OPTIONS.map(b => (
+          {branchOptions.map(b => (
             <option key={b} value={b}>
               {b}
             </option>
@@ -222,35 +286,37 @@ export default function Profile() {
         </select>
       </div>
 
-      {/* Electives */}
+      {/* Elective/Extra/Backlog courses */}
       <div className="card space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Electives</h3>
-        <input
-          className="input-field font-mono"
-          value={electiveCodesText}
-          onChange={e => setElectiveCodesText(e.target.value)}
-          placeholder="e.g. CS501, CS502, ML101"
-        />
+        <h3 className="text-sm font-semibold text-gray-900">Elective/Extra/Backlog courses</h3>
         <p className="text-xs text-gray-500">
-          Comma-separated codes. These electives are always shown in your timetable.
+          Add courses using either course code or instructor name (as mentioned in timetable). The
+          timetable is filtered by your semester, so if either field matches, we can find the room
+          number and fill in unknown information from known data.
         </p>
-      </div>
-
-      {/* Extra / backlog courses */}
-      <div className="card space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Extra / Backlog Courses</h3>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <input
-            className="input-field flex-1 font-mono"
+            className="input-field font-mono"
             value={extraCode}
-            onChange={e => setExtraCode(e.target.value)}
-            placeholder="e.g. CS501"
+            onChange={e => setExtraCode(e.target.value.toUpperCase())}
+            placeholder="Course code (e.g. CS501)"
             onKeyDown={e => e.key === 'Enter' && addExtraCourse()}
           />
-          <button type="button" onClick={addExtraCourse} className="btn-primary whitespace-nowrap">
-            Add
-          </button>
+          <input
+            className="input-field"
+            value={extraInstructor}
+            onChange={e => setExtraInstructor(e.target.value)}
+            placeholder="Instructor name (as in timetable)"
+            onKeyDown={e => e.key === 'Enter' && addExtraCourse()}
+          />
         </div>
+        <button
+          type="button"
+          onClick={addExtraCourse}
+          className="btn-primary whitespace-nowrap w-full sm:w-auto"
+        >
+          Add
+        </button>
         {extraCoursesList.length > 0 && (
           <ul className="space-y-1">
             {extraCoursesList.map(c => (
@@ -258,7 +324,12 @@ export default function Profile() {
                 key={c.code}
                 className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
               >
-                <span className="font-mono text-gray-700">{c.code}</span>
+                <div>
+                  <span className="font-mono text-gray-700">{c.code}</span>
+                  {c.instructor && (
+                    <span className="ml-2 text-xs text-gray-500">— {c.instructor}</span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => removeExtraCourse(c.code)}
@@ -370,6 +441,9 @@ export default function Profile() {
           {saving ? <Spinner size={16} className="text-white" /> : 'Save profile'}
         </button>
       </div>
+
+      {/* Passkeys */}
+      <ManagePasskeys />
     </div>
   );
 }

@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { monitoringApi } from '../../api';
-import type { MonitoringSubsection } from '../../types/api';
+import type { MonitoringSubsection } from '../../shared/types/api';
 import { ActivityPanel, type ActivityData } from './panels/Activity';
 import { FeedbackPanel, type FeedbackData } from './panels/Feedback';
 import { HealthPanel, type HealthData } from './panels/Health';
@@ -70,7 +70,7 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
     let cancelled = false;
     monitoringApi
       .subsections()
-      .then(r => {
+      .then((r: { subsections: MonitoringSubsection[] }) => {
         if (!cancelled) setSubsections(r.subsections || []);
       })
       .catch(() => {

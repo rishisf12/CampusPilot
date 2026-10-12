@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { attendanceApi, profileApi, scheduleApi, timetableApi } from '../../api';
-import { istNow, todayIso } from '../../lib/time';
-import { afterProfileChange } from '../../lib/sync';
-import { instructorFor, toMinutes } from '../../lib/normalise';
-import useProfile from '../../hooks/useProfile';
-import useProfileCourses from '../../hooks/useProfileCourses';
-import useProfileVersion from '../../hooks/useProfileVersion';
-import ErrorBanner from '../../components/ErrorBanner';
-import Spinner from '../../components/Spinner';
-import type { TimetableSlot } from '../../types/api';
+import { istNow, todayIso } from '../../shared/lib/time';
+import { afterProfileChange } from '../../shared/lib/sync';
+import { instructorFor, toMinutes } from '../../shared/lib/normalise';
+import useProfile from '../../shared/hooks/useProfile';
+import useProfileCourses from '../../shared/hooks/useProfileCourses';
+import useProfileVersion from '../../shared/hooks/useProfileVersion';
+import ErrorBanner from '../../shared/components/ErrorBanner';
+import Spinner from '../../shared/components/Spinner';
+import type { TimetableSlot } from '../../shared/types/api';
 
 const SUB_TABS = [
   { id: 'subjects', label: 'Subjects' },
@@ -286,12 +286,13 @@ export default function Attendance({ onError }: AttendanceProps) {
   /**
    * Course codes present in the student's timetable.
    *
-   * A subject that has left the timetable is flagged rather than deleted: its
-   * attendance history is still real, and silently dropping it would erase it.
+   * Since the backend now filters subjects to only those in the student's
+   * timetable (plus elected electives), we can derive the set directly from
+   * the API response.
    */
   const timetableCodes = useMemo(
-    () => new Set(myClasses.map(slot => slot.course_code.toUpperCase())),
-    [myClasses]
+    () => new Set(subjects.map(subject => subject.course_code.toUpperCase())),
+    [subjects]
   );
 
   /** course_id -> course_code, so the history table can show codes not ids. */

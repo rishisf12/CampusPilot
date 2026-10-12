@@ -1,7 +1,9 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
-import { authApi } from '../api';
-import ErrorBanner from './ErrorBanner';
-import Spinner from './Spinner';
+import { authApi } from '../../../api';
+import { GROUP_DETAILS, type ProgrammeGroup } from '../../../shared/constants';
+import ErrorBanner from '../../../shared/components/ErrorBanner';
+import Spinner from '../../../shared/components/Spinner';
+import SignupProgress from './SignupProgress';
 
 /**
  * Registration step 1: prove the college email before an account exists.
@@ -21,9 +23,18 @@ interface SignupEmailProps {
   onVerified: (email: string) => void;
   onBack: () => void;
   offline: boolean;
+  /** Chosen in step 0; shown so the choice can still be changed. */
+  programmeGroup?: ProgrammeGroup | null;
+  onChangeProgramme?: () => void;
 }
 
-export default function SignupEmail({ onVerified, onBack, offline }: SignupEmailProps) {
+export default function SignupEmail({
+  onVerified,
+  onBack,
+  offline,
+  programmeGroup = null,
+  onChangeProgramme,
+}: SignupEmailProps) {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [stage, setStage] = useState<'email' | 'code'>('email');
@@ -31,8 +42,6 @@ export default function SignupEmail({ onVerified, onBack, offline }: SignupEmail
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // Set once the code is right, so the next step knows the address is usable.
-  const [verified, setVerified] = useState(false);
 
   const sendCode = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -77,7 +86,6 @@ export default function SignupEmail({ onVerified, onBack, offline }: SignupEmail
     setBusy(true);
     try {
       await authApi.verifySignup(email.trim().toLowerCase(), code.trim());
-      setVerified(true);
       onVerified(email.trim().toLowerCase());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid code');
@@ -113,16 +121,31 @@ export default function SignupEmail({ onVerified, onBack, offline }: SignupEmail
                 ? 'We check the address first, so a half-created account cannot block you later.'
                 : `We sent a 6-digit code to ${email.trim().toLowerCase()}.`}
             </p>
+            {/* The choice from step 0, changeable without restarting the flow. */}
+            {programmeGroup && (
+              <p className="text-xs text-gray-500 mt-2">
+                Joining as{' '}
+                <span className="font-medium text-gray-700">
+                  {GROUP_DETAILS[programmeGroup].title} ({GROUP_DETAILS[programmeGroup].programmes})
+                </span>
+                {onChangeProgramme && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      onClick={onChangeProgramme}
+                      className="text-primary-600 hover:underline"
+                    >
+                      Change
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
           </div>
 
           {/* Order, so it is clear what happens next. */}
-          <ol className="flex items-center gap-2 text-xs">
-            <Step n={1} label="Email" done={stage === 'code'} active={stage === 'email'} />
-            <span className="flex-1 h-px bg-gray-200" aria-hidden="true" />
-            <Step n={2} label="Code" done={verified} active={stage === 'code' && !verified} />
-            <span className="flex-1 h-px bg-gray-200" aria-hidden="true" />
-            <Step n={3} label="Details" done={false} active={false} />
-          </ol>
+          <SignupProgress current={stage === 'email' ? 'email' : 'code'} />
 
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
@@ -224,34 +247,5 @@ export default function SignupEmail({ onVerified, onBack, offline }: SignupEmail
         </div>
       </div>
     </div>
-  );
-}
-
-interface StepProps {
-  n: number;
-  label: string;
-  done: boolean;
-  active: boolean;
-}
-
-/** One step in the "email, then code, then details" sequence. */
-function Step({ n, label, done, active }: StepProps) {
-  return (
-    <li
-      className={`flex items-center gap-1.5 ${active ? 'text-primary-600' : done ? 'text-success-600' : 'text-gray-400'}`}
-    >
-      <span
-        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold ${
-          done
-            ? 'bg-success-500 text-white'
-            : active
-              ? 'bg-primary-500 text-white'
-              : 'bg-gray-200 text-gray-500'
-        }`}
-      >
-        {done ? '✓' : n}
-      </span>
-      <span className="hidden sm:inline">{label}</span>
-    </li>
   );
 }

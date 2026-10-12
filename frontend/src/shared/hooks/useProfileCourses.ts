@@ -1,6 +1,14 @@
 import { useMemo } from 'react';
 import { useProfile } from './useProfile';
-import { sameBranchFamily, splitCourseCodes, toMinutes } from '../lib/normalise';
+import {
+  branchFamily,
+  branchesInText,
+  courseBelongsToBranch,
+  isOpenElective,
+  isPostgradCourse,
+  splitCourseCodes,
+  toMinutes,
+} from '../lib/normalise';
 import type { TimetableSlot } from '../types/api';
 
 interface ProfileCourseResult {
@@ -43,7 +51,7 @@ export default function useProfileCourses(
   slots: TimetableSlot[] | undefined,
   options: { includeOtherSemesters?: boolean } = {}
 ): ProfileCourseResult[] {
-  const { branch, semester, optedInCodes } = useProfile();
+  const { branch, semester, optedInCodes, programme } = useProfile();
   const { includeOtherSemesters = false } = options;
 
   const optedIn = useMemo(() => new Set(optedInCodes), [optedInCodes]);
@@ -57,18 +65,44 @@ export default function useProfileCourses(
     const seen = new Set<string>();
     const relevant: ProfileCourseResult[] = [];
 
+    const isPostgradProgramme = ['MTECH', 'ME', 'MDES', 'PHD'].includes(
+      (programme || '').toUpperCase()
+    );
+
     rows.forEach(slot => {
       const code = slot.course_code.toUpperCase();
       // Only what the profile claims. An elective nobody chose is not theirs.
       const inProfile = optedIn.has(code);
 
-      if (!includeOtherSemesters && semester && slot.semester && slot.semester !== semester) {
+      // Skip postgraduate courses for undergraduate programmes
+      if (isPostgradCourse(code) && !isPostgradProgramme) return;
+
+      // Coerce both to number to avoid string/number mismatch from API
+      const slotSem = Number(slot.semester);
+      const profileSem = Number(semester);
+      if (!includeOtherSemesters && profileSem && slotSem && slotSem !== profileSem) {
         if (!inProfile) return;
       }
 
       const slotBranch = slot.branch_or_program;
-      const branchOk = !slotBranch || sameBranchFamily(slotBranch, branch);
-      if (!inProfile && !branchOk) return;
+
+      // Check if this is a shared cell (multiple branches)
+      const branchFamilies = branchesInText(slotBranch);
+      const studentFamily = branchFamily(branch);
+
+      let branchOk = false;
+      if (isOpenElective(code)) {
+        // Electives are NOT branch-specific — show only if student opted in
+        branchOk = inProfile;
+      } else if (studentFamily) {
+        // Core course: only show if course prefix matches student's branch family
+        branchOk = courseBelongsToBranch(code, branch);
+      } else {
+        // No student family (shouldn't happen for signed-up users): fall back to slot branch
+        branchOk = !slotBranch || branchFamilies.includes(studentFamily);
+      }
+
+      if (!branchOk) return;
 
       // De-duplicate on when/where/what, not the row id.
       const key = [slot.day, slot.start_time, slot.end_time, slot.room, code].join('|');
@@ -84,5 +118,5 @@ export default function useProfileCourses(
     });
 
     return relevant;
-  }, [slots, branch, semester, optedIn, includeOtherSemesters]);
+  }, [slots, branch, semester, programme, optedIn, includeOtherSemesters]);
 }

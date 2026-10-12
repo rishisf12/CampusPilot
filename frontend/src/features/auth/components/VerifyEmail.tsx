@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { authApi } from '../api';
-import { RESEND_COOLDOWN_SECONDS } from '../constants';
-import { readPendingVerification, writePendingVerification } from '../lib/storage';
-import ErrorBanner from './ErrorBanner';
-import Spinner from './Spinner';
+import { authApi } from '../../../api';
+import { RESEND_COOLDOWN_SECONDS } from '../../../shared/constants';
+import { readPendingVerification, writePendingVerification } from '../../../shared/lib/storage';
+import ErrorBanner from '../../../shared/components/ErrorBanner';
+import Spinner from '../../../shared/components/Spinner';
 
 // AuthWrapper starts this clock when a signup completes, so the two must agree.
 const COOLDOWN_SECONDS = RESEND_COOLDOWN_SECONDS;

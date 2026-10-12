@@ -20,10 +20,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { toCreationOptions, toRequestOptions, isPasskeySupported } from '../src/lib/passkey';
+import {
+  isPasskeySupported,
+  toCreationOptions,
+  toRequestOptions,
+  type CreationOptionsFromServer,
+  type RequestOptionsFromServer,
+} from '../../shared/lib/passkey';
 
 //: Shapes a real server response has taken, trimmed of anything irrelevant.
-const CREATE_OPTIONS = {
+const CREATE_OPTIONS: CreationOptionsFromServer = {
   rp: { name: 'essential - Your Campus Assistant', id: 'localhost' },
   user: {
     id: 'MQ', // base64url for the two bytes "1"
@@ -45,7 +51,7 @@ const CREATE_OPTIONS = {
   _label: 'Windows Hello',
 };
 
-const REQUEST_OPTIONS = {
+const REQUEST_OPTIONS: RequestOptionsFromServer = {
   challenge:
     'pqjeFJyv7fgPCbUBi8WG4nmkw8cDSTDYp7VJE9bj7nRVOxAtcUPE0ZI7ZKt2r_3FhiPPFcmyX8NVbej88-zukQ',
   rpId: 'localhost',
@@ -56,9 +62,22 @@ const REQUEST_OPTIONS = {
     'pqjeFJyv7fgPCbUBi8WG4nmkw8cDSTDYp7VJE9bj7nRVOxAtcUPE0ZI7ZKt2r_3FhiPPFcmyX8NVbej88-zukQ',
 };
 
+/**
+ * The slice of a WebAuthn public-key options object that WebIDL requires to
+ * be a `BufferSource`. Written structurally so the same helper checks both
+ * the creation options (which carry `user` and `excludeCredentials`) and
+ * the request options (which carry `allowCredentials`).
+ */
+interface PublicKeyWithBinaryFields {
+  challenge: BufferSource;
+  user?: { id: BufferSource };
+  excludeCredentials?: Array<{ id: BufferSource }>;
+  allowCredentials?: Array<{ id: BufferSource }>;
+}
+
 /** Every value in the dictionary that WebIDL requires to be a BufferSource. */
-function bufferSourceFields(publicKey) {
-  const fields = { challenge: publicKey.challenge };
+function bufferSourceFields(publicKey: PublicKeyWithBinaryFields) {
+  const fields: Record<string, BufferSource> = { challenge: publicKey.challenge };
   if (publicKey.user) fields['user.id'] = publicKey.user.id;
   for (const [index, item] of (publicKey.excludeCredentials || []).entries()) {
     fields[`excludeCredentials[${index}].id`] = item.id;
@@ -101,17 +120,20 @@ test('sign-in binary fields are bytes too', () => {
 
 test('base64url decodes to the right bytes', () => {
   const { id } = toCreationOptions(CREATE_OPTIONS).publicKey.user;
-  assert.deepEqual([...id], [0x31]); // "MQ" is base64url for "1"
+  assert.deepEqual([...(id as Uint8Array)], [0x31]); // "MQ" is base64url for "1"
 });
 
 test('the full challenge survives the round trip', () => {
   const { challenge } = toCreationOptions(CREATE_OPTIONS).publicKey;
-  assert.equal(Buffer.from(challenge).toString('base64url'), CREATE_OPTIONS.challenge);
+  assert.equal(
+    Buffer.from(challenge as Uint8Array).toString('base64url'),
+    CREATE_OPTIONS.challenge
+  );
 });
 
 test('credential ids survive the round trip', () => {
-  const [{ id }] = toRequestOptions(REQUEST_OPTIONS).publicKey.allowCredentials;
-  assert.equal(Buffer.from(id).toString('base64url'), 'AbN6MTEWv_gsAX8-k7iU5A');
+  const [{ id }] = toRequestOptions(REQUEST_OPTIONS).publicKey.allowCredentials!;
+  assert.equal(Buffer.from(id as Uint8Array).toString('base64url'), 'AbN6MTEWv_gsAX8-k7iU5A');
 });
 
 test('padding-free base64url is handled', () => {
@@ -120,8 +142,8 @@ test('padding-free base64url is handled', () => {
   const { id } = toRequestOptions({
     ...REQUEST_OPTIONS,
     allowCredentials: [{ type: 'public-key', id: long }],
-  }).publicKey.allowCredentials[0];
-  assert.equal(Buffer.from(id).toString('base64url'), long);
+  }).publicKey.allowCredentials![0];
+  assert.equal(Buffer.from(id as Uint8Array).toString('base64url'), long);
 });
 
 test('excluded credentials are converted as well', () => {
@@ -129,7 +151,7 @@ test('excluded credentials are converted as well', () => {
     ...CREATE_OPTIONS,
     excludeCredentials: [{ type: 'public-key', id: 'AbN6MTEWv_gsAX8-k7iU5A' }],
   });
-  assert.ok(publicKey.excludeCredentials[0].id instanceof Uint8Array);
+  assert.ok(publicKey.excludeCredentials![0].id instanceof Uint8Array);
 });
 
 test('an empty exclude list is tolerated', () => {
@@ -142,14 +164,15 @@ test('an empty exclude list is tolerated', () => {
 
 test('internal bookkeeping fields are not forwarded', () => {
   const { publicKey } = toCreationOptions(CREATE_OPTIONS);
-  assert.equal(publicKey._challenge, undefined);
-  assert.equal(publicKey._label, undefined);
+  const extra = publicKey as unknown as Record<string, unknown>;
+  assert.equal(extra._challenge, undefined);
+  assert.equal(extra._label, undefined);
 });
 
 test('server policy is passed through untouched', () => {
   const { publicKey } = toCreationOptions(CREATE_OPTIONS);
   assert.equal(publicKey.rp.id, 'localhost');
-  assert.equal(publicKey.authenticatorSelection.userVerification, 'required');
+  assert.equal(publicKey.authenticatorSelection?.userVerification, 'required');
   assert.equal(publicKey.timeout, 60000);
   assert.equal(publicKey.pubKeyCredParams.length, 2);
 });

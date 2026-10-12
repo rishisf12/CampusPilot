@@ -1,4 +1,4 @@
-import { attendanceApi } from '../api';
+import { attendanceApi } from '../../api';
 import { bumpProfileVersion } from './storage';
 
 /**

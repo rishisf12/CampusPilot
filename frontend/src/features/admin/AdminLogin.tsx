@@ -1,6 +1,6 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
-import ErrorBanner from '../../components/ErrorBanner';
-import Spinner from '../../components/Spinner';
+import ErrorBanner from '../../shared/components/ErrorBanner';
+import Spinner from '../../shared/components/Spinner';
 
 /**
  * Developer sign-in. Same username + password as students - the *role* on the

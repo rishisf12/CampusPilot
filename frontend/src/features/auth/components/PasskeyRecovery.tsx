@@ -1,7 +1,7 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
-import { authenticateWithPasskey, isPasskeySupported } from '../lib/passkey';
-import ErrorBanner from './ErrorBanner';
-import Spinner from './Spinner';
+import { authenticateWithPasskey, isPasskeySupported } from '../../../shared/lib/passkey';
+import ErrorBanner from '../../../shared/components/ErrorBanner';
+import Spinner from '../../../shared/components/Spinner';
 
 /**
  * Password recovery by passkey.

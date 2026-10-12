@@ -21,6 +21,54 @@ const BRANCH_FAMILY: Record<string, string> = {
   MDES: 'MDES',
 };
 
+/** Course code prefix -> branch family mapping. */
+const COURSE_PREFIX_BRANCH: Record<string, string> = {
+  CS: 'CSE',
+  EC: 'ECE',
+  ME: 'ME',
+  SM: 'SM',
+  DS: 'DS',
+  IT: 'ECE',
+  HS: 'CSE', // Humanities - generic
+  NS: 'CSE', // Natural Sciences - generic
+  MT: 'CSE', // Math - generic
+  ES: 'CSE', // Engineering Science - generic
+  OE: 'CSE', // Open Elective - generic
+  NM: 'PG', // PhD/Research
+  EC5: 'ECE', // ECE postgrad
+  ME5: 'ME', // ME postgrad
+  SM5: 'SM', // SM postgrad
+  DS5: 'DS', // DS postgrad
+  CS8: 'CSE', // CSE postgrad
+};
+
+/** Prefixes that indicate postgraduate (MTech/ME) courses. */
+const POSTGRAD_PREFIXES = new Set([
+  'EC5',
+  'ME5',
+  'SM5',
+  'DS5',
+  'CS8',
+  'ME6',
+  'EC6',
+  'SM6',
+  'DS6',
+  'CS9',
+  'ME8',
+  'EC8',
+  'SM8',
+  'DS8',
+]);
+
+/** Check if a course code indicates a postgraduate (MTech/ME) course. */
+export function isPostgradCourse(code: string): boolean {
+  if (!code) return false;
+  const match = code.match(/^([A-Z]+[5689]?)/);
+  if (!match) return false;
+  const prefix = match[1].toUpperCase();
+  return POSTGRAD_PREFIXES.has(prefix);
+}
+
 /** The canonical branch list, used as the fallback for unrecognised input. */
 export const BRANCHES = ['CSE A', 'CSE B', 'DS', 'ECE', 'ME', 'SM', 'PG', 'MDes'];
 
@@ -29,19 +77,56 @@ export const BRANCHES = ['CSE A', 'CSE B', 'DS', 'ECE', 'ME', 'SM', 'PG', 'MDes'
  *
  * `DS` stays `DS` because it is a branch in its own right, not a section of
  * another one - and BDes students must not be folded into anything else.
+ *
+ * Postgraduate programmes are degrees, not departments, so they are matched
+ * first and against a punctuation-free copy: the timetable writes "M.Tech",
+ * "Ph.D." and "MDes (Sem I)" dotted and spaced. Left to the department prefixes
+ * below, "M.Tech (Mechatronics)" reads as ME and "M.Tech (Design)" as MDes -
+ * and a dotted "M.TECH" never matched "MTECH" at all.
  */
 export function branchFamily(value: string | undefined | null): string {
   if (!value) return '';
-  const cleaned = String(value)
+  const compact = String(value)
     .toUpperCase()
-    .replace(/[^A-Z]/g, '')
-    .replace(/BTECH|MTECH|MDES|PHD|BDES|SEMESTER|SEM/g, '');
+    .replace(/[^A-Z0-9]/g, '');
+  if (!compact) return '';
+  if (compact.includes('PHD') || compact.includes('DOCTOR')) return 'PG';
+  if (compact.includes('MTECH')) return 'PG';
+  // Bachelor of Design is an undergraduate branch, not the master's one.
+  if (compact.includes('BDES')) return 'DS';
+  if (compact.includes('MDES') || compact.includes('DESIGN')) return 'MDES';
+  const cleaned = compact.replace(/BTECH|SEMESTER|SEM/g, '');
   if (!cleaned) return '';
   // Longest prefix first so "MDES" is not read as "ME".
   for (const prefix of Object.keys(BRANCH_FAMILY).sort((a, b) => b.length - a.length)) {
     if (cleaned.startsWith(prefix)) return BRANCH_FAMILY[prefix];
   }
   return cleaned;
+}
+
+/** Separators used between branches in a shared timetable cell ("ECE ME SM"). */
+const BRANCH_TOKEN_SEP = /[\s,;/&+]+/;
+
+/**
+ * Every branch family named anywhere in a free-text cell.
+ *
+ * A cell may hold one branch ("MDS501" -> ["MDES"]), several shared ones
+ * ("ECE ME SM" -> ["ECE", "ME", "SM"]) or a postgraduate label
+ * ("M.Tech (P&C)" -> ["PG"]). Comparing memberships rather than the first match
+ * means a shared row reaches every branch it belongs to.
+ */
+export function branchesInText(value: string | undefined | null): string[] {
+  if (!value) return [];
+  const families = new Set<string>();
+  const whole = branchFamily(value);
+  if (whole) families.add(whole);
+  String(value)
+    .split(BRANCH_TOKEN_SEP)
+    .forEach(token => {
+      const family = branchFamily(token);
+      if (family) families.add(family);
+    });
+  return [...families];
 }
 
 /**
@@ -61,9 +146,33 @@ export function sameBranchFamily(
   return left === right;
 }
 
-/** PG papers are hidden from UG students, and vice versa. */
-export function isPostgraduate(value: string | undefined | null): boolean {
-  return branchFamily(value) === 'PG';
+/**
+ * Extract branch family from a course code prefix.
+ * e.g., "ME3010L" -> "ME", "EC3011" -> "ECE", "SM3012" -> "SM"
+ */
+export function branchFromCourseCode(code: string): string {
+  if (!code) return '';
+  // Extract prefix: letters before first digit (or digit sequence)
+  const match = code.match(/^([A-Z]+)/);
+  if (!match) return '';
+  const prefix = match[1];
+  // Try exact match first
+  if (COURSE_PREFIX_BRANCH[prefix]) return COURSE_PREFIX_BRANCH[prefix];
+  // Fallback: use BRANCH_FAMILY if prefix matches a known branch
+  if (BRANCH_FAMILY[prefix]) return BRANCH_FAMILY[prefix];
+  return '';
+}
+
+/**
+ * Check if a slot's course code belongs to the student's branch.
+ * For shared cells (multiple branches in branch_or_program), only allow
+ * courses whose code prefix matches the student's branch.
+ */
+export function courseBelongsToBranch(courseCode: string, studentBranch: string): boolean {
+  const studentFamily = branchFamily(studentBranch);
+  if (!studentFamily) return false;
+  const courseFamily = branchFromCourseCode(courseCode);
+  return courseFamily === studentFamily;
 }
 
 /**

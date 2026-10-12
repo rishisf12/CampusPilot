@@ -12,7 +12,7 @@
  * transition. The percentage is always rendered as text so the score is never
  * communicated by colour alone.
  */
-import { toneFor } from '../../constants';
+import { toneFor } from '../../shared/constants';
 
 type Tone = 'success' | 'warning' | 'danger';
 

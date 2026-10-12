@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { hackathonsApi } from '../../api';
-import type { Hackathon, HackathonAttachment } from '../../types/api';
+import type { Hackathon, HackathonAttachment } from '../../shared/types/api';
 
 const PILL = {
   success: 'bg-success-50 text-success-700',

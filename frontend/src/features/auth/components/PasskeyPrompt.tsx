@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { createPasskey, isPasskeySupported } from '../lib/passkey';
-import Spinner from './Spinner';
+import { createPasskey, isPasskeySupported } from '../../../shared/lib/passkey';
+import Spinner from '../../../shared/components/Spinner';
 
 /**
  * The one-time prompt offering to enrol a passkey after a password sign-in.

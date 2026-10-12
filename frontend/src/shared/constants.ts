@@ -5,6 +5,63 @@ export const BRANCH_OPTIONS = ['CSE A', 'CSE B', 'DS', 'ECE', 'ME', 'SM', 'PG', 
 
 export const PROGRAMMES = ['BTech', 'BDes', 'MTech', 'MDes', 'PhD'] as const;
 
+/**
+ * Programme groups, the first question of registration.
+ *
+ * The three groups are how the app decides what to show: undergraduates get
+ * the full classroom toolkit, master's students get classes and exams without
+ * the UG machinery, and doctoral scholars get the lightest bundle. Asking
+ * first means the rest of signup - and the whole app afterwards - can be
+ * shaped around the answer instead of guessing from a branch name.
+ */
+export const PROGRAMME_GROUPS = ['UG', 'PG', 'PHD'] as const;
+
+/** Which concrete programmes belong to each group. */
+export const GROUP_PROGRAMMES: Record<ProgrammeGroup, readonly Programme[]> = {
+  UG: ['BTech', 'BDes'],
+  PG: ['MTech', 'MDes'],
+  PHD: ['PhD'],
+};
+
+/** Display details for the programme-chooser cards. */
+export const GROUP_DETAILS: Record<
+  ProgrammeGroup,
+  { title: string; programmes: string; blurb: string }
+> = {
+  UG: {
+    title: 'Undergraduate',
+    programmes: 'BTech · BDes',
+    blurb: 'Classes, attendance, exams, rooms and teams - the full campus toolkit.',
+  },
+  PG: {
+    title: "Master's",
+    programmes: 'MTech · MDes',
+    blurb: 'Your classes, timetable and exams - without the undergraduate machinery.',
+  },
+  PHD: {
+    title: 'Doctoral',
+    programmes: 'PhD',
+    blurb: 'Coursework classes and exams, kept light so research stays in front.',
+  },
+};
+
+/** The group a concrete programme belongs to. Unknown values fall to UG. */
+export function programmeGroupOf(programme: string | undefined | null): ProgrammeGroup {
+  const found = PROGRAMME_GROUPS.find(group =>
+    GROUP_PROGRAMMES[group].includes((programme || '') as Programme)
+  );
+  return found || 'UG';
+}
+
+/** Branch options offered per concrete programme, at signup. */
+export const PROGRAMME_BRANCHES: Record<Programme, readonly BranchOption[]> = {
+  BTech: ['CSE A', 'CSE B', 'ECE', 'ME', 'SM'],
+  BDes: ['DS'],
+  MTech: ['PG'],
+  MDes: ['MDes'],
+  PhD: ['PG'],
+};
+
 export const GENDERS = ['Male', 'Female', 'Other'] as const;
 
 /**
@@ -36,10 +93,24 @@ export const ALLOWED_EMAIL_DOMAIN = '@iiitdmj.ac.in';
 /** Top-level navigation tabs rendered inside the single header. */
 export const NAV_TABS = [
   { id: 'live', label: 'Live Schedule' },
-  { id: 'vacant', label: 'Vacant Room Lookup' },
   { id: 'attendance', label: 'Attendance' },
+  { id: 'vacant', label: 'Vacant Room Lookup' },
   { id: 'exam', label: 'Exam' },
 ] as const;
+
+/**
+ * Which classroom tabs each programme group sees.
+ *
+ * Live Schedule (which carries the shared timetable) and Exam are common ground
+ * for everyone. Attendance and Vacant Rooms are built around the undergraduate
+ * timetable, so they stay in the UG bundle; a master's or doctoral student is
+ * never shown a tab that cannot answer for them.
+ */
+export const GROUP_CLASSROOM_TABS: Record<ProgrammeGroup, readonly NavTabId[]> = {
+  UG: ['live', 'attendance', 'vacant', 'exam'],
+  PG: ['live', 'exam'],
+  PHD: ['live', 'exam'],
+};
 
 /** My Team sub-tabs: discover, own teams, incoming requests, hackathon feed. */
 export const TEAM_TABS = [
@@ -97,6 +168,7 @@ export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 export type BranchOption = (typeof BRANCH_OPTIONS)[number];
 export type Programme = (typeof PROGRAMMES)[number];
+export type ProgrammeGroup = (typeof PROGRAMME_GROUPS)[number];
 export type Gender = (typeof GENDERS)[number];
 export type NavTabId = (typeof NAV_TABS)[number]['id'];
 export type TeamTabId = (typeof TEAM_TABS)[number]['id'];

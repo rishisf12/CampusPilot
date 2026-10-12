@@ -11,7 +11,7 @@ Three things make this non-standard:
 2. **Metadata comes from SQLModel, not Base.metadata.** The app declares tables
    with ``SQLModel, table=True``, so importing every model module is what
    populates ``SQLModel.metadata``. Miss one module and Alembic will happily
-   generate a migration that DROPS its table. The import below is therefore
+   generate a migration that DROPs its table. The import below is therefore
    load-bearing, not decorative.
 
 3. **The engine is the app's own engine.** ``env.py`` normally calls
@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text as sa_text
 
 # --- make the app importable from any working directory -------------------
 # This file lives at backend/alembic/env.py, so:
@@ -71,7 +71,8 @@ def _assert_metadata_complete() -> None:
     Cheap insurance against the specific failure described above: a feature
     added a model, the migration exists, but this file was not updated. Without
     it the symptom appears as a generated DROP TABLE in a future migration, at
-    which point the cause is three commits back and the data is gone.
+    which point the cause is three commits back and the data is gone. `alembic check` in CI catches that case, which is why it
+    is a required step rather than an optional one.
     """
     import os
 
@@ -144,13 +145,14 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         _assert_metadata_complete()
+        connection.execute(sa_text("SET search_path = core, academic, social, telemetry, public"))
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
             # render_as_batch is not needed for PostgreSQL
-        render_as_batch=False,
+            render_as_batch=False,
         )
         with context.begin_transaction():
             context.run_migrations()
