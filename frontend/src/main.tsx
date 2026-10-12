@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import App from './core/App';
 import './index.css';
 import './telemetry'; // Session/page_view beacons + crash capture
 

@@ -63,7 +63,21 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@shared': path.resolve(__dirname, './src/shared'),
+      '@modules': path.resolve(__dirname, './src/modules'),
     },
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        'module-student-ug': path.resolve(__dirname, 'src/modules/student-ug/main.tsx'),
+        'module-student-pg': path.resolve(__dirname, 'src/modules/student-pg/main.tsx'),
+        'module-admin': path.resolve(__dirname, 'src/modules/admin/main.tsx'),
+        'module-faculty': path.resolve(__dirname, 'src/modules/faculty/main.tsx'),
+      },
+    },
+    chunkSizeWarningLimit: 500,
   },
   server: {
     port: 5173,
