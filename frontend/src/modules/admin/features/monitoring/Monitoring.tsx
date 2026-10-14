@@ -26,7 +26,7 @@ import { ActivityPanel, type ActivityData } from './panels/Activity';
 import { FeedbackPanel, type FeedbackData } from './panels/Feedback';
 import { HealthPanel, type HealthData } from './panels/Health';
 import { HistoryPanel, type HistoryData } from './panels/History';
-import { type MonetisationData } from './panels/Monetisation';
+import { type MonetisationData, MonetisationPanel } from './panels/Monetisation';
 import { SecurityPanel, type SecurityData } from './panels/Security';
 
 const RANGES = [
@@ -362,12 +362,20 @@ function PanelBody({
     case 'B_W_ACTIVITY':
     case 'B_A_ACTIVITY':
       return (
-        <ActivityPanel
-          data={overview}
-          monetisation={monetisation}
-          loading={loading}
-          awaiting={awaiting}
-        />
+        <div className="space-y-4">
+          <ActivityPanel
+            data={overview}
+            monetisation={monetisation}
+            loading={loading}
+            awaiting={awaiting}
+          />
+          {/* The subsection is titled "User Activity & Monetization", but
+              ActivityPanel only carries four summary tiles. The detailed
+              revenue / subscription / ad breakdown lived in MonetisationPanel
+              and was never rendered anywhere, so it is mounted here to make
+              the second half of the subsection actually visible. */}
+          <MonetisationPanel data={monetisation} loading={loading} awaiting={awaiting} />
+        </div>
       );
     case 'C_W_SECURITY':
     case 'C_A_SECURITY':

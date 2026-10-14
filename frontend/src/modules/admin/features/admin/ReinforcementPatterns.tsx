@@ -11,6 +11,8 @@ export default function ReinforcementPatterns({ onError }: ReinforcementPatterns
   const [error, setError] = useState<string | null>(null);
   const [testInput, setTestInput] = useState('');
   const [testOutput, setTestOutput] = useState('');
+  const [testMatched, setTestMatched] = useState<boolean | null>(null);
+  const [testing, setTesting] = useState(false);
   const [newPattern, setNewPattern] = useState({
     name: '',
     pattern: '',
@@ -38,14 +40,19 @@ export default function ReinforcementPatterns({ onError }: ReinforcementPatterns
   }, []);
 
   const testPattern = async () => {
+    setTesting(true);
     try {
       const result = await reinforcementApi.test({
         pattern: newPattern.pattern,
-        description: testInput,
+        replacement: newPattern.replacement,
+        text: testInput,
       });
       setTestOutput(result.output);
+      setTestMatched(result.matched);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Test failed');
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -55,6 +62,7 @@ export default function ReinforcementPatterns({ onError }: ReinforcementPatterns
       await reinforcementApi.create(newPattern);
       setNewPattern({ name: '', pattern: '', replacement: '', description: '' });
       setTestOutput('');
+      setTestMatched(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add pattern');
@@ -134,6 +142,15 @@ export default function ReinforcementPatterns({ onError }: ReinforcementPatterns
           />
           <input
             type="text"
+            placeholder="Description (what this fixes)"
+            value={newPattern.description}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              setNewPattern(p => ({ ...p, description: e.target.value }))
+            }
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+          />
+          <input
+            type="text"
             placeholder="Test input"
             value={testInput}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setTestInput(e.target.value)}
@@ -152,16 +169,24 @@ export default function ReinforcementPatterns({ onError }: ReinforcementPatterns
           <button
             type="button"
             onClick={testPattern}
-            disabled={!newPattern.pattern || !testInput}
+            disabled={testing || !newPattern.pattern || !newPattern.replacement || !testInput}
+            title="Preview this pattern against the test input without saving it"
             className="btn-ghost text-sm disabled:opacity-60"
           >
-            Test
+            {testing ? 'Testing…' : 'Test'}
           </button>
         </div>
-        {testOutput && (
+        {testOutput !== '' && (
           <div className="p-3 rounded-lg bg-gray-50 text-sm">
             <p className="font-mono text-gray-600">Input: {testInput}</p>
-            <p className="font-mono text-green-600 mt-1">Output: {testOutput}</p>
+            <p className={`font-mono mt-1 ${testMatched ? 'text-green-600' : 'text-amber-600'}`}>
+              Output: {testOutput}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {testMatched
+                ? 'Pattern matched and rewrote the input.'
+                : 'No match — the output is identical to the input.'}
+            </p>
           </div>
         )}
       </div>

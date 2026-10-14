@@ -367,8 +367,8 @@ export const reinforcementApi = {
     }),
   remove: (id: number) =>
     request<{ message: string }>(`/reinforcement/${id}`, { method: 'DELETE' }),
-  test: (data: { pattern: string; description: string }) =>
-    request<{ input: string; output: string }>('/reinforcement/test', {
+  test: (data: { pattern: string; replacement: string; text: string }) =>
+    request<{ input: string; output: string; matched: boolean }>('/reinforcement/test', {
       method: 'POST',
       body: data,
     }),

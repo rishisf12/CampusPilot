@@ -13,6 +13,10 @@ from core.deps import get_current_admin
 from core.database import get_session
 from models import ReinforcementPattern, User
 
+import re
+
+from features.timetable.reinforcement import ReinforcementPatternModel
+
 router = APIRouter(tags=["Reinforcement Patterns"])
 
 
@@ -29,6 +33,20 @@ class PatternUpdate(BaseModel):
     replacement: str | None = None
     description: str | None = None
     enabled: bool | None = None
+
+
+class PatternTest(BaseModel):
+    """A single candidate rule plus the text to preview it against.
+
+    Deliberately not ``PatternCreate``: testing is a read-only preview, so it
+    must not demand a name or a description it has no use for. It previously
+    bound ``PatternCreate`` while the admin UI sent only a pattern and some
+    text, so every click failed with 422.
+    """
+
+    pattern: str
+    replacement: str
+    text: str
 
 
 @router.get("/")
@@ -112,15 +130,22 @@ def delete_pattern(
 
 @router.post("/test")
 def test_pattern(
-    data: PatternCreate,
-    session: Session = Depends(get_session),
+    data: PatternTest,
     _: User = Depends(get_current_admin),
 ):
-    """Test a pattern against sample text."""
-    from features.timetable.reinforcement import get_reinforcement_model
-    model = get_reinforcement_model()
-    model.load_from_db(session)
-    # Add the test pattern temporarily
-    model.learn(data.name, data.pattern, data.replacement, data.description)
-    result = model.apply(data.description)
-    return {"input": data.description, "output": result}
+    """Preview one candidate rule against sample text.
+
+    Uses a throwaway model whose default rules are dropped, rather than the
+    shared singleton. ``learn`` appends permanently, so testing through the
+    singleton would leave every rule ever previewed active in this process's
+    timetable parser until restart -- and the previews would compound, each one
+    seeing the output of the last.
+    """
+    model = ReinforcementPatternModel()
+    model.rules.clear()
+    try:
+        model.learn("__preview__", data.pattern, data.replacement, "__preview__")
+    except re.error as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid regex: {exc}") from exc
+    output = model.apply(data.text)
+    return {"input": data.text, "output": output, "matched": output != data.text}
