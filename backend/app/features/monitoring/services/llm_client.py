@@ -27,10 +27,20 @@ logger = logging.getLogger(__name__)
 class OllamaConfig(BaseModel):
     """Configuration for Ollama client."""
     base_url: str = "http://ollama:11434/v1"
-    model: str = "qwen3:8b"
+    model: str = "qwen3:4b"
     timeout: float = 240.0
     temperature: float = 0.1
-    max_tokens: int = 4096
+
+    #: 512, not 4096.
+    #:
+    #: A scan verdict is a status, a one-line summary and a few findings that
+    #: the rule engine has already fixed - it is not prose, so a large budget
+    #: only buys the model room to wander. Measured on CPU with qwen3:4b and a
+    #: 294-token prompt: a 4096 budget ran 509s and burned ~1960 tokens before
+    #: emitting a 381-character JSON object, while 512 finished the same object
+    #: in 97s. The headroom bought nothing and blew the request timeout, which
+    #: is what made every scan look like an LLM outage.
+    max_tokens: int = 1536
 
 
 class LLMError(Exception):
@@ -72,6 +82,7 @@ class OllamaClient:
         user_prompt: str,
         response_model: type[BaseModel],
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ) -> BaseModel:
         """Call Ollama chat completion and parse response as Pydantic model.
 
@@ -91,7 +102,16 @@ class OllamaClient:
             "model": self.config.model,
             "messages": messages,
             "temperature": temperature if temperature is not None else self.config.temperature,
-            "max_tokens": self.config.max_tokens,
+            "max_tokens": max_tokens if max_tokens is not None else self.config.max_tokens,
+            # Disable thinking. qwen3 is a reasoning model and spends its whole
+            # budget on a `reasoning` field, leaving `content` empty - "2+2"
+            # burned 200 tokens and returned "" with finish_reason "length".
+            #
+            # Note this is necessary but not sufficient: with `think: false` the
+            # model returned prose rather than JSON on this Ollama build, even
+            # under `response_format: json_schema`. That is why Stage 2 is off
+            # by default behind SCAN_LLM_ENABLED - see the note on that setting.
+            "think": False,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -111,9 +131,29 @@ class OllamaClient:
             response.raise_for_status()
             data = response.json()
 
-            content = data["choices"][0]["message"]["content"]
+            message = data["choices"][0]["message"]
+            content = message.get("content") or ""
             if not content:
-                raise LLMError("Empty response from LLM")
+                # Older Ollama builds ignore `think: false` and return the whole
+                # answer in `reasoning`. Recover it rather than failing, so a
+                # version difference degrades to a working scan rather than to
+                # no scan.
+                content = message.get("reasoning") or ""
+                if not content:
+                    # An empty body almost always means the token budget ran
+                    # out before the JSON closed. `finish_reason` says which,
+                    # and surfacing it matters: "empty response" was previously
+                    # indistinguishable from a broken model, which sent me
+                    # looking at Ollama's health instead of at the budget.
+                    finish = data["choices"][0].get("finish_reason", "unknown")
+                    usage = data.get("usage", {})
+                    raise LLMError(
+                        f"Empty response from LLM (finish_reason={finish}, "
+                        f"completion_tokens={usage.get('completion_tokens')}, "
+                        f"max_tokens={max_tokens or self.config.max_tokens}). "
+                        "finish_reason=length means the answer was truncated; "
+                        "check the model's reasoning output is being disabled."
+                    )
 
             # Parse and validate
             return response_model.model_validate_json(content)
@@ -128,14 +168,31 @@ class OllamaClient:
             raise LLMError(f"LLM call failed: {e}") from e
 
     async def health_check(self) -> bool:
-        """Check if Ollama is reachable and the model is available."""
+        """Check if Ollama is reachable and the model is available.
+
+        Handles both response shapes. The configured base_url points at the
+        OpenAI-compatible `/v1` surface, which answers
+        `{"object": "list", "data": [{"id": "qwen3:8b", ...}]}`, while the
+        native Ollama API answers `{"models": [{"name": "qwen3:8b"}]}`.
+        Reading only `models`/`name` meant the check returned False against a
+        perfectly healthy server, so Stage 2 never ran and every scan silently
+        degraded to the rule engine.
+        """
         try:
             client = await self._ensure_client()
             response = await client.get("/models", timeout=10.0)
             response.raise_for_status()
             data = response.json()
-            models = [m.get("name", "") for m in data.get("models", [])]
-            return any(self.config.model in m for m in models)
+            names = [
+                m.get("id") or m.get("name") or ""
+                for m in (data.get("data") or data.get("models") or [])
+            ]
+            # Substring both ways: the config may name a tag the server reports
+            # without one, or vice versa.
+            return any(
+                self.config.model == n or self.config.model in n or n in self.config.model
+                for n in names
+            )
         except Exception:  # noqa: BLE001 - local Ollama failure means 'stage 2 unavailable'
             return False
 

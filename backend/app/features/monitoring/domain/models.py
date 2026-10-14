@@ -211,8 +211,22 @@ class Purchase(SQLModel, table=True):
     user_hash: Optional[str] = Field(default=None, index=True)
     app_version: Optional[str] = Field(default=None, index=True)
     verified: bool = Field(default=False, index=True)
-    #: Free-form: "subscription", "consumable", "restore".
-    kind: str = Field(default="one_time")
+    #: The native Postgres enum `purchase_kind` holds these four labels. Typed
+    #: as a plain `str` the INSERT bound VARCHAR and Postgres rejected it with
+    #: "column kind is of type purchase_kind but expression is of type character
+    #: varying", and any `WHERE kind = :x` comparison raised "operator does not
+    #: exist". Declared through the enum type so both directions bind correctly.
+    kind: str = Field(
+        default="one_time",
+        sa_column=Column(
+            SAEnum(
+                "one_time", "subscription", "consumable", "restore",
+                name="purchase_kind",
+                create_type=False,
+            ),
+            nullable=False,
+        ),
+    )
 
 
 class AdEvent(SQLModel, table=True):
@@ -250,7 +264,17 @@ class CrashReport(SQLModel, table=True):
     ts: datetime = Field(default=None, sa_column=Column("ts", DateTime, nullable=False, index=True))
     platform: str = Field(index=True)
     #: "crash" or "anr".
-    kind: str = Field(index=True)
+    kind: str = Field(
+        sa_column=Column(
+            SAEnum(
+                "crash", "anr",
+                name="crash_report_kind",
+                create_type=False,
+            ),
+            index=True,
+            nullable=False,
+        ),
+    )
     #: The session the crash happened in. Crash-free rate is defined on sessions,
     #: so without this column the only alternative is counting distinct users,
     #: which hides a user who crashes on every launch behind one affected user.
@@ -322,7 +346,21 @@ class ScanResult(SQLModel, table=True):
     scan_id: str = Field(index=True)
     #: A_W_HEALTH, B_W_ACTIVITY, C_W_SECURITY, D_W_FEEDBACK, A_A_HEALTH, ...
     subsection: str = Field(index=True)
-    status: str = Field(index=True)
+    #: The native Postgres enum `scan_result_status` holds these four labels.
+    #: Typed as a plain `str`, every INSERT bound VARCHAR and Postgres rejected
+    #: it, so no scan could ever be recorded - the rule engine and the LLM both
+    #: ran and then the result was lost at the database boundary.
+    status: str = Field(
+        sa_column=Column(
+            SAEnum(
+                "healthy", "warning", "critical", "error",
+                name="scan_result_status",
+                create_type=False,
+            ),
+            index=True,
+            nullable=False,
+        ),
+    )
     summary: str = Field(default="", sa_column=Column("summary", Text, nullable=False, default=""))
     findings: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False, default=list))
     root_causes: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False, default=list))

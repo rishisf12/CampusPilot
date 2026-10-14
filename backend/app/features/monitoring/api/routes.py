@@ -732,13 +732,19 @@ def _get_academic_events(start: datetime, end: datetime) -> list[dict]:
 # --------------------------------------------------------------------------
 
 @monitoring_router.post("/scan/{subsection}", response_model=ScanResponse)
-async def trigger_scan(
+def trigger_scan(
     subsection: str,
     payload: ScanRequest = ScanRequest(),
     session: Session = Depends(get_session),
     _admin=Depends(get_current_admin),
 ):
     """Trigger a Stage 1 rule-based scan for one subsection.
+
+    Synchronous on purpose. `run_scan` drives a synchronous rule engine that
+    internally calls the async LLM stage with `asyncio.run`, and that refuses to
+    nest inside a running event loop. FastAPI runs a `def` endpoint in a worker
+    thread, so there is no loop to collide with. Declaring this `async def` made
+    every LLM stage fail with "cannot be called from a running event loop".
 
     Returns the scan result synchronously. In Phase 3 this will be
     enqueued via RQ and return a pending status immediately.

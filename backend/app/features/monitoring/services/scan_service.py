@@ -13,7 +13,9 @@ The flow:
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import inspect
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -30,7 +32,42 @@ from features.monitoring.domain.models import (
     Purchase,
 )
 from features.monitoring.services import queries
-from features.monitoring.domain.thresholds import ScanStatus, ScanVerdict, run_stage1_scan
+from features.monitoring.domain.thresholds import (
+    ScanStatus,
+    ScanVerdict,
+    evaluate_a_a_health,
+    evaluate_a_w_health,
+    evaluate_b_a_activity,
+    evaluate_b_w_activity,
+    evaluate_c_a_security,
+    evaluate_c_w_security,
+    evaluate_d_a_feedback,
+    evaluate_d_w_feedback,
+    run_stage1_scan,
+)
+
+#: Mirrors the dispatch table in `thresholds.run_stage1_scan`, keyed by
+#: subsection, so the collected data can be narrowed to exactly the parameters
+#: one evaluator accepts before the dict is splatted into it.
+STAGE1_EVALUATORS = {
+    "A_W_HEALTH": evaluate_a_w_health,
+    "B_W_ACTIVITY": evaluate_b_w_activity,
+    "C_W_SECURITY": evaluate_c_w_security,
+    "D_W_FEEDBACK": evaluate_d_w_feedback,
+    "A_A_HEALTH": evaluate_a_a_health,
+    "B_A_ACTIVITY": evaluate_b_a_activity,
+    "C_A_SECURITY": evaluate_c_a_security,
+    "D_A_FEEDBACK": evaluate_d_a_feedback,
+}
+from features.monitoring.api.schemas import (
+    Action as SchemaAction,
+    Confidence as SchemaConfidence,
+    Finding as SchemaFinding,
+    Metric as SchemaMetric,
+    Recommendation as SchemaRecommendation,
+    ScanNarrative,
+    Status as SchemaStatus,
+)
 from features.monitoring.api.schemas import ScanResult as ScanResultSchema
 from features.monitoring.services.llm_client import (
     OllamaClient,
@@ -76,6 +113,16 @@ def _reconcile_findings(
 # Data Collection for Stage 2 (same as Stage 1 but returns full data dicts)
 # ---------------------------------------------------------------------------
 
+def _platform_for_subsection(subsection: str) -> str:
+    """Map a subsection id to its platform.
+
+    `A_W_HEALTH` -> web, `A_A_HEALTH` -> android. The platform is the second
+    underscore-separated token.
+    """
+    parts = subsection.split("_")
+    return "android" if len(parts) > 1 and parts[1] == "A" else "web"
+
+
 def _collect_a_w_health_data(session: Session, start: datetime, end: datetime, platform: str) -> dict[str, Any]:
     latest = session.exec(
         select(HealthMetric).where(
@@ -85,18 +132,22 @@ def _collect_a_w_health_data(session: Session, start: datetime, end: datetime, p
         ).order_by(HealthMetric.ts.desc()).limit(1)
     ).first()
 
-    if not latest:
-        return {}
-
+    # Every key is always present, None when unknown.
+    #
+    # This used to return `{}` when there was no sample yet, and
+    # `run_stage1_scan` splats the dict straight into the evaluator, so an empty
+    # window raised "missing 8 required positional arguments" - a crash, rather
+    # than the verdict the evaluator is designed to return when data is absent.
+    # All eight parameters are Optional precisely so "no data" is expressible.
     return {
-        "http_p95_ms": latest.response_time_p95_ms,
-        "http_5xx_pct": latest.http_5xx_pct,
-        "uptime_pct": latest.uptime_pct,
-        "cpu_pct": latest.cpu_pct,
-        "ram_pct": latest.ram_pct,
-        "disk_pct": latest.disk_pct,
-        "db_query_p95_ms": latest.db_query_p95_ms,
-        "ssl_expiry_days": latest.ssl_expiry_days,
+        "http_p95_ms": latest.response_time_p95_ms if latest else None,
+        "http_5xx_pct": latest.http_5xx_pct if latest else None,
+        "uptime_pct": latest.uptime_pct if latest else None,
+        "cpu_pct": latest.cpu_pct if latest else None,
+        "ram_pct": latest.ram_pct if latest else None,
+        "disk_pct": latest.disk_pct if latest else None,
+        "db_query_p95_ms": latest.db_query_p95_ms if latest else None,
+        "ssl_expiry_days": latest.ssl_expiry_days if latest else None,
     }
 
 
@@ -110,13 +161,30 @@ def _collect_c_w_security_data(session: Session, start: datetime, end: datetime,
         )
     ).one() or 0
 
-    max_failed_single_ip = session.exec(
-        select(func.max(func.count())).where(
+    # Count per source IP, then take the largest count.
+    #
+    # This cannot be `max(count(*))` over a GROUP BY: nesting an aggregate
+    # directly is invalid SQL and Postgres rejected it with "aggregate function
+    # calls cannot be nested", so C-W Security could never complete a scan. The
+    # count has to happen in the inner query so the outer `max` sees one row per
+    # IP. A scalar subquery is used rather than a join so an empty window still
+    # returns 0 instead of NULL.
+    per_ip = (
+        select(
+            SecurityEvent.ip_hash.label("ip_hash"),
+            func.count().label("failures"),
+        )
+        .where(
             SecurityEvent.ts >= start,
             SecurityEvent.ts < end,
             SecurityEvent.platform == platform,
             SecurityEvent.kind == "failed_login",
-        ).group_by(SecurityEvent.ip_hash)
+        )
+        .group_by(SecurityEvent.ip_hash)
+        .subquery()
+    )
+    max_failed_single_ip = session.exec(
+        select(func.coalesce(func.max(per_ip.c.failures), 0)).select_from(per_ip)
     ).one() or 0
 
     hours = (end - start).total_seconds() / 3600
@@ -234,7 +302,12 @@ def _collect_c_a_security_data(session: Session, start: datetime, end: datetime,
             SecurityEvent.ts >= start,
             SecurityEvent.ts < end,
             SecurityEvent.platform == platform,
-            SecurityEvent.kind == "replay_attack",
+            # `replay_attack` is not a label in the native enum `security_event_kind`
+            # (which holds token_misuse, api_abuse, waf_blocked, ...), so this
+            # comparison raised `invalid input value for enum` and took the whole
+            # C-A Security scan down with it. A replayed purchase token surfaces
+            # as token misuse, which is the label that actually exists.
+            SecurityEvent.kind == "token_misuse",
         )
     ).one() or 0
 
@@ -248,8 +321,60 @@ def _collect_c_a_security_data(session: Session, start: datetime, end: datetime,
 
 
 def _collect_d_w_feedback_data(session: Session, start: datetime, end: datetime, platform: str) -> dict[str, Any]:
+    """Derive the three D-W Feedback rule inputs from the feedback analysis.
+
+    `analyse()` returns a rich dashboard payload (per-day series, topics,
+    coverage, correlations). `evaluate_d_w_feedback` wants three scalars, so
+    they are computed here. Previously the collector returned the payload
+    verbatim and the evaluator raised "missing 3 required positional arguments".
+    """
     from features.monitoring.services.feedback_analysis import analyse
-    return analyse(session, start, end)
+
+    data = analyse(session, start, end)
+    previous = analyse(session, start - (end - start), start)
+    sentiment = data.get("sentiment", {}) or {}
+    crash = data.get("crash_correlation", {}) or {}
+
+    # Complaint = a feedback item mentioning a crash/bug/freeze. The analysis
+    # module already counts these, so reuse it rather than re-deriving from a
+    # second pass over the rows.
+    top_complaint_count = int(crash.get("crash_keyword_mentions", 0) or 0)
+
+    # Volume change against the immediately preceding window of equal length.
+    now_total = int(data.get("total", 0) or 0)
+    prev_total = int(previous.get("total", 0) or 0)
+    if prev_total > 0:
+        volume_change_pct = round(100.0 * (now_total - prev_total) / prev_total, 2)
+    else:
+        # No baseline to compare against. None, not 0.0 - "volume is unchanged"
+        # and "we have never had a prior window" are different facts, and the
+        # rule for a drop below -25% must not fire on the second one.
+        volume_change_pct = None
+
+    return {
+        "volume_change_pct": volume_change_pct,
+        "sentiment_mean": sentiment.get("mean"),
+        "top_complaint_count": top_complaint_count,
+        # Retained for the LLM prompt, which receives the full collected data
+        # rather than only the rule inputs.
+        "_full": data,
+    }
+
+
+def _collect_d_a_feedback_data(session: Session, start: datetime, end: datetime, platform: str) -> dict[str, Any]:
+    """Same analysis as D-W, renamed for the Android evaluator's arguments.
+
+    `evaluate_d_a_feedback` asks for `crash_complaint_count` rather than
+    `top_complaint_count`, so returning the web collector's dict verbatim left
+    the required argument missing.
+    """
+    web = _collect_d_w_feedback_data(session, start, end, platform)
+    out = dict(web)
+    out.pop("top_complaint_count", None)
+    out["crash_complaint_count"] = (
+        (web.get("_full") or {}).get("crash_correlation") or {}
+    ).get("crash_keyword_mentions", 0)
+    return out
 
 
 def _collect_b_w_activity_data(session: Session, start: datetime, end: datetime, platform: str) -> dict[str, Any]:
@@ -290,11 +415,16 @@ def _collect_b_w_activity_data(session: Session, start: datetime, end: datetime,
 
 
 def _collect_b_a_activity_data(session: Session, start: datetime, end: datetime, platform: str) -> dict[str, Any]:
-    return _collect_b_w_activity_data(session, start, end, platform)
-
-
-def _collect_d_a_feedback_data(session: Session, start: datetime, end: datetime, platform: str) -> dict[str, Any]:
-    return _collect_d_w_feedback_data(session, start, end, platform)
+    # `evaluate_b_a_activity` wants `iap_revenue_change_pct`, not the web
+    # evaluator's `revenue_change_pct`. Reusing the web collector returned the
+    # wrong key name, so narrowing to the accepted parameters left the required
+    # argument missing. The underlying figure is the same verified purchase
+    # revenue either way.
+    data = _collect_b_w_activity_data(session, start, end, platform)
+    out = dict(data)
+    out.pop("revenue_change_pct", None)
+    out["iap_revenue_change_pct"] = data.get("revenue_change_pct")
+    return out
 
 
 COLLECTORS = {
@@ -327,9 +457,14 @@ def run_stage2_scan(
     scan_id = f"{subsection}-{int(datetime.now(timezone.utc).timestamp())}"
     start, end = queries.window(window_days)
 
-    # Determine platform
-    if platform is None:
-        platform = "web" if subsection.endswith("_W_") else "android"
+    # Determine platform from the subsection id.
+    #
+    # Ids are `X_W_NAME` / `X_A_NAME`, so the platform is the middle token.
+    # The previous test was `subsection.endswith("_W_")`, which is False for
+    # every real id - "A_W_HEALTH" ends with "_HEALTH", not "_W_" - so *all*
+    # eight subsections resolved to android and every scan queried the wrong
+    # platform.
+    platform = _platform_for_subsection(subsection) if platform is None else platform
 
     start_time = time.perf_counter()
 
@@ -341,40 +476,86 @@ def run_stage2_scan(
     collected_data = collector(session, start, end, platform)
 
     # 2. Run Stage 1 rule evaluation
-    verdict = run_stage1_scan(subsection, collected_data)
+    #
+    # `run_stage1_scan` splats this dict straight into an evaluator signature,
+    # so the collector's extra keys have to be dropped here. Collectors return
+    # whatever they found, which is broader than any one evaluator wants - the
+    # feedback analyser includes "window", the activity collector includes
+    # "revenue_change_pct" for the web evaluator - and passing those through
+    # raised "unexpected keyword argument" instead of a verdict.
+    evaluator = STAGE1_EVALUATORS.get(subsection)
+    if evaluator is None:
+        raise ValueError(f"No rule evaluator for subsection: {subsection}")
+    accepted = set(inspect.signature(evaluator).parameters)
+    rule_data = {k: v for k, v in collected_data.items() if k in accepted}
+    verdict = run_stage1_scan(subsection, rule_data)
 
-    # 3. Run Stage 2 LLM enhancement (if enabled)
+    # 3. Run Stage 2 LLM enhancement.
+    #
+    # Gated on its own flag rather than on SCAN_ENABLED. Stage 1 is a pure
+    # rule engine, deterministic and fast. Stage 2 needs a local model, and on
+    # CPU it measured 69-509s per call with an unreliable structured-output
+    # contract (see `llm_client`), which is not something to put in front of an
+    # admin clicking "Scan now". Off by default; turn it on deliberately.
     llm_verdict = None
-    if settings.scan_enabled:
+    if settings.scan_enabled and settings.scan_llm_enabled:
         try:
-            llm_verdict = _run_llm_stage(subsection, verdict, collected_data, start, end)
+            # `_run_llm_stage` is a coroutine and this function is synchronous.
+            # Calling it bare built a coroutine object that was never awaited, so
+            # the LLM silently did nothing on every scan while the call site
+            # still looked like it had run. `asyncio.run` needs no loop to be
+            # running, which is why the scan route is a sync `def` endpoint -
+            # FastAPI runs those in a worker thread, so this cannot collide with
+            # an event loop.
+            llm_verdict = asyncio.run(
+                _run_llm_stage(subsection, verdict, collected_data, start, end)
+            )
         except Exception as e:  # noqa: BLE001 - stage 2 is an enhancement; failures degrade to stage 1
             # LLM failed - log and fall back to Stage 1 only
             import logging
             logging.warning(f"LLM stage failed for {subsection}: {e}")
 
-    # 4. Build final verdict (Stage 1 + optional LLM enhancement)
-    final_verdict = _merge_verdicts(verdict, llm_verdict) if llm_verdict else verdict
+    # 4. Always start from the rule verdict, which is the sole authority for
+    # status and findings. The LLM only ever contributes prose.
+    #
+    # No merge function. An earlier `_merge_verdicts` rebuilt a `ScanVerdict`
+    # from the LLM output, which required the LLM to restate status and
+    # findings it was about to have overwritten anyway - and it read
+    # `stage2.status`, a field the narrow narrative shape deliberately does not
+    # have.
+    schema = _verdict_to_schema(
+        _merge_verdicts(verdict, llm_verdict), scan_id, subsection
+    )
+    if llm_verdict is not None:
+        schema.summary = llm_verdict.summary
 
     # 5. Reconciliation pass
     # Note: reconciliation happens in the schema validation + _reconcile_findings
 
-    # 5. Build summary and findings for storage
+    # 6. Build findings for storage.
+    #
+    # Read from `schema`, whose findings are `schemas.Finding` and really do
+    # carry an evidence list. This block previously iterated
+    # `final_verdict.findings`, which is a list of `thresholds.Finding`
+    # dataclasses with no `evidence` attribute at all.
     findings_json = [
         {
             "title": f.title,
             "severity": f.severity,
-            "evidence": [{
-                "metric": ev.metric,
-                "value": ev.value,
-                "unit": ev.unit,
-                "previous_value": ev.previous_value,
-                "change_pct": ev.change_pct,
-                "window": ev.window,
-                "source": ev.source,
-            } for ev in f.evidence]
+            "evidence": [
+                {
+                    "metric": ev.metric,
+                    "value": ev.value,
+                    "unit": ev.unit,
+                    "previous_value": ev.previous_value,
+                    "change_pct": ev.change_pct,
+                    "window": ev.window,
+                    "source": ev.source,
+                }
+                for ev in f.evidence
+            ],
         }
-        for f in final_verdict.findings
+        for f in schema.findings
     ]
 
     action_enum = {
@@ -393,32 +574,21 @@ def run_stage2_scan(
 
     actions_json = [
         {
-            "action": action_enum.get(a.action.value, "no_action"),
+            "action": a.action.value,
             "priority": a.priority,
             "detail": a.detail,
             "evidence_refs": a.evidence_refs,
         }
-        for a in final_verdict.recommended_actions
+        for a in schema.recommended_actions
     ]
 
     confidence_json = {
-        "level": final_verdict.confidence.level,
-        "missing_data": final_verdict.confidence.missing_data,
-        "tools_failed": final_verdict.confidence.tools_failed,
+        "level": schema.confidence.level,
+        "missing_data": schema.confidence.missing_data,
+        "tools_failed": schema.confidence.tools_failed,
     }
 
-    # Summary
-    if final_verdict.status == ScanStatus.HEALTHY:
-        summary = "All metrics within healthy thresholds."
-    elif final_verdict.status == ScanStatus.WARNING:
-        summary = f"{len([f for f in final_verdict.findings if f.severity == 'warning'])} warning(s) detected."
-    elif final_verdict.status == ScanStatus.CRITICAL:
-        summary = f"{len([f for f in final_verdict.findings if f.severity == 'critical'])} critical issue(s) detected."
-    else:
-        summary = "Scan failed to produce a verdict."
-
-    if hasattr(final_verdict, 'summary') and final_verdict.summary:
-        summary = final_verdict.summary
+    summary = schema.summary
 
     # Create ScanResult
     duration_ms = int((time.perf_counter() - start_time) * 1000)
@@ -426,10 +596,10 @@ def run_stage2_scan(
     scan_result = ScanResult(
         scan_id=scan_id,
         subsection=subsection,
-        status=final_verdict.status.value,
+        status=schema.status.value,
         summary=summary,
         findings=findings_json,
-        root_causes=final_verdict.root_causes,
+        root_causes=schema.root_causes,
         actions=actions_json,
         confidence=confidence_json,
         model="rule-engine-v1" + ("+llm" if llm_verdict else ""),
@@ -446,14 +616,15 @@ def run_stage2_scan(
     transition = StatusTransition(
         subsection=subsection,
         from_status="healthy",
-        to_status=final_verdict.status.value,
+        to_status=schema.status.value,
         scan_id=scan_id,
         at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     session.add(transition)
 
-    # Audit tool calls
-    for finding in final_verdict.findings:
+    # Audit tool calls. Reads `schema.findings`, whose evidence is a real list -
+    # `thresholds.Finding` has no `evidence` attribute, so iterating that raised.
+    for finding in schema.findings:
         for ev in finding.evidence:
             audit = ToolCallAudit(
                 scan_id=scan_id,
@@ -473,29 +644,85 @@ def run_stage2_scan(
     return scan_result
 
 
-def _merge_verdicts(stage1: ScanVerdict, stage2: ScanResultSchema) -> ScanVerdict:
-    """Merge Stage 1 rule verdict with Stage 2 LLM enhancement.
+def _verdict_to_schema(verdict: ScanVerdict, scan_id: str, subsection: str) -> ScanResultSchema:
+    """Convert a Stage 1 rule verdict into the same schema the LLM returns.
 
-    Stage 1 provides the authoritative status and findings with evidence.
-    Stage 2 provides summary, root_causes, recommended_actions, and confidence.
+    This is what makes "no LLM available" a supported configuration rather than
+    a degraded one: Stage 1 already produces a complete verdict, so it is
+    rendered through the same contract the storage layer and the API expect,
+    with every number taken from the rule engine and nothing invented.
     """
-    # Use Stage 1 status and findings (authoritative)
-    # Use Stage 2 summary, root_causes, actions, confidence
-    merged = ScanVerdict(
-        status=stage1.status,
-        findings=stage1.findings,
-        root_causes=stage2.root_causes,
-        actions=stage2.recommended_actions,
-        confidence=stage2.confidence,
-        missing_data=stage1.missing_data,
+    priority = {
+        ScanStatus.CRITICAL: 1,
+        ScanStatus.WARNING: 2,
+        ScanStatus.HEALTHY: 3,
+        ScanStatus.ERROR: 1,
+    }.get(verdict.status, 3)
+
+    return ScanResultSchema(
+        scan_id=scan_id,
+        subsection=subsection,
+        status=SchemaStatus(verdict.status.value),
+        summary=(
+            f"Rule engine verdict: {verdict.status.value}. "
+            f"{len(verdict.findings)} finding(s), "
+            f"{len(verdict.missing_data)} metric(s) missing. "
+            "No LLM enhancement was applied to this scan."
+        ),
+        findings=[
+            SchemaFinding(
+                title=f.title,
+                severity=f.severity,
+                evidence=[
+                    SchemaMetric(
+                        metric=f.metric,
+                        value=f.value,
+                        unit=f.unit,
+                        window=f.window,
+                        source=f.source,
+                    )
+                ],
+            )
+            for f in verdict.findings
+        ],
+        root_causes=verdict.root_causes,
+        recommended_actions=[
+            SchemaRecommendation(action=SchemaAction(a), priority=priority, detail=a)
+            for a in verdict.actions
+            if a in {act.value for act in SchemaAction}
+        ],
+        confidence=SchemaConfidence(
+            level=verdict.confidence,
+            missing_data=verdict.missing_data,
+        ),
     )
 
-    # If Stage 2 has a different status, log it but keep Stage 1's (more conservative)
-    if stage2.status != stage1.status:
-        import logging
-        logging.warning(f"LLM status {stage2.status} differs from rule status {stage1.status}; keeping rule status")
 
-    return merged
+def _merge_verdicts(stage1: ScanVerdict, stage2: Optional[ScanNarrative]) -> ScanVerdict:
+    """Combine Stage 1 rules with an optional Stage 2 narrative.
+
+    Stage 1 owns status, findings and missing_data outright - they are the
+    measured truth and are never taken from the model. Stage 2 contributes only
+    the prose fields, and only when it actually produced them.
+
+    This no longer reads `stage2.status` or `stage2.findings`. It used to, which
+    meant the LLM had to restate the rule verdict before those values were
+    discarded; `ScanNarrative` deliberately has no such fields.
+    """
+    if stage2 is None:
+        return stage1
+
+    return ScanVerdict(
+        status=stage1.status,
+        findings=stage1.findings,
+        root_causes=stage2.root_causes or stage1.root_causes,
+        actions=[
+            a.action.value if isinstance(a, SchemaRecommendation) else a
+            for a in (stage2.recommended_actions or stage1.actions)
+        ],
+        confidence=stage1.confidence,
+        missing_data=stage1.missing_data,
+    )
 
 
 async def _run_llm_stage(
@@ -504,7 +731,7 @@ async def _run_llm_stage(
     collected_data: dict,
     start: datetime,
     end: datetime,
-) -> ScanResultSchema:
+) -> ScanNarrative:
     """Run the LLM stage to generate summary, root causes, and actions."""
     settings = get_settings()
 
@@ -522,10 +749,19 @@ async def _run_llm_stage(
                 "title": f.title,
                 "severity": f.severity,
                 "evidence": [
-                    {"metric": ev.metric, "value": ev.value, "unit": ev.unit,
-                     "previous_value": ev.previous_value, "change_pct": ev.change_pct,
-                     "window": ev.window, "source": ev.source}
-                    for ev in f.evidence
+                    # `thresholds.Finding` is a flat dataclass carrying its own
+                    # metric; `schemas.Finding` wraps one or more `Metric`
+                    # evidences. The previous code iterated `f.evidence`, a field
+                    # that has never existed on the dataclass, so this raised
+                    # AttributeError and the LLM stage degraded on every scan.
+                    {
+                        "metric": f.metric,
+                        "value": f.value,
+                        "unit": f.unit,
+                        "threshold": f.threshold,
+                        "window": f.window,
+                        "source": f.source,
+                    }
                 ]
             }
             for f in stage1_verdict.findings
@@ -541,14 +777,14 @@ async def _run_llm_stage(
         result = await client.chat_completion(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            response_model=ScanResultSchema,
+            # The narrow narrative shape, not the full `ScanResult`. Status and
+            # findings are overwritten with the rule engine's values immediately
+            # below, so asking the model for them only burns tokens restating
+            # numbers that are discarded.
+            response_model=ScanNarrative,
             temperature=0.1,
+            max_tokens=512,
         )
-
-        # Inject the authoritative status and findings from Stage 1
-        result.status = stage1_verdict.status
-        result.findings = stage1_verdict.findings
-        result.subsection = subsection
 
         return result
 

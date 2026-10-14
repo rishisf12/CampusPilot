@@ -100,6 +100,24 @@ class ScanResult(BaseModel):
     confidence: Confidence
 
 
+class ScanNarrative(BaseModel):
+    """What the LLM is actually asked to produce.
+
+    Deliberately much smaller than `ScanResult`. The rule engine owns `status`
+    and `findings`, and `run_stage2_scan` overwrites both on the LLM's return
+    value regardless of what it says. Asking the model to emit the full
+    contract therefore made it spend most of its token budget restating numbers
+    that were about to be discarded - measured on CPU, 768 tokens were consumed
+    before the JSON closed, and the answer was truncated mid-object and thrown
+    away.
+
+    This shape asks only for the prose the model is actually responsible for.
+    """
+    summary: str = Field(min_length=20, max_length=1200)
+    root_causes: list[str] = Field(default_factory=list, max_length=6)
+    recommended_actions: list[Recommendation] = Field(default_factory=list, max_length=6)
+
+
 class ScanRequest(BaseModel):
     """Request body for triggering a scan."""
     window_days: int = Field(default=7, ge=1, le=90)

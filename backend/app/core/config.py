@@ -99,6 +99,32 @@ class Settings(BaseSettings):
     #: without a model is not full of ERROR verdicts.
     scan_enabled: bool = Field(default=False, alias="SCAN_ENABLED")
 
+    #: Stage 2 of a scan: a local LLM writes the human summary, root causes
+    #: and prioritised actions, while Stage 1 (the rule engine) owns every
+    #: number. The LLM is an enhancement only - `run_stage2_scan` degrades to
+    #: the rule verdict if any of this fails, which is why an installation with
+    #: no model still produces correct scans.
+    #:
+    #: These were missing entirely while `scan_service` read them, so the LLM
+    #: stage raised AttributeError on every scan and silently degraded.
+    ollama_base_url: str = Field(default="http://localhost:11434/v1", alias="OLLAMA_BASE_URL")
+    #: qwen3:4b rather than 8b. On CPU the 8b model did not return inside the
+    #: timeout on this workload; 4b produces the same schema-valid verdict in a
+    #: fraction of the time, and the summary is the only field it writes.
+    ollama_model: str = Field(default="qwen3:4b", alias="OLLAMA_MODEL")
+    ollama_timeout: float = Field(default=240.0, alias="OLLAMA_TIMEOUT")
+
+    #: Run Stage 2 (the LLM narrative) at all, as opposed to Stage 1 alone.
+    #:
+    #: Separate from SCAN_ENABLED because the two have very different
+    #: operational profiles. Stage 1 is deterministic, takes ~100ms and always
+    #: answers. Stage 2 needs a local model, and measured on CPU here it took
+    #: 69-509s per call and did not reliably honour `response_format`, so
+    #: enabling it by default would have made every admin-triggered scan feel
+    #: broken. Enabling scans is cheap and useful; enabling the model is a
+    #: deliberate choice with a latency cost.
+    scan_llm_enabled: bool = Field(default=False, alias="SCAN_LLM_ENABLED")
+
     #: Verify Play Store receipts. Off by default: it needs the Google Play
     #: Developer API credentials, and until then every purchase is honestly
     #: labelled unverified rather than quietly assumed good.
