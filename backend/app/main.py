@@ -44,12 +44,34 @@ def _start_rollup_loop(interval_s: int = 3600) -> threading.Thread:
     return thread
 
 
+def _start_health_loop(interval_s: int | None = None) -> threading.Thread:
+    """Sample the Prometheus instruments into `health_metric` on a timer.
+
+    Gated by HEALTH_SAMPLE_INLINE for the same multi-replica reason as the
+    rollup loop: each replica computes its deltas from its own in-process
+    counters, so a dashboard pointed at a different replica than the one
+    sampling would compare two unrelated processes.
+    """
+    from features.monitoring.infrastructure import health as health_mod
+
+    return health_mod.start_loop(interval_s)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up...")
     create_db_and_tables()
+
+    # Instruments DB_QUERY_DURATION / DB_QUERIES, which are otherwise declared
+    # and never incremented, and which the health sampler reads.
+    from features.monitoring.infrastructure import db_instrumentation
+
+    db_instrumentation.attach()
+
     if settings.rollup_inline:
         _start_rollup_loop()
+    if settings.health_sample_inline:
+        _start_health_loop()
     yield
     logger.info("Shutting down...")
 

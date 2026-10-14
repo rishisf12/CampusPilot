@@ -798,6 +798,43 @@ def trigger_rollup(
 
 
 # --------------------------------------------------------------------------
+# Health Sampling
+# --------------------------------------------------------------------------
+
+@monitoring_router.post("/health/sample")
+def trigger_health_sample(
+    session: Session = Depends(get_session),
+    _admin=Depends(get_current_admin),
+):
+    """Take one health reading immediately instead of waiting for the timer.
+
+    Reads the delta since the previous reading, so calling this twice in a row
+    reports only the requests made in between - which is the point: it is how an
+    admin confirms a fix by watching the error rate move rather than waiting for
+    the next scheduled sample to roll the window forward.
+    """
+    from features.monitoring.infrastructure import health as health_mod
+
+    health_mod.prune(session)
+    row = health_mod.sample_once(session)
+    return {
+        "ts": row.ts.isoformat(),
+        "platform": row.platform,
+        "response_time_ms": row.response_time_ms,
+        "response_time_p95_ms": row.response_time_p95_ms,
+        "response_time_p99_ms": row.response_time_p99_ms,
+        "http_2xx_pct": row.http_2xx_pct,
+        "http_4xx_pct": row.http_4xx_pct,
+        "http_5xx_pct": row.http_5xx_pct,
+        "db_query_p50_ms": row.db_query_p50_ms,
+        "db_query_p95_ms": row.db_query_p95_ms,
+        "db_slow_queries_count": row.db_slow_queries_count,
+        "db_connections_active": row.db_connections_active,
+        "db_connections_idle": row.db_connections_idle,
+    }
+
+
+# --------------------------------------------------------------------------
 # Data Freshness
 # --------------------------------------------------------------------------
 

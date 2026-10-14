@@ -71,6 +71,29 @@ class Settings(BaseSettings):
     #: process, or run `python -m features.monitoring.rollup --loop` instead.
     rollup_inline: bool = Field(default=False, alias="ROLLUP_INLINE")
 
+    #: Sample the Prometheus instruments into `health_metric` inside the API
+    #: process on a background timer. This is the only writer of that table, and
+    #: it is what makes the Web Health subsection report anything at all.
+    #: Same multi-replica caveat as `rollup_inline`: every replica would sample,
+    #: which for health is only duplicated rows rather than conflicting writes,
+    #: but the *deltas* each replica computes come from its own in-process
+    #: counters, so only the replica you point the dashboard at is meaningful.
+    health_sample_inline: bool = Field(default=False, alias="HEALTH_SAMPLE_INLINE")
+
+    #: Seconds between health samples. One minute is the floor worth using:
+    #: `evaluate_a_w_health` treats 500 ms as the DB-latency warning line, and a
+    #: sample that misses a burst is worse than a coarser one that does not.
+    health_sample_interval_s: int = Field(default=60, alias="HEALTH_SAMPLE_INTERVAL_S")
+
+    #: Drop `health_metric` rows older than this. The widest window any read path
+    #: accepts is 365 days, so keeping more would only cost storage.
+    health_retention_days: int = Field(default=90, alias="HEALTH_RETENTION_DAYS")
+
+    #: A query slower than this counts toward `db_slow_queries_count`. Matches
+    #: the 500 ms DB p95 warning in `monitoring/domain/thresholds.py`, so the
+    #: count and the finding move together.
+    health_slow_query_ms: float = Field(default=500.0, alias="HEALTH_SLOW_QUERY_MS")
+
     #: Accept the LLM-driven scan subsystem. Requires a local model server; see
     #: `docs/observability/ARCHITECTURE.md`. Off by default so an installation
     #: without a model is not full of ERROR verdicts.

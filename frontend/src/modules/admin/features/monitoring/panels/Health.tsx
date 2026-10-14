@@ -8,7 +8,31 @@
  */
 import { Panel, StatTile, EmptyState, num } from '../components/components';
 
+export interface HealthSnapshot {
+  ts?: string;
+  response_time_ms?: number | null;
+  response_time_p95_ms?: number | null;
+  response_time_p99_ms?: number | null;
+  http_2xx_pct?: number | null;
+  http_4xx_pct?: number | null;
+  http_5xx_pct?: number | null;
+  db_query_p50_ms?: number | null;
+  db_query_p95_ms?: number | null;
+  db_slow_queries_count?: number | null;
+  db_connections_active?: number | null;
+  db_connections_idle?: number | null;
+  cpu_pct?: number | null;
+  ram_pct?: number | null;
+  disk_pct?: number | null;
+}
+
 export interface HealthData {
+  /**
+   * The newest sampled reading: windowed latency, error mix and DB figures.
+   * Distinct from `http` below, which is a live registry read and therefore
+   * cumulative since process start.
+   */
+  snapshot?: HealthSnapshot | null;
   http?: {
     requests_by_route?: Record<string, number>;
     requests_by_status?: Record<string, number>;
@@ -65,6 +89,7 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
   const web = crashes.web || {};
   const android = crashes.android || {};
   const freshness = data.data_freshness || {};
+  const snap = data.snapshot || null;
 
   const totalRequests = Object.values(routeTotals).reduce((s, v) => s + (Number(v) || 0), 0);
   const total5xx = Object.entries(byStatus)
@@ -102,6 +127,76 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
           hint="4xx + 5xx of all requests"
         />
       </div>
+
+      <Panel
+        title="Latency & error mix"
+        subtitle={
+          snap?.ts
+            ? `Sampled ${new Date(snap.ts).toLocaleString()} — figures cover the interval since the previous sample, not all time.`
+            : 'No sample taken yet. Enable HEALTH_SAMPLE_INLINE or POST /monitoring/health/sample.'
+        }
+      >
+        {!snap ? (
+          <EmptyState
+            title="Awaiting first sample"
+            detail="The health sampler writes one row per interval. Until it has run once there is nothing windowed to report."
+          />
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatTile
+              label="Latency p50"
+              value={snap.response_time_ms == null ? '--' : `${num(snap.response_time_ms)} ms`}
+              hint="median request"
+            />
+            <StatTile
+              label="Latency p95"
+              value={
+                snap.response_time_p95_ms == null ? '--' : `${num(snap.response_time_p95_ms)} ms`
+              }
+              hint="warn above 500 ms"
+            />
+            <StatTile
+              label="Latency p99"
+              value={
+                snap.response_time_p99_ms == null ? '--' : `${num(snap.response_time_p99_ms)} ms`
+              }
+              hint="slowest tail"
+            />
+            <StatTile
+              label="Server errors"
+              value={snap.http_5xx_pct == null ? '--' : `${snap.http_5xx_pct}%`}
+              hint={
+                snap.http_5xx_pct == null ? 'no traffic in window' : '5xx of requests in window'
+              }
+              invertDelta
+            />
+            <StatTile
+              label="Client errors"
+              value={snap.http_4xx_pct == null ? '--' : `${snap.http_4xx_pct}%`}
+              hint="4xx of requests in window"
+            />
+            <StatTile
+              label="DB query p95"
+              value={snap.db_query_p95_ms == null ? '--' : `${num(snap.db_query_p95_ms)} ms`}
+              hint="warn above 500 ms"
+            />
+            <StatTile
+              label="Slow queries"
+              value={snap.db_slow_queries_count == null ? '--' : num(snap.db_slow_queries_count)}
+              hint="over 500 ms in window"
+            />
+            <StatTile
+              label="DB connections"
+              value={
+                snap.db_connections_active == null
+                  ? '--'
+                  : `${num(snap.db_connections_active)} / ${num(snap.db_connections_idle ?? 0)}`
+              }
+              hint="active / idle"
+            />
+          </div>
+        )}
+      </Panel>
 
       <Panel
         title="Crash-free rate"

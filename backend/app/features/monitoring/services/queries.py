@@ -523,9 +523,46 @@ def health_detail(session: Session, start: datetime, end: datetime,
     active_now = active_users(session, start, end, platform)
     sessions = sessions_count(session, start, end, platform)
 
+    # The newest `health_metric` row: the windowed latency, error-rate and DB
+    # figures. Kept separate from `http` above on purpose - those are live
+    # registry reads, which are cumulative since process start and therefore
+    # cannot express "during this window". Only the sampler records a window.
+    latest = session.exec(
+        select(HealthMetric)
+        .where(
+            HealthMetric.ts >= start,
+            HealthMetric.ts < end,
+            HealthMetric.platform == platform,
+        )
+        .order_by(HealthMetric.ts.desc())
+        .limit(1)
+    ).first()
+
+    snapshot = None
+    if latest is not None:
+        snapshot = {
+            "ts": latest.ts.isoformat(),
+            "response_time_ms": latest.response_time_ms,
+            "response_time_p95_ms": latest.response_time_p95_ms,
+            "response_time_p99_ms": latest.response_time_p99_ms,
+            "http_2xx_pct": latest.http_2xx_pct,
+            "http_4xx_pct": latest.http_4xx_pct,
+            "http_5xx_pct": latest.http_5xx_pct,
+            "db_query_p50_ms": latest.db_query_p50_ms,
+            "db_query_p95_ms": latest.db_query_p95_ms,
+            "db_slow_queries_count": latest.db_slow_queries_count,
+            "db_connections_active": latest.db_connections_active,
+            "db_connections_idle": latest.db_connections_idle,
+            # Null by design on web rows - see the health sampler's docstring.
+            "cpu_pct": latest.cpu_pct,
+            "ram_pct": latest.ram_pct,
+            "disk_pct": latest.disk_pct,
+        }
+
     return {
         "platform": platform,
         "window": {"start": start.isoformat(), "end": end.isoformat()},
+        "snapshot": snapshot,
         "http": {
             "requests_by_route": requests_by_route,
             "requests_by_status": requests_by_status,
