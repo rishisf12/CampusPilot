@@ -517,16 +517,35 @@ async def login(
     settings = get_settings()
 
     if not user or not verify_password(form.password, user.password_hash):
-        # Record failed login attempt (telemetry temporarily disabled due to enum type issue)
-        # monitoring_collector.record_security_event(
-        #     session,
-        #     "failed_login",
-        #     platform="web",
-        #     user_id=user.id if user else None,
-        #     pepper=settings.telemetry_pepper,
-        #     ip=client_ip,
-        #     detail={"username": form.username},
-        # )
+        # Record the attempt before raising. Credential stuffing is only visible
+        # in the C-W Security panel if a failed login is written down here, and
+        # the panel reads `telemetry.security_event`.
+        #
+        # This was commented out as "telemetry temporarily disabled due to enum
+        # type issue". The real cause was in
+        # `monitoring/domain/models.py`: a bare `from sqlalchemy import Enum`
+        # shadowed `enum.Enum`, so `SecurityEventKind` was not a real enum and
+        # SQLAlchemy persisted `FAILED_LOGIN` into a Postgres enum holding
+        # `failed_login`. Every insert raised and was swallowed. Fixed there.
+        try:
+            from features.monitoring.infrastructure import collector as monitoring_collector
+
+            monitoring_collector.record_security_event(
+                session,
+                "failed_login",
+                platform="web",
+                user_id=user.id if user else None,
+                pepper=settings.telemetry_pepper,
+                ip=client_ip,
+                # The attempted username is kept: distinguishing "one account
+                # being ground down" from "many accounts being sprayed" is the
+                # entire point of the metric. It is not a credential.
+                detail={"username": form.username},
+            )
+        except Exception:
+            # Recording a security event must never turn a 401 into a 500, and
+            # must never leak whether the username exists.
+            logger.exception("failed to record failed_login security event")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

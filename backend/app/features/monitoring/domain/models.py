@@ -23,7 +23,29 @@ from enum import Enum
 from typing import Any, Optional
 
 from sqlalchemy import JSON, DateTime, Text, UniqueConstraint, func
+# Aliased, not imported as `Enum`: a bare `Enum` here would shadow `enum.Enum`
+# from line 22, and every `class X(str, Enum)` below would then be built on
+# SQLAlchemy's *type* rather than the stdlib enum. SQLAlchemy's isinstance
+# check against `enum.Enum` then fails, it treats the class as a literal list
+# value, and it persists `member.name` instead of `member.value` - which is how
+# `FAILED_LOGIN` reached a Postgres enum holding `failed_login`.
+from sqlalchemy import Enum as SAEnum
 from sqlmodel import Column, Field, SQLModel
+
+
+def _enum_by_value(python_enum: type[Enum]):
+    """A SQLAlchemy Enum that persists the member **value**, not the name.
+
+    `values_callable` re-keys SQLAlchemy's lookup on `.value`, which matches the
+    existing Postgres type `security_event_kind` (created holding the values) and
+    lets callers pass a plain string like "failed_login" without importing the
+    enum.
+
+    Only `security_event.kind` needs this. `crash_report.kind`, `purchase.kind`
+    and `scan_result.status` are plain `str` on the Python side, so they already
+    bind their value.
+    """
+    return SAEnum(python_enum, values_callable=lambda members: [m.value for m in members])
 
 
 class SecurityEventKind(str, Enum):
@@ -266,7 +288,17 @@ class SecurityEvent(SQLModel, table=True):
     platform: str = Field(index=True)
     #: failed_login, brute_force, token_misuse, api_abuse, root_detected,
     #: emulator_detected, tamper_detected, rate_limited, waf_blocked.
-    kind: SecurityEventKind = Field(index=True)
+    #: `sa_column` rather than a plain Field because the default binding would
+    #: send "FAILED_LOGIN" to a Postgres enum holding "failed_login"; see
+    #: `_enum_by_value`.
+    kind: SecurityEventKind = Field(
+        default=SecurityEventKind.FAILED_LOGIN,
+        sa_column=Column(
+            _enum_by_value(SecurityEventKind),
+            index=True,
+            nullable=False,
+        ),
+    )
     #: Hashed remote address. The raw IP is never stored - it is personal data
     #: and a truncated hash still supports per-source rate limiting.
     ip_hash: Optional[str] = Field(default=None, index=True)

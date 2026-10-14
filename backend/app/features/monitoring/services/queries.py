@@ -616,8 +616,15 @@ def activity_detail(session: Session, start: datetime, end: datetime,
         .order_by(day_expr_cr)
     ).all()
 
-    # Top events
-    top_pages = session.exec(
+    # Top events by volume.
+    #
+    # Named for what it actually is. This was called `top_pages` and keyed as
+    # "path", which promised a list of URLs that could never appear:
+    # `EventHourly` aggregates on `event_name`/`country`/`os_version` and has no
+    # path column at all, since a URL is the high-cardinality dimension the
+    # rollup exists to discard. Grouping by event_name is right; only the label
+    # was lying.
+    top_events = session.exec(
         select(EventHourly.event_name, func.sum(EventHourly.n).label("views"))
         .where(EventHourly.bucket_hour >= start, EventHourly.bucket_hour < end)
         .group_by(EventHourly.event_name)
@@ -642,16 +649,21 @@ def activity_detail(session: Session, start: datetime, end: datetime,
         .order_by(func.sum(EventHourly.n).desc())
     ).all()
 
-    # Retention (simplified: day-1 and day-7 returning)
-    # This is a placeholder - real retention needs cohort analysis
-    retention = {"day_1": 0.0, "day_7": 0.0}
+    # Retention via the real cohort analysis, the same function `overview` uses.
+    #
+    # This was a hardcoded `{"day_1": 0.0, "day_7": 0.0}` placeholder, which was
+    # worse than empty: the panel expects `{cohort, pct}` objects, so it read
+    # `r.cohort` off a float, got `undefined`, decided the data was real, and
+    # rendered a literal "undefined%" tile.
+    window_days = max(1, (end - start).days)
+    retention = retention_cohorts(session, window_days, platform)
 
     return {
         "platform": platform,
         "window": {"start": start.isoformat(), "end": end.isoformat()},
         "dau": [{"day": str(d.day), "dau": d.dau} for d in dau],
         "sessions": [{"day": str(s.day), "sessions": s.sessions} for s in sessions],
-        "top_pages": [{"path": p.event_name, "views": p.views} for p in top_pages],
+        "top_events": [{"event_name": p.event_name, "views": p.views} for p in top_events],
         "geography": [{"country": g.country or "unknown", "views": g.views} for g in geo],
         "devices": [{"device": d.os_version or "unknown", "views": d.views} for d in devices],
         "retention": retention,
