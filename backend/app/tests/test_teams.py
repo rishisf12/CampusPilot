@@ -6,32 +6,36 @@ the same pattern test_endpoints.py uses.
 """
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, delete, select
 
 # The database URL is set by tests/conftest.py before any import of the app.
 from core.database import create_db_and_tables, engine
 from main import app
-from models import User, UserProfile
+from models import JoinRequest, Team, TeamMember, User, UserProfile, UserRole
 from features.auth.routes import create_access_token
 
 
 def make_user(username, branch="CSE A", skills=None):
     with Session(engine) as session:
+        existing = session.exec(select(User).where(User.username == username)).first()
+        if existing is not None:
+            return existing.id
         user = User(
             email=f"{username}@iiitdmj.ac.in", password_hash="x",
             full_name=username.title(), username=username,
             roll_number=f"99XXX{username[:3].upper()}",
-            is_email_verified=True, role="student",
+            is_email_verified=True, role=UserRole.STUDENT,
         )
         session.add(user)
         session.commit()
         session.refresh(user)
-        session.add(UserProfile(
-            user_id=user.id, first_name=username.title(),
-            programme="BTech", semester=5, branch=branch,
-            skills=skills or [],
-        ))
-        session.commit()
+        if session.exec(select(UserProfile).where(UserProfile.user_id == user.id)).first() is None:
+            session.add(UserProfile(
+                user_id=user.id, first_name=username.title(),
+                programme="BTech", semester=5, branch=branch,
+                skills=skills or [],
+            ))
+            session.commit()
         return user.id
 
 
@@ -41,6 +45,25 @@ def tokens():
     owner = make_user("tm_owner", branch="CSE A", skills=["react", "python"])
     mate = make_user("tm_mate", branch="CSE A", skills=["nodejs", "docker"])
     stranger = make_user("tm_stranger", branch="ME", skills=["react", "python"])
+    with Session(engine) as session:
+        stale_names = [
+            "Team Rocket", "Team Alpha", "Team Doomed", "Team Open",
+            "Team Mine", "Team Gated", "Team Alpha Match", "Team SIH",
+            "Probe Team",
+        ]
+        stale_ids = [
+            t.id
+            for t in session.exec(select(Team).where(Team.name.in_(stale_names))).all()
+        ]
+        for tid in stale_ids:
+            for row in session.exec(select(TeamMember).where(TeamMember.team_id == tid)).all():
+                session.delete(row)
+            for row in session.exec(select(JoinRequest).where(JoinRequest.team_id == tid)).all():
+                session.delete(row)
+            t = session.exec(select(Team).where(Team.id == tid)).first()
+            if t is not None:
+                session.delete(t)
+        session.commit()
     return {
         "owner": create_access_token(owner, "tm_owner"),
         "mate": create_access_token(mate, "tm_mate"),

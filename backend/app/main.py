@@ -140,6 +140,7 @@ from features.auth import routes as auth
 from features.feedback import routes as feedback
 from features.teams import routes as teams
 from features.monitoring.api.routes import collect_router, monitoring_router
+from features.admin import routes as admin_routes
 from ocr import routes as ocr_routes
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
@@ -153,6 +154,7 @@ app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
 app.include_router(teams.router, prefix="/teams", tags=["Teams"])
 app.include_router(teams.hackathons_router, prefix="/hackathons", tags=["Hackathons"])
 app.include_router(ocr_routes.router, prefix="/ocr", tags=["OCR Extraction"])
+app.include_router(admin_routes.router, prefix="/admin", tags=["Admin"])
 app.include_router(collect_router)
 app.include_router(monitoring_router)
 

@@ -57,15 +57,16 @@ def get_relevant_slots(session: Session, profile: UserProfile) -> List[Timetable
     """
     Get timetable slots relevant to the user:
     - Same semester
-    - Matching branch (resolved from the profile's ``branch_id``)
+    - Matching branch (resolved from the profile's branch)
     - Elective courses the user selected (NOT branch-specific)
     - Extra courses (is_extra=True)
     - Postgraduate courses only for postgraduate programmes
     """
     from features.profile.service import profile_to_filter
-    from features.exam.parser import branch_family, is_open_elective, infer_branch_from_course_code, is_postgrad_course
+    from features.exam.parser import branch_family, is_open_elective, is_postgrad_course, normalize_branch
 
     filters = profile_to_filter(profile, session)
+    profile_branch = filters.get("branch")
     profile_family = branch_family(filters.get("branch"))
     profile_programme = (filters.get("programme") or "").upper()
 
@@ -97,10 +98,20 @@ def get_relevant_slots(session: Session, profile: UserProfile) -> List[Timetable
             elective_match = code in elective_set
             branch_match = elective_match  # Only show if opted in
         else:
-            # For core courses, derive the course's branch from its code prefix
-            # and compare with student's branch family
-            course_branch = infer_branch_from_course_code(code)
-            branch_match = course_branch == profile_family
+            # For core courses, use the slot's branch_or_program directly
+            # The timetable has separate entries for CSE-A and CSE-B with different branch_or_program values
+            slot_branch = slot.branch_or_program
+            if slot_branch:
+                # Normalize both for comparison (e.g., "CSE-A" vs "CSE A")
+                slot_branch_norm = normalize_branch(slot_branch)
+                profile_branch_norm = normalize_branch(profile.branch) if profile.branch else None
+                branch_match = (slot_branch_norm == profile_branch_norm)
+            else:
+                # Fallback: derive from course code prefix
+                from features.exam.parser import infer_branch_from_course_code
+                course_branch = infer_branch_from_course_code(code)
+                profile_family = branch_family(filters.get("branch"))
+                branch_match = course_branch == profile_family
             elective_match = False  # Not an elective
 
         # Match extra

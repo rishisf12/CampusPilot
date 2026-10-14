@@ -187,11 +187,12 @@ def _looks_like_course_name(token: str) -> bool:
 
 
 #: Building codes used in room names, e.g. "L-102", "CR-104", "CC-3F".
-_ROOM_BUILDING_RE = re.compile(r"^(?:CR|CC|L|LAB|NB|AUD|AUDI|HMT|CPPS|SH|TR)$")
+_ROOM_BUILDING_RE = re.compile(r"^(?:CR|CC|L|LAB|NB|AUD|AUDI|HMT|CPPS|SH|TR|ME)$")
 
 
 #: Lab/venue suffixes that appear after a building code.
-LAB_VENUE_SUFFIXES = ("LAB", "WORKSHOP", "VLSI")
+#: Stored as uppercase for case-insensitive matching.
+LAB_VENUE_SUFFIXES = {"LAB", "WORKSHOP", "VLSI"}
 
 
 def _is_room_token(token: str) -> bool:
@@ -318,6 +319,8 @@ def _tokenize_cell(cell: str) -> List[str]:
 
     - ``CR-208``  letters then digits      -> a room, keep whole
     - ``ME3001-SKC`` digits then letters   -> a separator
+    - ``ME3011L-A`` letter 'L' then letter -> lab batch suffix, keep whole
+    - ``—`` (em dash)                      -> missing instructor marker, keep whole
 
     Everything else is split on the remaining separators, and whitespace is a
     separator too so ``ME3001 SKC CR208`` behaves like the dashed form.
@@ -336,10 +339,27 @@ def _tokenize_cell(cell: str) -> List[str]:
             left = buffer[-1] if buffer else ""
             right = text[index + 1] if index + 1 < length else ""
 
-            # A dash inside a room: letters before, digits after.
+            # A dash inside a room: letters before, digits after (e.g., CR-208, ME-102).
             if left.isalpha() and right.isdigit():
                 buffer += char
                 index += 1
+                continue
+
+            # Lab batch suffix: buffer ends with 'L' and right is a single letter (e.g., ME3011L-A).
+            if buffer.upper().endswith("L") and right.isalpha() and len(right) == 1:
+                buffer += char
+                index += 1
+                continue
+
+            # Em dash (—) used as "no instructor" marker - preserve as separate token.
+            if char == "—":
+                if buffer.strip():
+                    tokens.append(buffer.strip())
+                tokens.append("—")  # Keep em dash as explicit "no instructor" token
+                buffer = ""
+                index += 1
+                while index < length and text[index].isspace():
+                    index += 1
                 continue
 
             if buffer.strip():
@@ -379,6 +399,25 @@ def _tokenize_cell(cell: str) -> List[str]:
             continue
 
         if char.isspace():
+            # Don't split on space if buffer ends with a building code and next word is a venue suffix.
+            # E.g., "HMT LAB" should stay together.
+            next_idx = index + 1
+            # Peek at next word
+            next_word = ""
+            while next_idx < length and text[next_idx].isspace():
+                next_idx += 1
+            while next_idx < length and not text[next_idx].isspace() and text[next_idx] not in "-–—/:|":
+                next_word += text[next_idx]
+                next_idx += 1
+            
+            buffer_upper = buffer.strip().upper()
+            next_word_upper = next_word.upper()
+            if buffer_upper in BUILDING_CODES and next_word_upper in LAB_VENUE_SUFFIXES:
+                # Keep building + venue together (e.g., "HMT LAB")
+                buffer += char
+                index += 1
+                continue
+
             if buffer.strip():
                 tokens.append(buffer.strip())
             buffer = ""
@@ -445,7 +484,7 @@ def _is_floor_token(token: str) -> bool:
 
 #: Building codes that appear on their own in the grid, needing a number beside
 #: them: "CC" + "3F" -> "CC-3F".
-BUILDING_CODES = ("CR", "CC", "L", "LAB", "NB", "AUD", "AUDI", "HMT", "CPPS", "SH", "TR", "MC", "AMP", "VLSI")
+BUILDING_CODES = ("CR", "CC", "L", "LAB", "NB", "AUD", "AUDI", "HMT", "CPPS", "SH", "TR", "MC", "AMP", "VLSI", "ME")
 
 
 def _is_building_token(token: str) -> bool:
@@ -1800,8 +1839,8 @@ def _post_process_slots(slots: List[Dict]) -> List[Dict]:
     # For core courses: only keep the branch matching the course prefix (e.g., NS1002 -> CSE, ME3009 -> ME)
     from collections import defaultdict
 
-    # Group slots by (day, base, start, end) but for electives include course code in key
-    # For electives with empty course code, keep all slots (don't deduplicate) to allow instructor fallback
+    # Group slots by (day, base, start, end, branch) for core courses to preserve CSE-A/CSE-B
+    # For electives, use (day, code, start, end) since they have no branch
     grouped: defaultdict[tuple, List[Dict]] = defaultdict(list)
     for slot in slots:
         code = slot.get("course_code", "")
@@ -1819,13 +1858,22 @@ def _post_process_slots(slots: List[Dict]) -> List[Dict]:
             # Don't deduplicate empty-code electives - use unique key per slot
             key = (day, "EMPTY", id(slot), start, end)
         else:
-            key = (day, base, start, end)
+            # Core courses: include branch in key to preserve CSE-A/CSE-B separation
+            branch = slot.get("branch_or_program", "").strip()
+            key = (day, base, start, end, branch)
         grouped[key].append(slot)
 
     # For each group, select the correct slot(s)
     deduplicated: List[Dict] = []
     for key, group in grouped.items():
-        day, base, start, end = key
+        # Handle both 4-tuple (electives) and 5-tuple (core courses with branch) keys
+        if len(key) == 4:
+            day, base, start, end = key
+            branch = ""
+        elif len(key) == 5:
+            day, base, start, end, branch = key
+        else:
+            continue
         code = group[0].get("course_code", "") if group else ""
         is_elective = is_open_elective(code)
 
@@ -1834,23 +1882,30 @@ def _post_process_slots(slots: List[Dict]) -> List[Dict]:
             # For empty-code electives, keep all for instructor fallback
             deduplicated.extend(group)
         else:
-            # Core courses: find the slot where branch matches course prefix
-            correct_branch = infer_branch_from_course_code(code)
-            # First try to find exact match
-            matched = None
+            # Core courses: group by branch first to preserve CSE-A/CSE-B separation
+            by_branch: Dict[str, List[Dict]] = {}
             for slot in group:
-                if slot.get("branch_or_program", "") == correct_branch:
-                    matched = slot
-                    break
-            if matched:
-                deduplicated.append(matched)
-            else:
-                # Fallback: if no exact match, prefer non-TBA room, then first
-                non_tba = [s for s in group if s.get("room", "").upper() != "TBA"]
-                if non_tba:
-                    deduplicated.append(non_tba[0])
+                br = slot.get("branch_or_program", "") or ""
+                by_branch.setdefault(br, []).append(slot)
+            
+            # For each branch, select the best slot
+            for br, branch_slots in by_branch.items():
+                correct_branch = infer_branch_from_course_code(code)
+                # Prefer slot matching the course's branch family
+                matched = None
+                for slot in branch_slots:
+                    if slot.get("branch_or_program", "") == correct_branch:
+                        matched = slot
+                        break
+                if matched:
+                    deduplicated.append(matched)
                 else:
-                    deduplicated.append(group[0])
+                    # Fallback: if no exact match, prefer non-TBA room, then first
+                    non_tba = [s for s in branch_slots if s.get("room", "").upper() != "TBA"]
+                    if non_tba:
+                        deduplicated.append(non_tba[0])
+                    else:
+                        deduplicated.append(branch_slots[0])
 
     # Step 3: Resolve truncated course codes using instructor + day + semester
     # Build instructor -> course mapping from slots with VALID course codes only
@@ -1990,15 +2045,27 @@ def _post_process_slots(slots: List[Dict]) -> List[Dict]:
     return final_deduplicated
 
 
-def parse_timetable_file(file_path: Path, is_csv: bool = False) -> Dict[str, Any]:
+def parse_timetable_file(
+    file_path: Path,
+    is_csv: bool = False,
+    sheet_name: str = "All Entries",
+) -> Dict[str, Any]:
     """
-    Main entry: parse PDF or CSV timetable.
+    Main entry: parse PDF, CSV, or Excel list-format timetable.
     Returns dict with slots, raw_extraction, warnings, stats.
     """
-    if is_csv:
+    suffix = file_path.suffix.lower()
+    
+    # Excel list format (your cleaned format)
+    if suffix == ".xlsx":
+        return parse_list_timetable(file_path, sheet_name=sheet_name)
+    
+    # CSV format
+    if is_csv or suffix == ".csv":
         slots, warnings = parse_csv_timetable(file_path)
         raw = {"csv_rows": len(slots)}
     else:
+        # PDF grid format
         tables = extract_tables_from_pdf(file_path)
         # Put back characters the table extractor dropped into a neighbouring
         # cell (truncated elective heads, stray room letters).
@@ -2044,3 +2111,212 @@ def extract_raw_text(pdf_path: Path) -> List[str]:
         for page in pdf.pages:
             texts.append(page.extract_text() or "")
     return texts
+
+
+# ---------------------------------------------------------------------------
+# List-Format Timetable Parser (for your cleaned Excel format)
+# ---------------------------------------------------------------------------
+# Reads the "All Entries" sheet format:
+# Semester | Branch | Day | Course Code | Instructor | Room | Time | Remarks
+# And produces the same slot format as the grid parser.
+
+def parse_list_timetable(
+    xlsx_path: Path,
+    *,
+    sheet_name: str = "All Entries",
+) -> Dict[str, Any]:
+    """
+    Parse a list-format timetable Excel file (your cleaned format).
+    
+    Expected columns in the sheet:
+    - Semester (int or str like "I", "V", "VII")
+    - Branch (str like "CSE-A", "ME", "ECE")
+    - Day (str like "Monday", "Mon")
+    - Course Code (str like "ME3011L-A", "OE3M27", "CS3010L")
+    - Instructor (str like "SKC", "MZA", "—" for none)
+    - Room (str like "HMT LAB", "ME-102", "CR-104")
+    - Time (str like "10:00-10:55", "10:00-11:55")
+    - Remarks (str, optional)
+    
+    Returns the same format as parse_timetable_file():
+    {
+        "slots": [...],
+        "raw_extraction": {...},
+        "warnings": [...],
+        "stats": {"slots_found": N, "warnings_count": N}
+    }
+    """
+    import openpyxl
+    from datetime import time
+    import re
+    
+    warnings: List[str] = []
+    slots: List[Dict] = []
+    
+    try:
+        wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+    except (openpyxl.utils.exceptions.InvalidFileException, OSError) as e:
+        return {
+            "slots": [],
+            "raw_extraction": {},
+            "warnings": [f"Failed to open Excel file: {e}"],
+            "stats": {"slots_found": 0, "warnings_count": 1},
+        }
+    
+    if sheet_name not in wb.sheetnames:
+        return {
+            "slots": [],
+            "raw_extraction": {},
+            "warnings": [f"Sheet '{sheet_name}' not found. Available: {wb.sheetnames}"],
+            "stats": {"slots_found": 0, "warnings_count": 1},
+        }
+    
+    ws = wb[sheet_name]
+    
+    # Find header row (look for "Course Code" or "Semester")
+    header_row = None
+    col_map = {}
+    for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
+        if not row or not any(row):
+            continue
+        row_vals = [str(v).strip() if v else "" for v in row]
+        # Look for expected headers
+        if any(h in row_vals for h in ["Course Code", "course code", "Course", "Semester", "semester"]):
+            header_row = row_idx
+            for col_idx, val in enumerate(row_vals):
+                val_lower = val.lower().strip()
+                if val_lower in ("semester", "sem"):
+                    col_map["semester"] = col_idx
+                elif val_lower in ("branch", "programme", "program"):
+                    col_map["branch"] = col_idx
+                elif val_lower in ("day", "day of week", "dow"):
+                    col_map["day"] = col_idx
+                elif val_lower in ("course code", "course", "paper"):
+                    col_map["course_code"] = col_idx
+                elif val_lower in ("instructor", "faculty", "teacher"):
+                    col_map["instructor"] = col_idx
+                elif val_lower in ("room", "venue", "hall"):
+                    col_map["room"] = col_idx
+                elif val_lower in ("time", "slot", "duration"):
+                    col_map["time"] = col_idx
+                elif val_lower in ("remarks", "remark", "notes", "note"):
+                    col_map["remarks"] = col_idx
+            break
+    
+    if header_row is None:
+        return {
+            "slots": [],
+            "raw_extraction": {},
+            "warnings": [f"Could not find header row in sheet '{sheet_name}'"],
+            "stats": {"slots_found": 0, "warnings_count": 1},
+        }
+    
+    required_cols = {"semester", "branch", "day", "course_code", "time"}
+    missing = required_cols - set(col_map.keys())
+    if missing:
+        return {
+            "slots": [],
+            "raw_extraction": {},
+            "warnings": [f"Missing required columns: {missing}. Found: {list(col_map.keys())}"],
+            "stats": {"slots_found": 0, "warnings_count": 1},
+        }
+    
+    # Parse data rows
+    slots = []
+    row_count = 0
+    for row_idx, row_data in enumerate(ws.iter_rows(min_row=header_row + 1, values_only=True), header_row + 1):
+        if not row_data or not any(v for v in row_data if v is not None):
+            continue
+        
+        row_count += 1
+        
+        def get_col(key: str, row=row_data) -> str:
+            idx = col_map.get(key)
+            if idx is not None and idx < len(row) and row[idx] is not None:
+                return str(row[idx]).strip()
+            return ""
+        
+        semester_raw = get_col("semester")
+        branch = get_col("branch")
+        day = get_col("day")
+        course_code = get_col("course_code")
+        instructor = get_col("instructor")
+        room = get_col("room")
+        time_str = get_col("time")
+        remarks = get_col("remarks")
+        
+        # Skip empty rows
+        if not any([semester_raw, branch, day, course_code, time_str]):
+            continue
+        
+        # Parse semester (handles Roman numerals I, III, V, VII)
+        sem_match = re.search(r"(\d+)", semester_raw)
+        if sem_match:
+            semester = int(sem_match.group(1))
+        else:
+            # Try Roman numerals
+            roman_map = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8}
+            semester = roman_map.get(semester_raw.upper().strip())
+        
+        # Parse day
+        day_short = day[:3].capitalize() if day else ""
+        if day_short not in DAYS_ORDER:
+            warnings.append(f"Row {row_idx}: Unknown day '{day}'")
+            continue
+        
+        # Parse time
+        start_time, end_time = parse_time_range(time_str)
+        if not start_time:
+            warnings.append(f"Row {row_idx}: Could not parse time '{time_str}'")
+            # Default to 1-hour slot
+            start_time = time(9, 0)
+            end_time = time(10, 0)
+        
+        # Parse room
+        room = normalize_room(get_col("room"))
+        
+        # Parse instructor - handle em dash
+        instructor_raw = get_col("instructor")
+        if instructor_raw in ("—", "-", "", "—", "–", "NA", "N/A", "NA"):
+            instructor = None
+        else:
+            instructor = instructor_raw if instructor_raw else None
+        
+        # Parse course code - apply reinforcement to fix garbled codes
+        from features.timetable.reinforcement import get_reinforcement_model
+        course_code_clean = get_reinforcement_model().apply(course_code)
+        
+        # Parse remarks
+        remarks = get_col("remarks")
+        
+        slot = {
+            "day": day_short,
+            "start_time": start_time,
+            "end_time": end_time,
+            "room": room or "TBA",
+            "course_code": course_code_clean,
+            "instructor": instructor,
+            "branch": branch,
+            "branch_or_program": branch,
+            "semester": semester,
+            "is_elective": is_open_elective(course_code_clean),
+            "remarks": remarks,
+        }
+        slots.append(slot)
+    
+    wb.close()
+    
+    # Post-process: fix course codes, merge duplicates, apply batch logic
+    slots = _post_process_slots(slots)
+    
+    return {
+        "slots": slots,
+        "raw_extraction": {"source": "list_format_excel", "sheet": sheet_name, "rows_processed": row_count},
+        "warnings": warnings,
+        "stats": {
+            "slots_found": len(slots),
+            "warnings_count": len(warnings),
+        }
+    }
+
+

@@ -134,7 +134,7 @@ class Settings(BaseSettings):
     attendance_safe: int = Field(default=75, alias="ATTENDANCE_SAFE")
     attendance_warning: int = Field(default=65, alias="ATTENDANCE_WARNING")
     max_upload_mb: int = Field(default=25, alias="MAX_UPLOAD_MB")
-    allowed_extensions: str = Field(default=".pdf,.csv", alias="ALLOWED_EXTENSIONS")
+    allowed_extensions: str = Field(default=".pdf,.csv,.xlsx", alias="ALLOWED_EXTENSIONS")
 
     # Team-finding (My Team): points added to the skill-match score when the
     # viewer shares the team owner's branch. Signup is restricted to one
@@ -187,6 +187,7 @@ class Settings(BaseSettings):
         env_file = Path(__file__).resolve().parents[3] / ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"
 
     @property
     def feed_enabled(self) -> bool:

@@ -1,0 +1,194 @@
+# Timetable Processor Configuration
+# Reusable for any semester's timetable PDF (Aug-Nov 2026, Jan-Apr 2027, etc.)
+
+source:
+  pdf_path: "input/timetable_latest.pdf"
+  version: "Version III"
+  effective_date: "2026-08-17"
+  updated_date: "2026-08-14"
+  semester_label: "Aug-Nov 2026"
+
+parsing:
+  # Time slot column headers as they appear in the PDF
+  time_slots:
+    - "08:00-08:55"
+    - "09:00-09:55"
+    - "10:00-10:55"
+    - "11:00-11:55"
+    - "12:00-12:55"
+    - "14:00-14:55"
+    - "15:00-15:55"
+    - "16:00-16:55"
+    - "17:00-17:55"
+
+  # Semester bands in the PDF
+  semesters:
+    - "I"
+    - "III"
+    - "V"
+    - "VII"
+    - "PG"
+
+# Branch configuration per semester
+# group_code: the letter/number shown in the PDF's second column
+branches:
+  I:
+    - name: "CSE"
+      groups: ["A", "B"]
+    - name: "ECE"
+      groups: ["C"]
+    - name: "ME"
+      groups: ["D1"]
+    - name: "SM"
+      groups: ["D2"]
+    - name: "DS"
+      groups: ["E1", "E2"]
+  III:
+    - name: "CSE"
+      groups: ["A", "B"]
+    - name: "ECE"
+      groups: ["C"]
+    - name: "ME"
+      groups: ["D1"]
+    - name: "SM"
+      groups: ["D1", "D2"]
+    - name: "DS"
+      groups: ["E"]
+  V:
+    - name: "CSE"
+      groups: ["A", "B"]
+    - name: "ECE"
+      groups: ["C"]
+    - name: "ME"
+      groups: ["D1"]
+    - name: "SM"
+      groups: ["D2"]
+    - name: "DS"
+      groups: ["E"]
+  VII:
+    - name: "CSE"
+      groups: [""]
+    - name: "ECE"
+      groups: [""]
+    - name: "ME"
+      groups: [""]
+    - name: "SM"
+      groups: [""]
+    - name: "DS"
+      groups: [""]
+  PG:
+    - name: "M.Tech (AI)"
+      groups: [""]
+    - name: "M.Tech (DS)"
+      groups: [""]
+    - name: "Ph.D. (CSE)"
+      groups: [""]
+    - name: "M.Tech (P&C)"
+      groups: [""]
+    - name: "M.Tech (Nano)"
+      groups: [""]
+    - name: "M.Tech (Design)"
+      groups: [""]
+    - name: "M.Tech (Mechtronics)"
+      groups: [""]
+    - name: "Ph.D. (ME)"
+      groups: [""]
+    - name: "MDes (Sem I)"
+      groups: [""]
+    - name: "MDes (Sem III)"
+      groups: [""]
+    - name: "Ph.D. (NS)"
+      groups: [""]
+
+# Map group codes to display names
+group_display:
+  "CSE-A": "CSE A"
+  "CSE-B": "CSE B"
+  "ECE-C": "ECE"
+  "ME-D1": "ME"
+  "SM-D2": "SM"
+  "DS-E1": "DS"
+  "DS-E2": "DS"
+
+# Instructor abbreviations to full names
+instructors:
+  "MKR": "Dr. M.K. Rai"
+  "JAMF": "Dr. J.A.M. Farooqi"
+  "SSL": "Dr. S.S. Loshali"
+  "AS": "Dr. A. Sahoo"
+  "YSK": "Dr. Y.S. K."
+  "LKB": "Dr. L.K. B."
+  "MA": "Dr. M. A."
+  "NRJ": "Dr. N.R. J."
+  "SKJ": "Dr. S.K. J."
+  "NKM": "Dr. N.K. M."
+  "AV": "Dr. A. V."
+  "AM": "Dr. A. M."
+  "ACM": "Dr. A.C. M."
+  "JKT": "Dr. J.K. T."
+  "DM": "Dr. D. M."
+  "ARR": "Dr. A.R. R."
+  "SP": "Dr. S. P."
+  "PM": "Dr. P. M."
+  "PR": "Dr. P. R."
+  "VF": "Visiting Faculty"
+  "SKM": "Dr. S.K. M."
+  "PK": "Dr. P. K."
+  "RKR": "Dr. R.K. R."
+  "AP": "Dr. A. P."
+  "AO": "Dr. A. O."
+  "NaS": "Dr. N. S."
+  "BG": "Dr. B. G."
+  "AK": "Dr. A. K."
+  "CD": "Dr. C. D."
+  "MKP": "Dr. M.K. P."
+  "TC": "Dr. T. C."
+  "SDP": "Dr. S.D. P."
+  "VKG": "Dr. V.K. G."
+  "SGM": "Dr. S.G. M."
+  "KP": "Dr. K. P."
+  "DSR": "Dr. D.S. R."
+  "SKT": "Dr. S.K. T."
+  "TK": "Dr. T. K."
+  "AG": "Dr. A. G."
+  "ShM": "Dr. Sh. M."
+  "DS": "Dr. D. S."
+  "DPS": "Dr. D.P. S."
+  "DKV": "Dr. D.K. V."
+  "MDB": "Dr. M.D. B."
+  "KD": "Dr. K. D."
+  "MZA": "Dr. M.Z. A."
+  "SKC": "Dr. S.K. C."
+  "TS": "Dr. T. S."
+  "AB": "Dr. A. B."
+  "HSN": "Dr. H.S. N."
+  "PKP": "Dr. P.K. P."
+  "SM": "Dr. S. M."
+
+# Room code descriptions
+rooms:
+  "L": "Lecture Hall"
+  "CR": "Classroom"
+  "CC": "Computer Centre"
+  "HMT": "HMT Lab"
+  "CPPS": "CPPS Lab"
+  "MC": "MC Lab"
+  "AMP": "AMP Lab"
+  "VLSI": "VLSI Lab"
+  "AUD": "Auditorium"
+
+# Output configuration
+output:
+  formats: ["excel", "json"]
+  output_dir: "output/"
+  excel_filename: "Timetable_Aug-Nov_2026_by_Semester_Branch.xlsx"
+  json_filename: "timetable.json"
+  sheet_naming:
+    btech_pattern: "{semester_roman}-{branch_name}"
+    pg_pattern: "PG-{branch_name}"
+
+# Validation rules
+validation:
+  check_room_conflicts: true
+  check_instructor_conflicts: true
+  allowed_time_gaps: 1

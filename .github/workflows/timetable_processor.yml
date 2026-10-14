@@ -1,0 +1,136 @@
+name: Timetable Processor
+
+on:
+  push:
+    paths:
+      - 'input/timetable_latest.pdf'
+      - 'backend/app/features/timetable/**'
+  workflow_dispatch:
+    inputs:
+      pdf_path:
+        description: 'Path to timetable PDF'
+        required: false
+        default: 'input/timetable_latest.pdf'
+
+jobs:
+  process-timetable:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: campuspilot
+          POSTGRES_PASSWORD: campuspilot
+          POSTGRES_DB: campuspilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pdfplumber openpyxl pyyaml
+
+      - name: Run timetable parser
+        id: parse
+        run: |
+          cd backend
+          python -c "
+          import sys
+          sys.path.insert(0, 'app')
+          from pathlib import Path
+          from features.timetable.parser import parse_timetable_file
+          from features.timetable.excel_export import export_timetable_to_excel
+          from features.timetable.sql_seeder import export_timetable_to_sql
+          from features.timetable.diff import diff_timetables, format_diff_report
+          from features.timetable.config import get_config
+          import json
+          
+          config = get_config()
+          pdf_path = Path('${{ github.event.inputs.pdf_path || 'input/timetable_latest.pdf' }}')
+          
+          if not pdf_path.exists():
+              print(f'PDF not found: {pdf_path}')
+              sys.exit(1)
+          
+          # Parse
+          result = parse_timetable_file(pdf_path, is_csv=False)
+          slots = result['slots']
+          
+          print(f'Parsed {len(slots)} slots')
+          
+          if not slots:
+              print('ERROR: No slots found in PDF')
+              sys.exit(1)
+          
+          # Export Excel
+          output_dir = Path('output')
+          output_dir.mkdir(exist_ok=True)
+          excel_path = output_dir / config.get_output_filename('excel')
+          export_timetable_to_excel(slots, excel_path)
+          print(f'Excel: {excel_path}')
+          
+          # Export SQL
+          sql_path = output_dir / 'timetable.sql'
+          export_timetable_to_sql(slots, sql_path)
+          print(f'SQL: {sql_path}')
+          
+          # Save parse result for next step
+          with open('output/parse_result.json', 'w') as f:
+              json.dump({
+                  'slots_count': len(slots),
+                  'warnings': result.get('warnings', []),
+                  'stats': result.get('stats', {}),
+              }, f, indent=2)
+          "
+
+      - name: Upload Excel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: timetable-excel
+          path: backend/output/*.xlsx
+          retention-days: 90
+
+      - name: Upload SQL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: timetable-sql
+          path: backend/output/*.sql
+          retention-days: 90
+
+      - name: Commit outputs to repository
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add backend/output/
+          git diff --staged --quiet || git commit -m "Auto-update timetable outputs [skip ci]"
+          git push
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "Timetable processed successfully"
+          echo "Slots: $(cat backend/output/parse_result.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["slots_count"])')"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Timetable processing failed"
+          echo "Check the logs for details"

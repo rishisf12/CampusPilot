@@ -1,5 +1,7 @@
 # Frontend Dockerfile - Multi-stage build
-FROM node:20-alpine AS builder
+# Use node:20 instead of node:20-alpine because @tailwindcss/postcss requires
+# lightningcss native binary which is not available for Alpine (musl libc)
+FROM node:20 AS builder
 
 WORKDIR /app
 

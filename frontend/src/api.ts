@@ -357,7 +357,7 @@ export const reinforcementApi = {
   create: (data: { name: string; pattern: string; replacement: string; description: string }) =>
     request<{ id: number; message: string }>('/reinforcement/', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     }),
   update: (
     id: number,
@@ -371,14 +371,14 @@ export const reinforcementApi = {
   ) =>
     request<{ message: string }>(`/reinforcement/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: data,
     }),
   remove: (id: number) =>
     request<{ message: string }>(`/reinforcement/${id}`, { method: 'DELETE' }),
   test: (data: { pattern: string; description: string }) =>
     request<{ input: string; output: string }>('/reinforcement/test', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     }),
 };
 
@@ -505,6 +505,60 @@ export const feedbackApi = {
 // ------------------------------------------------------------- health
 export const healthApi = {
   check: () => request<HealthResponse>('/health'),
+};
+
+// ---------------------------------------------------------------- admin
+export interface AdminUser {
+  id: number;
+  email: string;
+  username: string;
+  full_name: string | null;
+  roll_number: string | null;
+  role: string;
+  is_email_verified: boolean;
+  created_at: string | null;
+}
+
+export const adminApi = {
+  users: (params: { search?: string; role?: string; page?: number; size?: number } = {}) => {
+    const search = new URLSearchParams();
+    if (params.search) search.set('search', params.search);
+    if (params.role) search.set('role', params.role);
+    search.set('page', String(params.page ?? 1));
+    search.set('size', String(params.size ?? 20));
+    return request<{ total: number; page: number; size: number; users: AdminUser[] }>(
+      `/admin/users?${search}`
+    );
+  },
+  setRole: (id: number, role: 'admin' | 'student') =>
+    request<AdminUser>(`/admin/users/${id}/role`, { method: 'PATCH', body: { role } }),
+  stats: () =>
+    request<{ total: number; admins: number; students: number; verified: number }>('/admin/stats'),
+  teams: (params: { search?: string; page?: number; size?: number } = {}) => {
+    const search = new URLSearchParams();
+    if (params.search) search.set('search', params.search);
+    search.set('page', String(params.page ?? 1));
+    search.set('size', String(params.size ?? 20));
+    return request<{
+      total: number;
+      page: number;
+      size: number;
+      teams: Array<{
+        id: number;
+        name: string;
+        description: string;
+        owner_id: number | null;
+        members: number;
+        max_members: number;
+        is_open: boolean;
+        hackathon_id: number | null;
+      }>;
+    }>(`/admin/teams?${search}`);
+  },
+  deleteTeam: (id: number) =>
+    request<{ message: string }>(`/admin/teams/${id}`, { method: 'DELETE' }),
+  exportSubsection: (subsection: string, days = 30, format: 'json' | 'csv' = 'json') =>
+    request<unknown>(`/monitoring/export/${subsection}?days=${days}&format=${format}`),
 };
 
 // ------------------------------------------------------------ monitoring

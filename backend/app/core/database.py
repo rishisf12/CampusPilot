@@ -1,31 +1,14 @@
 """Database engine, session factory, and schema creation.
 
-PostgreSQL is the only supported database. Three things in here are specific to
-Postgres and are the whole reason this file exists rather than a one-line URL
-swap:
-
-1. **Engine options are PostgreSQL-specific.** ``pool_size``, ``pool_pre_ping``,
-   ``pool_recycle``, and connect timeout are first-class Postgres features.
-   They are hard errors on SQLite's single-file driver.
-
-2. **Schema migration is owned by Alembic.** The old schema migration could not
-   work on Postgres. ``_migrate_columns`` issued ``ALTER TABLE ... ADD COLUMN``
-   with the type rendered by ``column.type.compile(dialect)``. That is fine on
-   SQLite, but on Postgres a server-side default has to be spelled ``now()`` not
-   ``CURRENT_TIMESTAMP``, a JSON column wants ``JSONB``, and an enum column is a
-   *type*, not a column - so the naive version would half-apply and then fail.
-   Alembic now owns the schema.
-
-3. **Postgres connections go stale.** Idle connections are dropped by the
-   server or by any NAT between here and there, and the symptom is an
-   OperationalError surfacing on an unrelated request. ``pool_pre_ping`` turns
-   that into a transparent reconnect.
+Supports both PostgreSQL (production) and SQLite (local development).
 """
 import logging
 from contextlib import contextmanager
+from urllib.parse import urlparse
 
 from sqlmodel import Session, create_engine
-from sqlalchemy import text
+from sqlalchemy import text, event
+from sqlalchemy.pool import StaticPool
 
 from core.config import settings
 
@@ -33,50 +16,43 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def is_sqlite(url: str) -> bool:
+    """Check if the database URL is for SQLite."""
+    parsed = urlparse(url)
+    return parsed.scheme in ("sqlite", "sqlite+pysqlite")
+
+
 def engine_kwargs() -> dict:
-    """Options for the PostgreSQL dialect.
-
-    Kept in one place, and public, so that anything rebuilding an engine against
-    the same URL gets the right options without re-deriving them. The test suite
-    clones the engine to obtain an isolated session.
-    """
-    return {
-        # Ping before handing out a pooled connection; transparently replaces one
-        # the server or a firewall has closed while it sat idle.
-        "pool_pre_ping": True,
-        "pool_size": settings.db_pool_size,
-        "max_overflow": settings.db_max_overflow,
-        "pool_timeout": settings.db_pool_timeout,
-        # Recycle before anything else would, rather than discovering the drop as
-        # a failed request at 3am.
-        "pool_recycle": settings.db_pool_recycle,
-        "connect_args": {
-            "connect_timeout": settings.db_connect_timeout,
-            "application_name": "campuspilot-api",
-            # Applied only when it can help. "prefer" upgrades to TLS when the
-            # server offers it; compose talks plaintext on the bridge network.
-            **({"sslmode": settings.db_sslmode} if settings.db_sslmode != "disable" else {}),
-        },
-    }
-
-
-#: Back-compat alias for the private name this function used to have.
-_engine_kwargs = engine_kwargs
+    """Options for the database dialect - works for both SQLite and PostgreSQL."""
+    url = settings.database_url
+    
+    if is_sqlite(url):
+        # SQLite-specific configuration
+        return {
+            "poolclass": StaticPool,
+            "connect_args": {
+                "check_same_thread": False,
+                "timeout": 30,
+            },
+        }
+    else:
+        # PostgreSQL-specific configuration
+        return {
+            "pool_pre_ping": True,
+            "pool_size": settings.db_pool_size,
+            "max_overflow": settings.db_max_overflow,
+            "pool_timeout": settings.db_pool_timeout,
+            "pool_recycle": settings.db_pool_recycle,
+            "connect_args": {
+                "connect_timeout": settings.db_connect_timeout,
+                "application_name": "campuspilot-api",
+                **({"sslmode": settings.db_sslmode} if settings.db_sslmode != "disable" else {}),
+            },
+        }
 
 
 def create_engine_with_retry(url: str, max_retries: int = 30, base_delay: float = 1.0):
-    """Create an engine, retrying transient connection failures.
-
-    The container and the local machine both hit a real race: the app process
-    frequently wins the startup race against Postgres, so the first connection
-    attempt fails while the database is still finishing its own init. Without
-    this the API crashes on boot and, under compose, restart-loops until Postgres
-    happens to win instead - a failure that looks intermittent and is really
-    just ordering.
-
-    Backoff is exponential and capped at 30s so a genuinely wrong URL still
-    fails fast enough to be noticed instead of hanging forever.
-    """
+    """Create an engine, retrying transient connection failures."""
     import time
 
     for attempt in range(1, max_retries + 1):
@@ -87,8 +63,7 @@ def create_engine_with_retry(url: str, max_retries: int = 30, base_delay: float 
                 future=True,
                 **engine_kwargs(),
             )
-            # Force the connection now; create_engine alone is lazy and would
-            # defer the failure to the first request instead.
+            # Force the connection now
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
         except Exception as exc:
@@ -109,11 +84,19 @@ def create_engine_with_retry(url: str, max_retries: int = 30, base_delay: float 
         logger.info("Database connection established on attempt %d", attempt)
         return engine
 
-    # Unreachable: the loop either returns or raises on its final attempt.
     raise RuntimeError("Failed to create database engine after max retries")
 
 
 engine = create_engine_with_retry(settings.database_url)
+
+
+# Enable foreign keys for SQLite
+if is_sqlite(settings.database_url):
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 # --------------------------------------------------------------------------
@@ -173,18 +156,11 @@ def alembic_config():
 
 
 def upgrade_schema() -> None:
-    """Bring the database up to the Alembic head.
-
-    Called from the application lifespan. Safe to run on every boot: Alembic is
-    a no-op when the ``alembic_version`` table already says "head".
-
-    On a brand-new database this creates everything from the migration history.
-    That is deliberate - ``create_all`` would build the *current* models and
-    leave no revision stamp, which silently diverges from the migration files the
-    moment the first real migration is written.
-
-    Includes retry logic for transient connection failures during startup.
-    """
+    """Bring the database up to the Alembic head (PostgreSQL only)."""
+    if is_sqlite(settings.database_url):
+        logger.info("SQLite detected: skipping Alembic migrations (using existing schema)")
+        return
+    
     import time
     from alembic import command
 
@@ -207,8 +183,13 @@ def upgrade_schema() -> None:
 
 
 def create_db_and_tables() -> None:
-    """Back-compat alias. Kept because ``main.py`` and several tools import it."""
-    upgrade_schema()
+    """Back-compat alias. Creates tables for SQLite, runs migrations for PostgreSQL."""
+    if is_sqlite(settings.database_url):
+        logger.info("SQLite detected: creating tables from models")
+        from sqlmodel import SQLModel
+        SQLModel.metadata.create_all(engine)
+    else:
+        upgrade_schema()
 
 
 # --------------------------------------------------------------------------

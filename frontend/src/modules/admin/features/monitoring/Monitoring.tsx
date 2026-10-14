@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { monitoringApi } from '@/api';
+import { monitoringApi, adminApi } from '@/api';
 import type { MonitoringSubsection } from '@shared/types/api';
 import { ActivityPanel, type ActivityData } from './panels/Activity';
 import { FeedbackPanel, type FeedbackData } from './panels/Feedback';
@@ -105,6 +105,7 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
   }, [platformGroup, subsections, selected]);
 
   const [monetisation, setMonetisation] = useState<MonetisationData | null>(null);
+  const [exporting, setExporting] = useState<'json' | 'csv' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -149,6 +150,28 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
     }
   }
 
+  async function runExport(format: 'json' | 'csv') {
+    if (selected === HISTORY_TAB || !selected) return;
+    setExporting(format);
+    try {
+      const data = await adminApi.exportSubsection(selected, days, format);
+      const text = format === 'json' ? JSON.stringify(data, null, 2) : String(data);
+      const blob = new Blob([text], {
+        type: format === 'json' ? 'application/json' : 'text/csv',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selected}_${days}d.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError(`Export ${format.toUpperCase()} failed.`);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   const groups = useMemo(() => {
     const out = new Map<string, MonitoringSubsection[]>();
     for (const s of subsections) {
@@ -181,6 +204,24 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
 
         <div className="flex items-center gap-3">
           <FreshnessBadge overview={overview} />
+          <button
+            type="button"
+            onClick={() => runExport('json')}
+            disabled={exporting !== null || selected === 'E_HISTORY'}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            title="Download this subsection as JSON"
+          >
+            {exporting === 'json' ? 'Exporting…' : 'Export JSON'}
+          </button>
+          <button
+            type="button"
+            onClick={() => runExport('csv')}
+            disabled={exporting !== null || selected === 'E_HISTORY'}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            title="Download this subsection as CSV"
+          >
+            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+          </button>
           <button
             type="button"
             onClick={runRollup}

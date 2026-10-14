@@ -3,6 +3,7 @@ import { useAuth } from '@shared/auth/AuthWrapper';
 import { healthApi } from '@/api';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
+import { Sidebar } from '@shared/components/Sidebar';
 
 /** Lazy-loaded features */
 const AdminPanel = lazy(() => import('./features/admin/AdminPanel'));
@@ -48,31 +49,30 @@ interface AdminTab {
 /**
  * Admin Routes - defines all routes for admin users.
  *
- * Sections: Feedback Responses, Web Monitoring, Android Monitoring, Profile
+ * Sections: Feedback Responses, Web Monitoring, Android Monitoring
+ * Profile is accessed via sidebar
  */
 export function AdminRoutes() {
-  const { user, logout, offline } = useAuth();
+  const { offline } = useAuth();
   const online = useBackendStatus();
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [adminTab, setAdminTab] = useState('responses');
+  // Sidebar open state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Admin sub-tabs
+  // Admin sub-tabs (Profile removed - accessed via sidebar)
   const ADMIN_TABS: AdminTab[] = [
     { id: 'responses', label: 'Feedback Responses' },
     { id: 'web-monitoring', label: 'Web App Monitoring' },
     { id: 'android-monitoring', label: 'Android App Monitoring' },
-    { id: 'profile', label: 'Profile' },
   ];
-
-  const displayName =
-    user?.full_name?.trim() || user?.username || user?.email?.split('@')[0] || 'Admin';
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Single static header, flush at the top, never scrolls away */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Top row: brand + user/status */}
+          {/* Top row: brand + sidebar toggle + status indicator */}
           <div className="flex items-center justify-between gap-4 h-16">
             {/* Brand */}
             <div className="flex items-center gap-3 shrink-0">
@@ -88,19 +88,33 @@ export function AdminRoutes() {
               Admin
             </span>
 
-            {/* User, their programme, logout and the live dot */}
+            {/* Right side: status indicator + sidebar toggle */}
             <div className="flex items-center gap-3 shrink-0">
-              <span className="hidden sm:inline text-sm font-medium text-gray-700 max-w-[160px] truncate">
-                {displayName}
-              </span>
-              <button type="button" onClick={logout} className="btn-ghost">
-                Logout
-              </button>
               <span
                 className={`w-2.5 h-2.5 rounded-full ${online ? 'bg-success-500' : 'bg-danger-500'}`}
                 title={online ? 'Backend connected' : 'Backend offline'}
                 aria-label={online ? 'Backend connected' : 'Backend offline'}
               />
+              {/* Sidebar Toggle Button in header */}
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="w-10 h-10 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors"
+                aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={sidebarOpen}
+              >
+                <svg
+                  className="w-6 h-6 text-gray-600"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
             </div>
           </div>
 
@@ -126,6 +140,13 @@ export function AdminRoutes() {
           </div>
         </div>
       </header>
+
+      {/* Sidebar */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onSectionChange={setAdminTab}
+      />
 
       {/* Content, centred */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

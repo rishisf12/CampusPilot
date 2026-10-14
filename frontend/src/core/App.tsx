@@ -39,18 +39,22 @@ function AppRouter() {
   // Admin sees the admin module regardless of programme
   if ((user?.role || 'student') === 'admin') {
     return (
-      <Suspense fallback={<ModuleLoading />}>
-        <AdminModule />
-      </Suspense>
+      <ProfileProvider>
+        <Suspense fallback={<ModuleLoading />}>
+          <AdminModule />
+        </Suspense>
+      </ProfileProvider>
     );
   }
 
   // Faculty (future)
   if ((user?.role || 'student') === 'faculty') {
     return (
-      <Suspense fallback={<ModuleLoading />}>
-        <FacultyModule />
-      </Suspense>
+      <ProfileProvider>
+        <Suspense fallback={<ModuleLoading />}>
+          <FacultyModule />
+        </Suspense>
+      </ProfileProvider>
     );
   }
 

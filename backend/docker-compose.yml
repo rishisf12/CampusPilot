@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: campuspilot
+      POSTGRES_PASSWORD: campuspilot
+      POSTGRES_DB: campuspilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campuspilot -d campuspilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  adminer:
+    image: adminer:4.8.1
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+psycopg://campuspilot:campuspilot@postgres:5432/campuspilot
+      - SECRET_KEY=dev-secret-change-in-production-0123456789abcdef
+      - TELEMETRY_PEPPER=dev-only-telemetry-pepper
+      - TELEMETRY_ENABLED=true
+      - METRICS_ENABLED=true
+      - FRONTEND_URL=http://localhost:5173
+      - ALLOWED_EMAIL_DOMAIN=@iiitdmj.ac.in
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=
+      - SMTP_PASSWORD=
+      - EMAIL_FROM=noreply@iiitdmj.ac.in
+      - TIMEZONE=Asia/Kolkata
+      - COLLEGE_START=09:00
+      - COLLEGE_END=17:00
+      - LUNCH_START=13:00
+      - LUNCH_END=14:00
+      - ATTENDANCE_SAFE=75
+      - ATTENDANCE_WARNING=65
+      - MAX_UPLOAD_MB=25
+      - ALLOWED_EXTENSIONS=.pdf,.csv
+      - BRANCH_OPTIONS=CSE A,CSE B,DS,ECE,ME,SM,PG,MDes
+      - ADMISSION_YEAR=21
+    volumes:
+      - ../backend/app/uploads:/app/backend/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

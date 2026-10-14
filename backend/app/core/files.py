@@ -7,8 +7,15 @@ from core.config import settings
 UPLOAD_DIR = Path(__file__).resolve().parents[1] / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {ext.strip().lower() for ext in settings.allowed_extensions.split(",")}
-MAX_BYTES = settings.max_upload_mb * 1024 * 1024
+
+def _get_allowed_extensions() -> set[str]:
+    """Dynamically get allowed extensions from settings."""
+    return {ext.strip().lower() for ext in settings.allowed_extensions.split(",")}
+
+
+def _get_max_bytes() -> int:
+    """Dynamically get max upload size from settings."""
+    return settings.max_upload_mb * 1024 * 1024
 
 
 def validate_upload(file: UploadFile, expected: str) -> None:
@@ -18,15 +25,17 @@ def validate_upload(file: UploadFile, expected: str) -> None:
     """
     # Extension
     ext = Path(file.filename).suffix.lower()
-    if ext not in ALLOWED_EXTENSIONS:
+    allowed_extensions = _get_allowed_extensions()
+    if ext not in allowed_extensions:
         raise HTTPException(
             status_code=400,
-            detail=f"Expected {expected} ({', '.join(sorted(ALLOWED_EXTENSIONS))}), got {ext}"
+            detail=f"Expected {expected} ({', '.join(sorted(allowed_extensions))}), got {ext}"
         )
 
     # Size (peek at content-length header if available)
     content_length = file.headers.get("content-length")
-    if content_length and int(content_length) > MAX_BYTES:
+    max_bytes = _get_max_bytes()
+    if content_length and int(content_length) > max_bytes:
         raise HTTPException(
             status_code=400,
             detail=f"File too large: {int(content_length) / 1024 / 1024:.1f} MB > {settings.max_upload_mb} MB limit"
@@ -36,6 +45,7 @@ def validate_upload(file: UploadFile, expected: str) -> None:
     allowed_mimes = {
         ".pdf": "application/pdf",
         ".csv": "text/csv",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }
     expected_mime = allowed_mimes.get(ext)
     if expected_mime and file.content_type != expected_mime:
@@ -74,7 +84,7 @@ def save_upload(file: UploadFile, prefix: str = "upload") -> Path:
             ),
         )
 
-    if size > MAX_BYTES:
+    if size > _get_max_bytes():
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="File exceeds size limit after upload")
 
@@ -108,7 +118,7 @@ def save_upload_from_bytes(data: bytes, original_filename: str, prefix: str = "u
     if size == 0:
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Empty attachment")
-    if size > MAX_BYTES:
+    if size > _get_max_bytes():
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Attachment exceeds size limit")
 

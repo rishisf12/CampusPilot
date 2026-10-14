@@ -58,24 +58,49 @@ SEED_ROWS = [
 
 @pytest.fixture(scope="module")
 def client():
+    from models import UserRole
+
     create_db_and_tables()
     with Session(engine) as session:
-        user = User(
-            email="smoke@iiitdmj.ac.in", password_hash="x", full_name="Smoke Test",
-            username="smokeuser", roll_number="23BCS050", is_email_verified=True,
-        )
-        session.add(user)
-        session.commit()
-        session.refresh(user)
+        user = session.exec(select(User).where(User.username == "smokeuser")).first()
+        if user is None:
+            user = User(
+                email="smoke@iiitdmj.ac.in", password_hash="x", full_name="Smoke Test",
+                username="smokeuser", roll_number="23BCS050", is_email_verified=True,
+                role=UserRole.STUDENT,
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+        if (
+            session.exec(select(UserProfile).where(UserProfile.user_id == user.id)).first()
+            is None
+        ):
+            session.add(UserProfile(user_id=user.id, programme="BTech", semester=5, branch="CSE A"))
+            session.commit()
 
-        session.add(UserProfile(user_id=user.id, programme="BTech", semester=5, branch="CSE A"))
-        session.add(Course(code="CS5031", name="CS5031", semester=5, branch="CSE"))
+        course = session.exec(select(Course).where(Course.code == "CS5031")).first()
+        if course is None:
+            course = Course(code="CS5031", name="CS5031")
+            session.add(course)
+            session.commit()
+            session.refresh(course)
+        # Deterministic seed: wipe this file's rows, then insert.
+        # Attendance rows reference courses, so they go first.
+        for row in session.exec(select(AttendanceRecord)).all():
+            session.delete(row)
+        for row in session.exec(select(TimetableSlot)).all():
+            session.delete(row)
+        for row in session.exec(select(ExamSeating)).all():
+            session.delete(row)
+        for row in session.exec(select(MidSemSchedule)).all():
+            session.delete(row)
+        session.commit()
         for row in SEED_ROWS:
             session.add(row)
         session.commit()
 
-        course = session.exec(select(Course).where(Course.code == "CS5031")).first()
-        session.add(AttendanceRecord(course_id=course.id, date=date(2026, 1, 5),
+        session.add(AttendanceRecord(course_id=course.id, user_id=user.id, date=date(2026, 1, 5),
                                      status=AttendanceStatus.PRESENT))
         session.commit()
         user_id = user.id  # read inside the session; the instance detaches after
@@ -119,6 +144,11 @@ GET_ENDPOINTS = [
 def test_get_endpoint_does_not_500(client, path):
     """Every read endpoint must return a real response, never a 500."""
     test_client, token = client
+    if path == "/attendance/course/1":
+        # Course ids restart on every rebuild; resolve a real one.
+        subjects = test_client.get("/attendance/subjects", headers=auth(token)).json()
+        assert subjects["subjects"], "seeded timetable should sync subjects"
+        path = f"/attendance/course/{subjects['subjects'][0]['course_id']}"
     res = test_client.get(path, headers=auth(token))
     assert res.status_code != 500, f"{path} -> {res.status_code} {res.text[:300]}"
     assert res.status_code < 400, f"{path} -> {res.status_code} {res.text[:300]}"

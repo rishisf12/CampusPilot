@@ -18,6 +18,34 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    op.execute(sa.text('CREATE SCHEMA IF NOT EXISTS "academic"'))
+    # 0001 created public.course (legacy shape with semester/branch).
+    # Current models use academic.course (code,name,instructor,is_elective,is_extra).
+    # Fresh rebuilds (tests) have no academic.course, so phase3 FKs fail.
+    # Prod already has it via create_all, so IF NOT EXISTS is a safe no-op there.
+    op.execute(sa.text('''
+        CREATE TABLE IF NOT EXISTS academic.course (
+            id SERIAL PRIMARY KEY,
+            code VARCHAR NOT NULL UNIQUE,
+            name VARCHAR NOT NULL,
+            instructor VARCHAR,
+            is_elective BOOLEAN NOT NULL DEFAULT false,
+            is_extra BOOLEAN NOT NULL DEFAULT false
+        )
+    '''))
+    op.execute(sa.text('CREATE INDEX IF NOT EXISTS ix_academic_course_code ON academic.course (code)'))
+    # Fresh rebuilds (tests) have no timetable_upload yet: it was created via
+    # create_all in prod, never via Alembic. Full current shape; IF NOT EXISTS
+    # keeps this a safe no-op where it already exists.
+    op.execute(sa.text('''
+        CREATE TABLE IF NOT EXISTS academic.timetable_upload (
+            id SERIAL PRIMARY KEY,
+            filename VARCHAR NOT NULL,
+            original_name VARCHAR,
+            size_bytes INTEGER,
+            uploaded_at TIMESTAMP
+        )
+    '''))
     # 3.1 academic_term table
     op.create_table(
         'academic_term',
@@ -74,6 +102,27 @@ def upgrade() -> None:
     op.create_index('ix_course_offering_course_id', 'course_offering', ['course_id'], schema='academic')
     op.create_index('ix_course_offering_term_id', 'course_offering', ['term_id'], schema='academic')
     op.create_index('ix_course_offering_branch_id', 'course_offering', ['branch_id'], schema='academic')
+
+    # academic.timetable_slot likewise predates Alembic (create_all in prod).
+    # Full current shape so fresh rebuilds match prod; placed after
+    # course_offering so the offering_id FK resolves, and before the
+    # timetable_slot_branch junction below which references it.
+    op.execute(sa.text('''
+        CREATE TABLE IF NOT EXISTS academic.timetable_slot (
+            id SERIAL PRIMARY KEY,
+            day VARCHAR NOT NULL,
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL,
+            room VARCHAR NOT NULL,
+            course_code VARCHAR NOT NULL,
+            instructor VARCHAR,
+            branch_or_program VARCHAR NOT NULL,
+            semester INTEGER,
+            offering_id INTEGER REFERENCES academic.course_offering(id) ON DELETE SET NULL
+        )
+    '''))
+    op.execute(sa.text('CREATE INDEX IF NOT EXISTS ix_academic_timetable_slot_day ON academic.timetable_slot (day)'))
+    op.execute(sa.text('CREATE INDEX IF NOT EXISTS ix_academic_timetable_slot_course_code ON academic.timetable_slot (course_code)'))
 
     # 3.4 timetable_slot_branch junction table
     op.create_table(

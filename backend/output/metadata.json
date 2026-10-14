@@ -1,0 +1,10 @@
+{
+  "version": "Version III",
+  "effective_date": "2026-08-17",
+  "slots_count": 427,
+  "warnings": [],
+  "outputs": {
+    "excel": "output\\Timetable_Aug-Nov_2026_by_Semester_Branch.xlsx",
+    "sql": "output\\timetable.sql"
+  }
+}

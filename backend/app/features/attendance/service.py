@@ -165,19 +165,6 @@ def get_subjects(
             # This replaces the old regex on branch_or_program with the normalized FK
             slot_codes = set()
             slot_query = select(TimetableSlot).where(TimetableSlot.semester == semester)
-            if offering_id is not None:
-                # Use the offering_id from the first matching slot as a guide,
-                # but we need to find all slots with the same offering_id
-                # Get a reference offering_id from slots matching the branch
-                ref_offering = session.exec(
-                    select(TimetableSlot.offering_id).where(
-                        TimetableSlot.semester == semester
-                    ).limit(1)
-                ).first()
-                if ref_offering:
-                    slot_query = slot_query.where(
-                        TimetableSlot.offering_id == ref_offering
-                    )
             slot_results = session.exec(slot_query).all()
             slot_codes = {
                 (slot.course_code or "").upper()

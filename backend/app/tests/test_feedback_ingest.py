@@ -7,22 +7,26 @@ from sqlmodel import Session
 # The database URL is set by tests/conftest.py before any import of the app.
 from core.database import create_db_and_tables, engine
 from main import app
-from models import User
+from models import User, UserRole
 from features.auth.routes import create_access_token
 
 
 @pytest.fixture(scope="module")
 def client():
+    from sqlmodel import select
+
     create_db_and_tables()
     with Session(engine) as session:
-        user = User(
-            email="ingest@iiitdmj.ac.in", password_hash="x", full_name="Ingest Test",
-            username="ingestuser", roll_number="23BCS100", is_email_verified=True,
-            role="student",
-        )
-        session.add(user)
-        session.commit()
-        session.refresh(user)
+        user = session.exec(select(User).where(User.username == "ingestuser")).first()
+        if user is None:
+            user = User(
+                email="ingest@iiitdmj.ac.in", password_hash="x", full_name="Ingest Test",
+                username="ingestuser", roll_number="23BCS100", is_email_verified=True,
+                role=UserRole.STUDENT,
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
         user_id = user.id
 
     with TestClient(app) as test_client:

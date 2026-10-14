@@ -14,28 +14,37 @@ from features.auth.routes import create_access_token
 
 @pytest.fixture(scope="module")
 def client():
+    from models import UserRole
+
     create_db_and_tables()
     with Session(engine) as session:
-        user = User(
-            email="fb@iiitdmj.ac.in", password_hash="x", full_name="Fb Test",
-            username="fbuser", roll_number="23BCS051", is_email_verified=True,
-            role="student",
-        )
-        admin = User(
-            email="fbadmin@iiitdmj.ac.in", password_hash="x", full_name="Fb Admin",
-            username="fbadmin", roll_number="23BCS052", is_email_verified=True,
-            role="admin",
-        )
-        session.add(user)
-        session.add(admin)
-        session.commit()
-        session.refresh(user)
-        session.refresh(admin)
-        session.add(UserProfile(
-            user_id=user.id, first_name="Fb", last_name="Test",
-            programme="BTech", semester=1, branch="SM",
-        ))
-        session.commit()
+        user = session.exec(select(User).where(User.username == "fbuser")).first()
+        if user is None:
+            user = User(
+                email="fb@iiitdmj.ac.in", password_hash="x", full_name="Fb Test",
+                username="fbuser", roll_number="23BCS051", is_email_verified=True,
+                role=UserRole.STUDENT,
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+        admin = session.exec(select(User).where(User.username == "fbadmin")).first()
+        if admin is None:
+            admin = User(
+                email="fbadmin@iiitdmj.ac.in", password_hash="x", full_name="Fb Admin",
+                username="fbadmin", roll_number="23BCS052", is_email_verified=True,
+                role=UserRole.ADMIN,
+            )
+            session.add(admin)
+            session.commit()
+            session.refresh(admin)
+        profile = session.exec(select(UserProfile).where(UserProfile.user_id == user.id)).first()
+        if profile is None:
+            session.add(UserProfile(
+                user_id=user.id, first_name="Fb", last_name="Test",
+                programme="BTech", semester=1, branch="SM",
+            ))
+            session.commit()
         user_id, admin_id = user.id, admin.id
 
     with TestClient(app) as test_client:

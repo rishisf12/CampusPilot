@@ -32,9 +32,9 @@ from sqlalchemy import engine_from_config, pool, text as sa_text
 # This file lives at backend/alembic/env.py, so:
 #   parents[0] = backend/alembic
 #   parents[1] = backend            <- the repo's backend/ directory
-# The importable package dir is backend/backend, a *sibling* of backend/alembic,
+# The importable package dir is backend/app, a *sibling* of backend/alembic,
 # not a parent - so it has to be joined on rather than indexed into parents.
-_APP_DIR = Path(__file__).resolve().parents[1] / "backend"
+_APP_DIR = Path(__file__).resolve().parents[1] / "app"
 if str(_APP_DIR) not in sys.path:
     sys.path.insert(0, str(_APP_DIR))
 
@@ -53,7 +53,7 @@ import models  # noqa: E402,F401  - imported for the side effect of registering 
 # initial revision already created it, does so on a database that is otherwise
 # perfectly in sync. `alembic check` in CI catches that case, which is why it
 # is a required step rather than an optional one.
-from features.monitoring import models as _monitoring_models  # noqa: E402,F401
+from features.monitoring.domain import models as _monitoring_models  # noqa: E402,F401
 
 from core.config import settings  # noqa: E402
 
@@ -84,11 +84,18 @@ def _assert_metadata_complete() -> None:
 
     inspector = inspect(engine)
     known = set(SQLModel.metadata.tables)
+    known_unqualified = {t.split(".")[-1] for t in known}
     try:
-        existing = set(inspector.get_table_names()) - {"alembic_version"}
+        existing: set[str] = set()
+        for _schema in ("public", "core", "academic", "social", "telemetry"):
+            try:
+                existing |= set(inspector.get_table_names(schema=_schema))
+            except Exception:
+                continue
+        existing -= {"alembic_version"}
     except Exception:  # noqa: BLE001 - database may not be reachable at import
         return
-    missing = existing - known
+    missing = existing - known_unqualified
     if missing:
         raise RuntimeError(
             "These tables exist in the database but not in SQLModel.metadata: "
@@ -146,6 +153,9 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         _assert_metadata_complete()
         connection.execute(sa_text("SET search_path = core, academic, social, telemetry, public"))
+        for _schema in ("core", "academic", "social", "telemetry"):
+            connection.execute(sa_text(f'CREATE SCHEMA IF NOT EXISTS "{_schema}"'))
+        connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
 from core.database import get_session
+from core.deps import get_current_admin
+from models import User
 from ocr import (
     process_uploaded_pdf,
 )
@@ -22,7 +24,8 @@ async def extract_timetable(
     hf_token: str = Form(None),
     model: str = Form("microsoft/phi-3-mini-4k-instruct"),
     poppler_path: str = Form(None),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
 ):
     """
     Extract timetable data from PDF using OCR + Hugging Face LLM.
@@ -77,7 +80,8 @@ async def extract_exam(
     hf_token: str = Form(None),
     model: str = Form("microsoft/phi-3-mini-4k-instruct"),
     poppler_path: str = Form(None),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
 ):
     """
     Extract exam seating data from PDF using OCR + Hugging Face LLM.
@@ -129,6 +133,7 @@ async def extract_exam(
 async def debug_extract_text(
     file: UploadFile = File(...),
     poppler_path: str = Form(None),
+    _: User = Depends(get_current_admin),
 ):
     """
     Debug endpoint: Returns raw OCR text from each page.

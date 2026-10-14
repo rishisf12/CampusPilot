@@ -9,6 +9,7 @@ import datetime
 from email.message import EmailMessage
 
 import pytest
+from sqlalchemy import text
 from sqlmodel import select
 
 from core.database import create_db_and_tables
@@ -27,14 +28,34 @@ def fresh_team_tables():
     from sqlmodel import Session
 
     from core.database import engine
-    from models import FeedCursor, Hackathon, JoinRequest, Team, TeamMember, User, UserProfile
+    from models import (
+        FeedCursor,
+        Feedback,
+        FeedbackReply,
+        Hackathon,
+        JoinRequest,
+        Team,
+        TeamMember,
+        User,
+        UserProfile,
+    )
 
     def wipe():
         create_db_and_tables()
         with Session(engine) as session:
-            for model in (JoinRequest, TeamMember, UserProfile, FeedCursor, Hackathon, Team, User):
-                for row in session.exec(select(model)).all():
-                    session.delete(row)
+            # TRUNCATE ... CASCADE: FK-safe regardless of model changes.
+            # Row-by-row deletes previously died on ordering (team->hackathon,
+            # feedback->user, attendance->user) every time a new FK appeared.
+            session.exec(
+                text(
+                    "TRUNCATE "
+                    "social.join_request, social.team_member, social.team, "
+                    "telemetry.feed_cursor, social.hackathon, "
+                    "social.feedback_reply, social.feedback, "
+                    "core.user_profile, core.user "
+                    "RESTART IDENTITY CASCADE"
+                )
+            )
             session.commit()
 
     wipe()

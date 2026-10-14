@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from core.deps import get_current_user
+from core.deps import get_current_admin
 from core.database import get_session
 from models import ReinforcementPattern, User
 
@@ -31,15 +31,11 @@ class PatternUpdate(BaseModel):
     enabled: bool | None = None
 
 
-def _is_admin(user: User) -> bool:
-    return (user.role or 'student') == 'admin'
-
-
 @router.get("/")
-def list_patterns(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
-    """List all reinforcement patterns."""
-    if not _is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin only")
+def list_patterns(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+):
     patterns = session.exec(select(ReinforcementPattern).order_by(ReinforcementPattern.name)).all()
     return [
         {
@@ -55,10 +51,12 @@ def list_patterns(session: Session = Depends(get_session), user: User = Depends(
 
 
 @router.post("/")
-def create_pattern(data: PatternCreate, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def create_pattern(
+    data: PatternCreate,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+):
     """Add a new correction pattern."""
-    if not _is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin only")
     pattern = ReinforcementPattern(
         name=data.name,
         pattern=data.pattern,
@@ -72,10 +70,13 @@ def create_pattern(data: PatternCreate, session: Session = Depends(get_session),
 
 
 @router.put("/{pattern_id}")
-def update_pattern(pattern_id: int, data: PatternUpdate, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def update_pattern(
+    pattern_id: int,
+    data: PatternUpdate,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+):
     """Update an existing pattern."""
-    if not _is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin only")
     pattern = session.get(ReinforcementPattern, pattern_id)
     if not pattern:
         raise HTTPException(status_code=404, detail="Pattern not found")
@@ -95,10 +96,12 @@ def update_pattern(pattern_id: int, data: PatternUpdate, session: Session = Depe
 
 
 @router.delete("/{pattern_id}")
-def delete_pattern(pattern_id: int, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def delete_pattern(
+    pattern_id: int,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+):
     """Delete a pattern."""
-    if not _is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin only")
     pattern = session.get(ReinforcementPattern, pattern_id)
     if not pattern:
         raise HTTPException(status_code=404, detail="Pattern not found")
@@ -108,10 +111,12 @@ def delete_pattern(pattern_id: int, session: Session = Depends(get_session), use
 
 
 @router.post("/test")
-def test_pattern(data: PatternCreate, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def test_pattern(
+    data: PatternCreate,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+):
     """Test a pattern against sample text."""
-    if not _is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin only")
     from features.timetable.reinforcement import get_reinforcement_model
     model = get_reinforcement_model()
     model.load_from_db(session)

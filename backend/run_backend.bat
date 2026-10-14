@@ -1,0 +1,3 @@
+@echo off
+set PYTHONPATH=C:\Users\Appex\Documents\Default Project\CampusPilot\backend
+C:\Users\Appex\Documents\Default Project\CampusPilot\backend\venv\Scripts\python.exe -m uvicorn app.main:app --port 8000 --reload

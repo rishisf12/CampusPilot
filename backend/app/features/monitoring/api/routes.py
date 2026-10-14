@@ -442,7 +442,7 @@ def feedback_analysis(
 ):
     days = max(1, min(days, 365))
     start, end = _window(days)
-    from features.monitoring.feedback_analysis import analyse
+    from features.monitoring.services.feedback_analysis import analyse
     return analyse(session, start, end)
 
 
@@ -835,13 +835,66 @@ def export_subsection(
     _admin=Depends(get_current_admin),
 ):
     """Export raw data for one subsection (JSON or CSV)."""
-    valid_ids = {s["id"] for s in SUBSECTIONS}
-    if subsection not in valid_ids:
+    valid = {s["id"]: s for s in SUBSECTIONS}
+    if subsection not in valid:
         raise HTTPException(status_code=404, detail=f"Unknown subsection: {subsection}")
+    meta = valid[subsection]
+    platform = meta["platform"]
+    days = max(1, min(days, 365))
+    start, end = _window(days)
 
-    # TODO: Implement CSV export
-    if format == "csv":
-        raise HTTPException(status_code=501, detail="CSV export not yet implemented")
+    kind = subsection.split("_")[0]  # A, B, C, D
+    if kind == "A":
+        payload: dict[str, Any] = queries.health_detail(session, start, end, platform)
+    elif kind == "B":
+        payload = {
+            "activity": queries.activity_detail(session, start, end, platform),
+            "monetisation": queries.monetisation_detail(
+                session, start, end, start - timedelta(days=days), start, platform
+            ),
+        }
+    elif kind == "C":
+        payload = queries.security_detail(session, start, end, platform)
+    else:
+        from features.monitoring.services.feedback_analysis import analyse
 
-    # For now, return a summary
-    return {"message": f"Export for {subsection} not yet implemented"}
+        payload = analyse(session, start, end)
+
+    envelope = {
+        "subsection": subsection,
+        "platform": platform,
+        "window": {"start": start.isoformat(), "end": end.isoformat(), "days": days},
+        "data": payload,
+    }
+    if format == "json":
+        return envelope
+
+    import csv
+    import io
+
+    flat: dict[str, Any] = {}
+
+    def _flatten(prefix: str, value: Any) -> None:
+        if isinstance(value, dict):
+            for k, v in value.items():
+                _flatten(f"{prefix}.{k}" if prefix else str(k), v)
+        elif isinstance(value, (list, tuple)):
+            flat[prefix] = f"list[{len(value)}]"
+        elif value is None or isinstance(value, (str, int, float, bool)):
+            flat[prefix] = value
+        else:
+            flat[prefix] = str(value)
+
+    _flatten("", payload)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["metric", "value"])
+    for k in sorted(flat):
+        writer.writerow([k, flat[k]])
+    from fastapi.responses import PlainTextResponse
+
+    return PlainTextResponse(
+        buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{subsection}_{days}d.csv"'},
+    )

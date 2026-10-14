@@ -201,12 +201,42 @@ export function ProfileIcon({ className = 'w-12 h-12' }) {
   );
 }
 
+/** Monitoring: a chart/bar icon for monitoring sections. */
+export function MonitoringIcon({ className = 'w-12 h-12' }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 3v18h18" />
+      <path d="M7 16l4-4 4 4 6-6" />
+    </svg>
+  );
+}
+
+/** Important: an alert/exclamation icon. */
+export function ImportantIcon({ className = 'w-12 h-12' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+    </svg>
+  );
+}
+
 /** Section id -> icon, so App.jsx can stay a plain map over its section list. */
 export const SECTION_ICONS = {
   classroom: ClassroomIcon,
   'my-team': MyTeamIcon,
   feedback: FeedbackIcon,
   profile: ProfileIcon,
+  monitoring: MonitoringIcon,
+  important: ImportantIcon,
 };
 
 /** Section id -> label, kept for tooltips and accessible names. */

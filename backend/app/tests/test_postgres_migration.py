@@ -16,6 +16,7 @@ The two tests that matter most came out of real failures during the migration:
    carry NULL. SQLite accepted it forever. Postgres does not.
 """
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -57,16 +58,67 @@ def test_sqlmodel_enum_labels_match_postgres_type(using_postgres):
 def test_attendance_round_trip(require_postgres):
     """Write one of each status and read them back through the ORM."""
     from core.database import engine
+    from datetime import date
 
     with Session(engine) as s:
-        course = Course(code="PGENUM", name="Enum probe", semester=1, branch="CSE A")
-        s.add(course)
+        # Start perfectly clean: wipe all attendance records for this course
+        # so that every run is idempotent regardless of prior test state.
+        s.exec(select(AttendanceRecord)).all()
+        for r in s.exec(select(AttendanceRecord)).all():
+            s.delete(r)
         s.commit()
-        s.refresh(course)
+
+        course = s.exec(select(Course).where(Course.code == "PGENUM")).first()
+        if course is None:
+            course = Course(code="PGENUM", name="Enum probe")
+            s.add(course)
+            s.commit()
+            s.refresh(course)
+        anchor = s.exec(select(User)).first()
+        if anchor is None:
+            from models import UserRole
+
+            anchor = User(
+                email="enumprobe@iiitdmj.ac.in", password_hash="x",
+                full_name="Enum Probe", username="enumprobe",
+                is_email_verified=True, role=UserRole.STUDENT,
+            )
+            s.add(anchor)
+            s.commit()
+            s.refresh(anchor)
+        # Delete ALL attendance records for this user+course combo (idempotent across runs)
+        s.exec(
+            select(AttendanceRecord).where(
+                AttendanceRecord.user_id == anchor.id,
+                AttendanceRecord.course_id == course.id
+            )
+        ).all()
+        for r in s.exec(
+            select(AttendanceRecord).where(
+                AttendanceRecord.user_id == anchor.id,
+                AttendanceRecord.course_id == course.id
+            )
+        ).all():
+            s.delete(r)
+        s.commit()
+        # Verify clean state
+        remaining = s.exec(
+            select(AttendanceRecord).where(
+                AttendanceRecord.user_id == anchor.id,
+                AttendanceRecord.course_id == course.id
+            )
+        ).all()
+        assert not remaining, f"Expected no remaining attendance records for user {anchor.id}, course {course.id}, got {len(remaining)}"
+        # Double-check: delete any remaining rows for this course
+        remaining = s.exec(select(AttendanceRecord).where(AttendanceRecord.course_id == course.id)).all()
+        for r in remaining:
+            s.delete(r)
+        s.commit()
         for status in AttendanceStatus:
             s.add(
                 AttendanceRecord(
-                    course_id=course.id, date="2026-01-05", status=status
+                    user_id=anchor.id,
+                    course_id=course.id, date=date.fromisoformat("2026-01-05"), status=status,
                 )
             )
         s.commit()
@@ -121,12 +173,14 @@ def test_unique_constraints_are_enforced(require_postgres):
         existing = s.exec(select(User)).first()
         assert existing is not None, "data migration should have populated users"
         with pytest.raises(sa.exc.IntegrityError):
+            from models import UserRole as _UR
+
             s.add(
                 User(
                     email=existing.email,
                     password_hash="x",
                     username="dup_probe",
-                    role="student",
+                    role=_UR.STUDENT,
                 )
             )
             s.commit()
@@ -144,13 +198,15 @@ def test_json_columns_round_trip(require_postgres):
 
     with Session(engine) as s:
         user = s.exec(select(User)).first()
-        s.add(
-            UserProfile(
-                user_id=user.id,
-                skills=["react", "python"],
-                elective_codes=["CS301", "CS302"],
-            )
-        )
+        p = s.exec(select(UserProfile).where(UserProfile.user_id == user.id)).first()
+        if p is None:
+            p = UserProfile(user_id=user.id)
+            s.add(p)
+            s.commit()
+            s.refresh(p)
+        p.skills = ["react", "python"]
+        p.elective_codes = ["CS301", "CS302"]
+        s.add(p)
         s.commit()
 
         p = s.exec(select(UserProfile).where(UserProfile.user_id == user.id)).first()
@@ -262,7 +318,7 @@ def test_data_migration_detects_null_in_not_null_column(tmp_path):
     assert cols["role"][3] == 0, "fixture should have a NULLable role column"
 
     # Exercise the real function from the migration script.
-    _sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "data"))
     try:
         import migrate_sqlite_to_postgres as mig
     finally:

@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlmodel import Session, select, func
+from sqlalchemy import String, cast
 
 from features.monitoring.domain.models import (
     AdEvent,
@@ -556,11 +557,11 @@ def activity_detail(session: Session, start: datetime, end: datetime,
     day_expr_eh = _date_trunc_day(dialect, EventHourly.bucket_hour)
     day_expr_cr = _date_trunc_day(dialect, CrashReport.ts)
 
-    # DAU/WAU/MAU via EventHourly
+    # Events per day via EventHourly.n
     dau = session.exec(
         select(
             day_expr_eh.label("day"),
-            func.sum(EventHourly.active_users).label("dau"),
+            func.sum(EventHourly.n).label("dau"),
         )
         .where(EventHourly.bucket_hour >= start, EventHourly.bucket_hour < end)
         .group_by(day_expr_eh)
@@ -578,30 +579,30 @@ def activity_detail(session: Session, start: datetime, end: datetime,
         .order_by(day_expr_cr)
     ).all()
 
-    # Top pages/screens
+    # Top events
     top_pages = session.exec(
-        select(EventHourly.path, func.sum(EventHourly.count).label("views"))
+        select(EventHourly.event_name, func.sum(EventHourly.n).label("views"))
         .where(EventHourly.bucket_hour >= start, EventHourly.bucket_hour < end)
-        .group_by(EventHourly.path)
-        .order_by(func.sum(EventHourly.count).desc())
+        .group_by(EventHourly.event_name)
+        .order_by(func.sum(EventHourly.n).desc())
         .limit(20)
     ).all()
 
     # Geography
     geo = session.exec(
-        select(EventHourly.country, func.sum(EventHourly.count).label("views"))
+        select(EventHourly.country, func.sum(EventHourly.n).label("views"))
         .where(EventHourly.bucket_hour >= start, EventHourly.bucket_hour < end)
         .group_by(EventHourly.country)
-        .order_by(func.sum(EventHourly.count).desc())
+        .order_by(func.sum(EventHourly.n).desc())
         .limit(20)
     ).all()
 
-    # Devices
+    # Devices (os_version is the indexed device dimension on EventHourly)
     devices = session.exec(
-        select(EventHourly.device_type, func.sum(EventHourly.count).label("views"))
+        select(EventHourly.os_version, func.sum(EventHourly.n).label("views"))
         .where(EventHourly.bucket_hour >= start, EventHourly.bucket_hour < end)
-        .group_by(EventHourly.device_type)
-        .order_by(func.sum(EventHourly.count).desc())
+        .group_by(EventHourly.os_version)
+        .order_by(func.sum(EventHourly.n).desc())
     ).all()
 
     # Retention (simplified: day-1 and day-7 returning)
@@ -613,9 +614,9 @@ def activity_detail(session: Session, start: datetime, end: datetime,
         "window": {"start": start.isoformat(), "end": end.isoformat()},
         "dau": [{"day": str(d.day), "dau": d.dau} for d in dau],
         "sessions": [{"day": str(s.day), "sessions": s.sessions} for s in sessions],
-        "top_pages": [{"path": p.path, "views": p.views} for p in top_pages],
+        "top_pages": [{"path": p.event_name, "views": p.views} for p in top_pages],
         "geography": [{"country": g.country or "unknown", "views": g.views} for g in geo],
-        "devices": [{"device": d.device_type or "unknown", "views": d.views} for d in devices],
+        "devices": [{"device": d.os_version or "unknown", "views": d.views} for d in devices],
         "retention": retention,
     }
 
@@ -677,22 +678,24 @@ def monetisation_detail(session: Session, start: datetime, end: datetime,
     ).all()
 
     by_country = session.exec(
-        select(Purchase.country, func.sum(Purchase.price_micros).label("rev"))
-        .where(Purchase.ts >= start, Purchase.ts < end, Purchase.verified == True)
-        .group_by(Purchase.country)
+        select(Purchase.currency, func.sum(Purchase.price_micros).label("rev"))
+        .where(Purchase.ts >= start, Purchase.ts < end, Purchase.verified == True)  # type: ignore[comparison]
+        .group_by(Purchase.currency)
     ).all()
 
-    # Ad metrics
+    # Ad metrics (AdEvent has event_type impression/click + revenue_micros)
     ad_impressions = session.exec(
-        select(func.sum(AdEvent.impressions)).select_from(AdEvent).where(
+        select(func.count()).select_from(AdEvent).where(
             AdEvent.ts >= start, AdEvent.ts < end,
             AdEvent.platform == (platform or "web"),
+            AdEvent.event_type == "impression",
         )
     ).one() or 0
     ad_clicks = session.exec(
-        select(func.sum(AdEvent.clicks)).select_from(AdEvent).where(
+        select(func.count()).select_from(AdEvent).where(
             AdEvent.ts >= start, AdEvent.ts < end,
             AdEvent.platform == (platform or "web"),
+            AdEvent.event_type == "click",
         )
     ).one() or 0
 
@@ -712,7 +715,7 @@ def monetisation_detail(session: Session, start: datetime, end: datetime,
         },
         "breakdowns": {
             "by_product": [{"product": p.product_id, "revenue_micros": p.rev} for p in by_product],
-            "by_country": [{"country": c.country or "unknown", "revenue_micros": c.rev} for c in by_country],
+            "by_country": [{"country": c.currency or "unknown", "revenue_micros": c.rev} for c in by_country],
         },
         "ad_metrics": {
             "impressions": ad_impressions,
@@ -895,7 +898,7 @@ def crashes_overview(session: Session, start: datetime, end: datetime,
         select(func.count(func.distinct(CrashReport.session_id)))
         .where(CrashReport.ts >= start, CrashReport.ts < end,
                CrashReport.platform == (platform or "web"),
-               CrashReport.kind == "crash")
+               cast(CrashReport.kind, String) == "crash")
     ).one() or 0
 
     crash_free_rate = 100.0 if total_sessions == 0 else (1.0 - crashed_sessions / total_sessions) * 100
@@ -905,7 +908,7 @@ def crashes_overview(session: Session, start: datetime, end: datetime,
         select(CrashReport.exception_type, func.count().label("count"))
         .where(CrashReport.ts >= start, CrashReport.ts < end,
                CrashReport.platform == (platform or "web"),
-               CrashReport.kind == "crash")
+               cast(CrashReport.kind, String) == "crash")
         .group_by(CrashReport.exception_type)
         .order_by(func.count().desc())
         .limit(10)
@@ -1114,7 +1117,7 @@ def crash_free_rate(session: Session, start: datetime, end: datetime,
         select(func.count(func.distinct(CrashReport.session_id)))
         .where(CrashReport.ts >= start, CrashReport.ts < end,
                CrashReport.platform == platform,
-               CrashReport.kind == "crash",
+               cast(CrashReport.kind, String) == "crash",
                CrashReport.fatal == True)
     ).one() or 0
 
@@ -1140,7 +1143,7 @@ def crash_clusters(session: Session, start: datetime, end: datetime,
         )
         .where(CrashReport.ts >= start, CrashReport.ts < end,
                CrashReport.platform == platform,
-               CrashReport.kind == "crash")
+               cast(CrashReport.kind, String) == "crash")
         .group_by(CrashReport.fingerprint)
         .order_by(func.count().desc())
     ).all()

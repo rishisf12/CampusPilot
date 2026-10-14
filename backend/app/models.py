@@ -2,7 +2,7 @@
 from datetime import date, time, datetime
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON
-from sqlalchemy import Date, DateTime, UniqueConstraint, func, Enum as SAEnum
+from sqlalchemy import Date, DateTime, UniqueConstraint, func, Enum as SAEnum, Integer, ForeignKey
 from enum import Enum
 
 
@@ -99,14 +99,28 @@ class Branch(SQLModel, table=True):
     is_active: bool = Field(default=True)
 
 
+class AcademicTerm(SQLModel, table=True):
+    """Academic term (e.g. 2025-26 Sem 1)."""
+
+    __tablename__ = "academic_term"
+    __table_args__ = {"schema": "academic"}
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    academic_year: str
+    term_number: int = 1
+    start_date: Optional[date] = Field(default=None)
+    end_date: Optional[date] = Field(default=None)
+    is_current: bool = Field(default=False)
+
+
 class CourseOffering(SQLModel, table=True):
     """A course as offered in a specific term to a specific branch."""
     __tablename__ = "course_offering"
     __table_args__ = {"schema": "academic"}
     id: Optional[int] = Field(default=None, primary_key=True)
-    course_id: int = Field(foreign_key="academic.course.id", index=True, ondelete="CASCADE")
-    term_id: int = Field(foreign_key="academic.academic_term.id", index=True, ondelete="CASCADE")
-    branch_id: int = Field(foreign_key="academic.branch.id", index=True, ondelete="CASCADE")
+    course_id: int = Field(sa_column=Column(Integer, ForeignKey("academic.course.id", ondelete="CASCADE"), index=True))
+    term_id: int = Field(sa_column=Column(Integer, ForeignKey("academic.academic_term.id", ondelete="CASCADE"), index=True))
+    branch_id: int = Field(sa_column=Column(Integer, ForeignKey("academic.branch.id", ondelete="CASCADE"), index=True))
     semester: int
     section: Optional[str] = Field(default=None, index=True)
     instructor: Optional[str] = None
@@ -122,8 +136,8 @@ class TimetableSlotBranch(SQLModel, table=True):
         {"schema": "academic"},
     )
     id: Optional[int] = Field(default=None, primary_key=True)
-    slot_id: int = Field(foreign_key="academic.timetable_slot.id", index=True, ondelete="CASCADE")
-    branch_id: int = Field(foreign_key="academic.branch.id", index=True, ondelete="CASCADE")
+    slot_id: int = Field(foreign_key="academic.timetable_slot.id", index=True)
+    branch_id: int = Field(foreign_key="academic.branch.id", index=True)
 
 
 class AttendanceRecord(SQLModel, table=True):
@@ -154,11 +168,10 @@ class TimetableSlot(SQLModel, table=True):
     #: Faculty initials or short name, when the source lists one.
     instructor: Optional[str] = Field(default=None)
     branch_or_program: str
-    semester: int
+    semester: Optional[int] = Field(default=None, index=True)
     offering_id: Optional[int] = Field(
         default=None,
         foreign_key="academic.course_offering.id",
-        ondelete="SET NULL",
     )
 
 
@@ -188,8 +201,8 @@ class User(SQLModel, table=True):
     #: promotes an account with ``tools/make_admin.py``. Student signup never
     #: sets this, so it cannot be self-granted.
     role: UserRole = Field(
-        default="student",
-        sa_column=Column("role", SAEnum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]), index=True)
+        default=UserRole.STUDENT,
+        sa_column=Column("role", SAEnum(UserRole, name="user_role", native_enum=True, values_callable=lambda x: [e.value for e in x]), nullable=False, default="student", index=True)
     )
     #:
     #: When the password last changed. A reset stamps this, and any session token

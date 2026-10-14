@@ -248,12 +248,12 @@ def _collect_c_a_security_data(session: Session, start: datetime, end: datetime,
 
 
 def _collect_d_w_feedback_data(session: Session, start: datetime, end: datetime, platform: str) -> dict[str, Any]:
-    from features.monitoring.feedback_analysis import analyse
+    from features.monitoring.services.feedback_analysis import analyse
     return analyse(session, start, end)
 
 
 def _collect_b_w_activity_data(session: Session, start: datetime, end: datetime, platform: str) -> dict[str, Any]:
-    from features.monitoring.queries import active_users
+    from features.monitoring.services.queries import active_users
     prev_start = start - (end - start)
     dau_now = active_users(session, start, end, platform)
     dau_prev = active_users(session, prev_start, start, platform)

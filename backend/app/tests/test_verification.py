@@ -30,8 +30,9 @@ from features.auth import signup as svc
 ALLOWED = get_settings().ALLOWED_EMAIL_DOMAIN
 
 #: Every test needs its own identity: email, username and roll are all unique
-#: columns, so reusing them would fail the duplicate checks.
-_counter = iter(range(1, 500))
+#: columns, so reusing them would fail the duplicate checks. The base is
+#: random per session so re-runs don't collide with previous sessions' rows.
+_counter = iter(range(__import__("random").randint(10000, 900000), 1000000))
 
 
 def make_signup(**overrides):

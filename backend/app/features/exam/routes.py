@@ -12,7 +12,7 @@ from sqlmodel import Session, delete, select
 
 from core.database import get_session
 from models import ExamSeating, ExamUpload, MidSemSchedule, User
-from core.deps import get_current_user
+from core.deps import get_current_admin, get_current_user
 from features.exam.clash import (
     clash_summary,
     collect_student_exams,
@@ -70,7 +70,7 @@ def _record_upload(session: Session, kind: str, saved_path: Path, original_name:
 async def upload_seating_index(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     """
     Upload the seating-index PDF/CSV.
@@ -111,7 +111,7 @@ async def upload_seating_index(
 async def upload_exam_seating_legacy(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     """Backwards-compatible alias of :func:`upload_seating_index`."""
     return await upload_seating_index(file=file, session=session, _=_)
@@ -125,7 +125,7 @@ async def upload_exam_seating_legacy(
 async def upload_mid_sem_timetable(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     """Upload the mid-sem exam timetable PDF/CSV into ``MidSemSchedule``."""
     saved_path, is_csv = _upload_meta(file)
@@ -528,7 +528,7 @@ def preview_exam_upload(
 @router.delete("/timetable", status_code=204)
 def clear_exam_timetable(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     session.exec(delete(MidSemSchedule))
     session.exec(delete(ExamUpload).where(ExamUpload.kind == "timetable"))
@@ -539,7 +539,7 @@ def clear_exam_timetable(
 @router.delete("/seating", status_code=204)
 def clear_exam_seating(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_admin),
 ):
     session.exec(delete(ExamSeating))
     session.exec(delete(ExamUpload).where(ExamUpload.kind == "seating"))
@@ -548,7 +548,10 @@ def clear_exam_seating(
 
 
 @router.post("/debug/parse-exam")
-async def debug_parse_exam(file: UploadFile = File(...)):
+async def debug_parse_exam(
+    file: UploadFile = File(...),
+    _: User = Depends(get_current_admin),
+):
     """Return the raw extraction alongside the parse result, for troubleshooting."""
     validate_upload(file, "exam PDF/CSV")
     saved_path = save_upload(file, "debug_exam")

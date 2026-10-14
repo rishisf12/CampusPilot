@@ -3,11 +3,11 @@ from passlib.hash import sha256_crypt
 from datetime import datetime
 import os
 
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+psycopg://campuspilot:campuspilot@postgres:5432/campuspilot')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+psycopg://campuspilot:campuspilot@localhost:5432/campuspilot')
 engine = create_engine(DATABASE_URL)
 
 with Session(engine) as session:
-    from models import User, UserProfile
+    from app.models import User, UserProfile
     
     # Check if ME test user exists
     existing = session.exec(select(User).where(User.username == 'metest')).first()

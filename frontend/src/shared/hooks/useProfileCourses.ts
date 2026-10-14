@@ -11,6 +11,21 @@ import {
 } from '../lib/normalise';
 import type { TimetableSlot } from '../types/api';
 
+/**
+ * Check if a branch string has a specific section (e.g., "CSE-A", "CSE-B", "DS-E1")
+ * Returns the specific section if found, otherwise undefined.
+ */
+function getSpecificSection(branch: string): string | undefined {
+  if (!branch) return undefined;
+  // Match patterns like "CSE-A", "CSE-B", "DS-E1", "DS-E2", etc.
+  // Pattern: branch code + space/hyphen + section letter/number
+  const match = branch.match(/^([A-Z]{2,4})[\s-]+([A-Z]\d?)$/i);
+  if (match) {
+    return match[0].toUpperCase().replace(/\s+/g, '-');
+  }
+  return undefined;
+}
+
 interface ProfileCourseResult {
   /** Row id from the timetable slot; kept through the split and filter. */
   id: number;
@@ -95,8 +110,32 @@ export default function useProfileCourses(
         // Electives are NOT branch-specific — show only if student opted in
         branchOk = inProfile;
       } else if (studentFamily) {
-        // Core course: only show if course prefix matches student's branch family
-        branchOk = courseBelongsToBranch(code, branch);
+        // Core course: check if course prefix matches student's branch family
+        const courseMatchesFamily = courseBelongsToBranch(code, branch);
+
+        // Also check if the slot's specific section matches student's specific section
+        const slotBranch = slot.branch_or_program;
+        const studentBranch = branch;
+
+        // Check for specific sections directly in the branch strings
+        const slotSpecificSection = getSpecificSection(slotBranch);
+        const studentSpecificSection = getSpecificSection(studentBranch);
+
+        if (slotSpecificSection && studentSpecificSection) {
+          // Both have specific sections - must match exactly
+          branchOk = slotSpecificSection === studentSpecificSection;
+        } else if (slotSpecificSection && !studentSpecificSection) {
+          // Slot has specific section but student doesn't - show only if student's family matches
+          const slotFamily = branchFamily(slotBranch);
+          branchOk = slotFamily === branchFamily(studentBranch);
+        } else if (!slotSpecificSection && studentSpecificSection) {
+          // Student has specific section but slot doesn't - show if generic branch matches
+          const slotFamily = branchFamily(slotBranch);
+          branchOk = slotFamily === branchFamily(studentBranch);
+        } else {
+          // Neither has specific section - fall back to course family match
+          branchOk = courseMatchesFamily;
+        }
       } else {
         // No student family (shouldn't happen for signed-up users): fall back to slot branch
         branchOk = !slotBranch || branchFamilies.includes(studentFamily);

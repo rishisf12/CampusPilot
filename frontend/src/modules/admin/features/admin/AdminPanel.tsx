@@ -2,6 +2,9 @@ import { useEffect, useState, ChangeEvent } from 'react';
 import { feedbackApi } from '@/api';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import ReinforcementPatterns from './ReinforcementPatterns';
+import Users from './Users';
+import DataManager from './DataManager';
+import TeamsManager from './TeamsManager';
 
 interface FeedbackResponse {
   id: number;
@@ -32,7 +35,7 @@ interface AdminPanelProps {
  * feedback entry.
  */
 export default function AdminPanel({ onError }: AdminPanelProps) {
-  const [tab, setTab] = useState<'feedback' | 'patterns'>('feedback');
+  const [tab, setTab] = useState<'feedback' | 'patterns' | 'users' | 'data' | 'teams'>('feedback');
   const [items, setItems] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +112,39 @@ export default function AdminPanel({ onError }: AdminPanelProps) {
           }`}
         >
           Reinforcement Patterns
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('users')}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+            tab === 'users'
+              ? 'bg-primary-50 text-primary-600'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          }`}
+        >
+          Users
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('data')}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+            tab === 'data'
+              ? 'bg-primary-50 text-primary-600'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          }`}
+        >
+          Data
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('teams')}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+            tab === 'teams'
+              ? 'bg-primary-50 text-primary-600'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          }`}
+        >
+          Teams
         </button>
       </div>
 
@@ -193,6 +229,12 @@ export default function AdminPanel({ onError }: AdminPanelProps) {
       )}
 
       {tab === 'patterns' && <ReinforcementPatterns onError={(msg: string) => setError(msg)} />}
+
+      {tab === 'users' && <Users onError={(msg: string) => setError(msg)} />}
+
+      {tab === 'data' && <DataManager onError={(msg: string) => setError(msg)} />}
+
+      {tab === 'teams' && <TeamsManager onError={(msg: string) => setError(msg)} />}
     </div>
   );
 }

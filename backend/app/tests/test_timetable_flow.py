@@ -15,7 +15,7 @@ from sqlmodel import Session, delete, select
 # The database URL is set by tests/conftest.py before any import of the app.
 from core.database import create_db_and_tables, engine
 from main import app
-from models import Course, TimetableSlot, User, UserProfile
+from models import Course, TimetableSlot, User, UserProfile, UserRole
 from features.auth.routes import create_access_token
 
 TIMETABLE_CSV = """day,start_time,end_time,room,course_code,branch_or_program,semester
@@ -32,16 +32,38 @@ Wednesday,10:00,11:00,L-102,SM2002,BTech SM,5
 def context():
     create_db_and_tables()
     with Session(engine) as session:
-        user = User(
-            email="timetable@iiitdmj.ac.in", password_hash="x", full_name="TT Student",
-            username="ttuser", roll_number="23BCS060", is_email_verified=True,
-        )
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-        session.add(UserProfile(user_id=user.id, programme="BTech", semester=5, branch="CSE A"))
+        user = session.exec(select(User).where(User.username == "ttuser")).first()
+        if user is None:
+            user = User(
+                email="timetable@iiitdmj.ac.in", password_hash="x", full_name="TT Student",
+                username="ttuser", roll_number="23BCS060", is_email_verified=True,
+                role=UserRole.ADMIN,
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+        else:
+            # Uploads are admin-only; the pipeline tests exercise them as admin.
+            user.role = UserRole.ADMIN
+            session.add(user)
+            session.commit()
+        if (
+            session.exec(select(UserProfile).where(UserProfile.user_id == user.id)).first()
+            is None
+        ):
+            session.add(UserProfile(user_id=user.id, programme="BTech", semester=5, branch="CSE A"))
+            session.commit()
         # Own the codes used here so other fixtures cannot interfere.
+        # Attendance rows reference courses, so they go first.
+        from models import AttendanceRecord as _AR
+
         session.exec(delete(TimetableSlot))
+        for _c in session.exec(
+            select(Course).where(Course.code.in_(["CS5031", "ME5011", "CS5032",
+                                                  "OE3E33", "SM2002"]))
+        ).all():
+            for _r in session.exec(select(_AR).where(_AR.course_id == _c.id)).all():
+                session.delete(_r)
         session.exec(delete(Course).where(Course.code.in_(["CS5031", "ME5011", "CS5032",
                                                            "OE3E33", "SM2002"])))
         session.commit()

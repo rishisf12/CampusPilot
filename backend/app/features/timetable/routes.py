@@ -12,7 +12,7 @@ from sqlmodel import Session, delete, select
 
 from core.database import get_session
 from models import TimetableSlot, TimetableUpload, User
-from core.deps import get_current_user
+from core.deps import get_current_admin, get_current_user
 from features.attendance.service import sync_courses_from_timetable
 from features.exam.parser import normalize_branch
 from features.timetable.parser import parse_timetable_file
@@ -49,17 +49,19 @@ class SlotResponse(BaseModel):
 @router.post("/upload")
 async def upload_timetable(
     file: UploadFile = File(...),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
 ):
     """
-    Upload master timetable PDF or CSV.
+    Upload master timetable PDF, CSV, or Excel (list format).
     Parses and stores all slots in TimetableSlot.
     Returns parse report.
     """
-    validate_upload(file, "master timetable PDF/CSV")
+    validate_upload(file, "master timetable PDF/CSV/Excel")
     saved_path = save_upload(file, "timetable")
 
     is_csv = saved_path.suffix.lower() == ".csv"
+    is_excel = saved_path.suffix.lower() == ".xlsx"
     try:
         result = parse_timetable_file(saved_path, is_csv=is_csv)
     except Exception as e:
@@ -84,15 +86,10 @@ async def upload_timetable(
     inserted = 0
     for slot_data in result["slots"]:
         slot = TimetableSlot(**slot_data)
-        if slot.course_code == 'NS1002':
-            print(f"UPLOAD DEBUG NS1002: Adding slot: day={slot.day} start={slot.start_time} end={slot.end_time} course={slot.course_code} branch={slot.branch_or_program} room={slot.room} instructor={slot.instructor} sem={slot.semester}")
-        if '3010' in slot.course_code and slot.branch_or_program == 'ME':
-            print(f"UPLOAD DEBUG: Adding slot: day={slot.day} start={slot.start_time} course={slot.course_code} branch={slot.branch_or_program} sem={slot.semester}")
         session.add(slot)
         inserted += 1
 
     session.commit()
-    print(f"UPLOAD DEBUG: Committed {inserted} slots")
 
     # Attendance is driven by the timetable, so refresh the course list now.
     new_courses = sync_courses_from_timetable(session)
@@ -122,15 +119,17 @@ async def upload_timetable(
 @router.post("/debug/parse-timetable")
 async def debug_parse_timetable(
     file: UploadFile = File(...),
+    _: User = Depends(get_current_admin),
 ):
     """
     DEBUG: Returns RAW extracted tables/text per page AND the parsed result.
     Use this to see exactly where parsing fails.
     """
-    validate_upload(file, "master timetable PDF/CSV")
+    validate_upload(file, "master timetable PDF/CSV/Excel")
     saved_path = save_upload(file, "debug_timetable")
 
     is_csv = saved_path.suffix.lower() == ".csv"
+    is_excel = saved_path.suffix.lower() == ".xlsx"
     if is_csv:
         import csv
         with saved_path.open(newline="", encoding="utf-8") as f:
@@ -140,6 +139,23 @@ async def debug_parse_timetable(
             "file_type": "csv",
             "raw_rows": rows,
             "parsed_result": parse_timetable_file(saved_path, is_csv=True),
+        }
+
+    if is_excel:
+        import openpyxl
+        wb = openpyxl.load_workbook(saved_path, read_only=True)
+        sheets_info = {}
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                rows.append([str(v) if v is not None else "" for v in row])
+            sheets_info[sheet_name] = {"rows": rows[:50], "total_rows": ws.max_row}
+        wb.close()
+        return {
+            "file_type": "excel",
+            "sheets": sheets_info,
+            "parsed_result": parse_timetable_file(saved_path),
         }
 
     # PDF: return raw tables AND raw text
@@ -166,7 +182,10 @@ async def debug_parse_timetable(
 
 
 @router.get("/options")
-def timetable_options(session: Session = Depends(get_session)):
+def timetable_options(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),
+):
     """
     Branch / semester / course options discovered in the uploaded timetable.
 
@@ -195,7 +214,10 @@ def timetable_options(session: Session = Depends(get_session)):
 
 
 @router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
-def clear_timetable(session: Session = Depends(get_session)):
+def clear_timetable(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+):
     """Clear all timetable slots."""
     session.exec(delete(TimetableSlot))
     session.exec(delete(TimetableUpload))
@@ -278,7 +300,12 @@ def preview_timetable_upload(
 
 
 @router.put("/slot/{slot_id}", response_model=SlotResponse)
-def edit_slot(slot_id: int, payload: SlotEdit, session: Session = Depends(get_session)):
+def edit_slot(
+    slot_id: int,
+    payload: SlotEdit,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+):
     """Edit a weekly timetable slot."""
     slot = session.get(TimetableSlot, slot_id)
     if not slot:
@@ -303,7 +330,10 @@ def edit_slot(slot_id: int, payload: SlotEdit, session: Session = Depends(get_se
 
 
 @router.get("/slots", response_model=List[SlotResponse])
-def list_slots(session: Session = Depends(get_session)):
+def list_slots(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),
+):
     """List all timetable slots (for debugging)."""
     slots = session.exec(select(TimetableSlot)).all()
     # `SlotResponse` declares times as strings, so format them explicitly
@@ -318,7 +348,7 @@ def list_slots(session: Session = Depends(get_session)):
             course_code=slot.course_code,
             instructor=slot.instructor,
             branch_or_program=slot.branch_or_program,
-            semester=slot.semester,
+            semester=slot.semester if slot.semester is not None else 0,
         )
         for slot in slots
     ]
