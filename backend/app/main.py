@@ -138,7 +138,6 @@ from features.rooms import routes as rooms
 from features.exam import routes as exam
 from features.auth import routes as auth
 from features.feedback import routes as feedback
-from features.teams import routes as teams
 from features.monitoring.api.routes import collect_router, monitoring_router
 from features.admin import routes as admin_routes
 from ocr import routes as ocr_routes
@@ -151,8 +150,6 @@ app.include_router(profile.router, prefix="/profile", tags=["Profile"])
 app.include_router(rooms.router, prefix="/rooms", tags=["Rooms"])
 app.include_router(exam.router, prefix="/exam", tags=["Exam"])
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
-app.include_router(teams.router, prefix="/teams", tags=["Teams"])
-app.include_router(teams.hackathons_router, prefix="/hackathons", tags=["Hackathons"])
 app.include_router(ocr_routes.router, prefix="/ocr", tags=["OCR Extraction"])
 app.include_router(admin_routes.router, prefix="/admin", tags=["Admin"])
 app.include_router(collect_router)

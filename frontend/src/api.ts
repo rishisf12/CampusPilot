@@ -47,14 +47,6 @@ import type {
   FeedbackSubmit,
   FeedbackResponse,
   FeedbackReply,
-  Team,
-  TeamCreate,
-  TeamDetail,
-  TeamJoinRequest,
-  TeamMatchResult,
-  MyTeam,
-  Hackathon,
-  HackathonFeed,
   MonitoringSubsection,
   ValidationErrorDetail,
   HealthResponse,
@@ -395,63 +387,6 @@ export const roomsApi = {
   all: () => request<string[]>('/rooms/all'),
 };
 
-// -------------------------------------------------------------- teams
-function teamQuery(params: Record<string, unknown> = {}): string {
-  const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') search.append(key, String(value));
-  });
-  const encoded = search.toString();
-  return encoded ? `?${encoded}` : '';
-}
-
-export const teamsApi = {
-  list: (params: Record<string, unknown> = {}) =>
-    request<{
-      pagination: {
-        total: number;
-        page: number;
-        size: number;
-        pages: number;
-        has_next: boolean;
-        has_previous: boolean;
-      };
-      data: Team[];
-    }>(`/teams${teamQuery(params)}`),
-  matches: (params: Record<string, unknown> = {}) =>
-    request<{ matches: TeamMatchResult[] }>(`/teams/match${teamQuery(params)}`),
-  mine: () => request<{ teams: MyTeam[] }>('/teams/mine'),
-  requests: () => request<{ requests: TeamJoinRequest[] }>('/teams/requests'),
-  get: (id: number) => request<TeamDetail>(`/teams/${id}`),
-  create: (data: TeamCreate) => request<Team>('/teams', { method: 'POST', body: data }),
-  update: (id: number, data: Partial<TeamCreate>) =>
-    request<Team>(`/teams/${id}`, { method: 'PUT', body: data }),
-  remove: (id: number) => request<{ message: string }>(`/teams/${id}`, { method: 'DELETE' }),
-  join: (id: number) =>
-    request<{ status?: string; message?: string; detail?: string }>(`/teams/${id}/join`, {
-      method: 'POST',
-    }),
-  leave: (id: number) => request<{ message: string }>(`/teams/${id}/leave`, { method: 'POST' }),
-  respond: (requestId: number, status: 'accepted' | 'rejected') =>
-    request<{ message: string }>(`/teams/requests/${requestId}`, {
-      method: 'PUT',
-      body: { status },
-    }),
-};
-
-// ---------------------------------------------------------- hackathons
-export const hackathonsApi = {
-  list: (params: Record<string, unknown> = {}) =>
-    request<HackathonFeed>(`/hackathons${teamQuery(params)}`),
-  create: (data: Partial<Hackathon>) =>
-    request<Hackathon>('/hackathons', { method: 'POST', body: data }),
-  /** Pull new mail and sweep anything past the retention window. */
-  sync: () =>
-    request<{ ok: boolean; added: number; reason?: string }>('/hackathons/feed/sync', {
-      method: 'POST',
-    }),
-};
-
 // ---------------------------------------------------------- attendance
 // The backend serves subjects/summary/records/course and the sync trigger.
 // The banner, history, per-subject "today" state, calendar and attendance
@@ -534,29 +469,6 @@ export const adminApi = {
     request<AdminUser>(`/admin/users/${id}/role`, { method: 'PATCH', body: { role } }),
   stats: () =>
     request<{ total: number; admins: number; students: number; verified: number }>('/admin/stats'),
-  teams: (params: { search?: string; page?: number; size?: number } = {}) => {
-    const search = new URLSearchParams();
-    if (params.search) search.set('search', params.search);
-    search.set('page', String(params.page ?? 1));
-    search.set('size', String(params.size ?? 20));
-    return request<{
-      total: number;
-      page: number;
-      size: number;
-      teams: Array<{
-        id: number;
-        name: string;
-        description: string;
-        owner_id: number | null;
-        members: number;
-        max_members: number;
-        is_open: boolean;
-        hackathon_id: number | null;
-      }>;
-    }>(`/admin/teams?${search}`);
-  },
-  deleteTeam: (id: number) =>
-    request<{ message: string }>(`/admin/teams/${id}`, { method: 'DELETE' }),
   exportSubsection: (subsection: string, days = 30, format: 'json' | 'csv' = 'json') =>
     request<unknown>(`/monitoring/export/${subsection}?days=${days}&format=${format}`),
 };

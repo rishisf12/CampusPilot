@@ -59,28 +59,3 @@ def admin_stats(
     _: User = Depends(get_current_admin),
 ):
     return service.stats(session)
-
-
-@router.get("/teams")
-def admin_list_teams(
-    search: Optional[str] = None,
-    page: int = 1,
-    size: int = 20,
-    session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
-):
-    page = max(1, page)
-    size = max(1, min(size, 100))
-    teams, total = service.list_teams(session, search, page, size)
-    return {"total": total, "page": page, "size": size, "teams": teams}
-
-
-@router.delete("/teams/{team_id}", status_code=204)
-def admin_delete_team(
-    team_id: int,
-    session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
-):
-    if not service.delete_team_any(session, team_id):
-        raise HTTPException(status_code=404, detail="Team not found")
-    return

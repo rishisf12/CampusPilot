@@ -242,7 +242,7 @@ export const SECTION_ICONS = {
 /** Section id -> label, kept for tooltips and accessible names. */
 export const SECTION_LABELS = {
   classroom: 'Classroom',
-  'my-team': 'Events',
+  'my-team': 'Collaborations',
   important: 'Important',
   feedback: 'Feedback',
   profile: 'Profile',

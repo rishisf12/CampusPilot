@@ -3,7 +3,7 @@ import { useAuth } from '@shared/auth/AuthWrapper';
 import { useProfile } from '@shared/hooks/useProfile';
 import { healthApi } from '@/api';
 import { GROUP_CLASSROOM_TABS, NAV_TABS, programmeGroupOf } from '@shared/constants';
-import { SECTION_LABELS, SECTION_ICONS } from '@shared/components/NavIcons';
+import { SECTION_LABELS } from '@shared/components/NavIcons';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 import { Sidebar } from '@shared/components/Sidebar';
@@ -11,7 +11,6 @@ import { Sidebar } from '@shared/components/Sidebar';
 /** Lazy-loaded features */
 const LiveSchedule = lazy(() => import('./features/schedule/LiveSchedule'));
 const ExamSeating = lazy(() => import('./features/exams/ExamSeating'));
-const Teams = lazy(() => import('./features/teams/Teams'));
 const Feedback = lazy(() => import('./features/feedback/Feedback'));
 const Profile = lazy(() => import('@shared/features/profile/Profile'));
 
@@ -37,23 +36,6 @@ function useBackendStatus() {
   }, []);
   return online;
 }
-
-/** Simple icon for Important section */
-function ImportantIcon({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-    </svg>
-  );
-}
-
-const SECTION_ICON_COMPONENTS = {
-  classroom: SECTION_ICONS.classroom,
-  'my-team': SECTION_ICONS['my-team'],
-  feedback: SECTION_ICONS.feedback,
-  profile: SECTION_ICONS.profile,
-  important: ImportantIcon,
-};
 
 interface NavTab {
   id: string;
@@ -134,20 +116,34 @@ export function StudentPGRoutes() {
               <button
                 type="button"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="w-10 h-10 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors"
+                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                  sidebarOpen
+                    ? 'bg-primary-50 text-primary-600'
+                    : 'bg-gray-50 hover:bg-gray-100 text-gray-600'
+                }`}
                 aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={sidebarOpen}
               >
                 <svg
-                  className="w-6 h-6 text-gray-600"
+                  className="w-6 h-6 transition-transform duration-200"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
+                  strokeLinecap="round"
                 >
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
+                  {sidebarOpen ? (
+                    <>
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </>
+                  ) : (
+                    <>
+                      <line x1="3" y1="12" x2="21" y2="12" />
+                      <line x1="3" y1="6" x2="21" y2="6" />
+                      <line x1="3" y1="18" x2="21" y2="18" />
+                    </>
+                  )}
                 </svg>
               </button>
             </div>
@@ -159,7 +155,6 @@ export function StudentPGRoutes() {
               {(['classroom', 'my-team', 'important', 'feedback'] as const).map(id => {
                 const isActive = section === id;
                 const label = SECTION_LABELS[id];
-                const Icon = SECTION_ICON_COMPONENTS[id];
                 return (
                   <button
                     key={id}
@@ -193,14 +188,13 @@ export function StudentPGRoutes() {
                       }
                     }}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-lg transition-colors flex items-center gap-1.5 ${
+                    className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-lg transition-colors ${
                       isActive
                         ? 'bg-primary-50 text-primary-600'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
-                    <span className="hidden sm:inline">{label}</span>
+                    {label}
                   </button>
                 );
               })}
@@ -286,7 +280,12 @@ export function StudentPGRoutes() {
             </>
           )}
 
-          {section === 'my-team' && <Teams />}
+          {section === 'my-team' && (
+            <div className="text-center py-12 text-gray-500">
+              <p className="text-lg font-medium">Collaborations</p>
+              <p className="mt-2">Content coming soon.</p>
+            </div>
+          )}
 
           {section === 'important' && (
             <div className="text-center py-12 text-gray-500">

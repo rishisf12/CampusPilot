@@ -96,23 +96,38 @@ export function AdminRoutes() {
                 aria-label={online ? 'Backend connected' : 'Backend offline'}
               />
               {/* Sidebar Toggle Button in header */}
+              {/* Sidebar Toggle Button in header */}
               <button
                 type="button"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="w-10 h-10 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors"
+                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                  sidebarOpen
+                    ? 'bg-primary-50 text-primary-600'
+                    : 'bg-gray-50 hover:bg-gray-100 text-gray-600'
+                }`}
                 aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={sidebarOpen}
               >
                 <svg
-                  className="w-6 h-6 text-gray-600"
+                  className="w-6 h-6 transition-transform duration-200"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
+                  strokeLinecap="round"
                 >
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
+                  {sidebarOpen ? (
+                    <>
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </>
+                  ) : (
+                    <>
+                      <line x1="3" y1="12" x2="21" y2="12" />
+                      <line x1="3" y1="6" x2="21" y2="6" />
+                      <line x1="3" y1="18" x2="21" y2="18" />
+                    </>
+                  )}
                 </svg>
               </button>
             </div>
