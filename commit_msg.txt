@@ -1,0 +1,12 @@
+feat: remove Teams/Collaborations feature from frontend and backend
+
+- Frontend: delete all Teams feature files (student-ug, student-pg, admin)
+- Frontend: remove teamsApi/hackathonsApi from api.ts
+- Frontend: replace Teams components with empty Collaborations placeholder
+- Frontend: remove TeamsManager from AdminPanel
+- Backend: delete app/features/teams/ package
+- Backend: unplug /teams and /hackathons routers from main.py
+- Backend: remove admin /teams endpoints from routes.py and service.py
+- UI: Collaborations tab preserved in navbar (empty placeholder for future recreation)
+
+All other features (schedule, attendance, exam, feedback, timetable, etc.) untouched.
