@@ -57,6 +57,17 @@ export function istNow(now = new Date()): IstNowResult {
   };
 }
 
+/** Time-aware greeting in IST ("Good morning" / "Good afternoon" / "Good evening"). */
+export function greetingFor(now = new Date()): string {
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: IST, hour: '2-digit', hour12: false }).format(now)
+  );
+  const h = hour === 24 ? 0 : hour;
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 /** "14:30" -> "2:30 PM". */
 export function formatTime(value: string | undefined | null): string {
   if (!value) return '';

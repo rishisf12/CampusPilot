@@ -9,6 +9,8 @@ import ErrorBanner from '@shared/components/ErrorBanner';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 import { Sidebar } from '@shared/components/Sidebar';
 import { Tabs } from '@/components/ui';
+import ThemeToggle from '@/components/layout/ThemeToggle';
+import { greetingFor } from '@shared/lib/time';
 
 /** Lazy-loaded features */
 const LiveSchedule = lazy(() => import('./features/schedule/LiveSchedule'));
@@ -19,12 +21,16 @@ const Profile = lazy(() => import('@shared/features/profile/Profile'));
 /** Poll the backend so the header dot reflects real connectivity. */
 function useBackendStatus() {
   const [online, setOnline] = useState(false);
+  const [lastSync, setLastSync] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
     const ping = async () => {
       try {
         await healthApi.check();
-        if (!cancelled) setOnline(true);
+        if (!cancelled) {
+          setOnline(true);
+          setLastSync(Date.now());
+        }
       } catch {
         if (!cancelled) setOnline(false);
       }
@@ -36,7 +42,7 @@ function useBackendStatus() {
       clearInterval(timer);
     };
   }, []);
-  return online;
+  return { online, lastSync };
 }
 
 interface NavTab {
@@ -59,8 +65,8 @@ const TAB_META: Record<string, { icon: React.ReactNode; hue: string }> = {
  */
 export function StudentPGRoutes() {
   const { offline } = useAuth();
-  const { programme } = useProfile();
-  const online = useBackendStatus();
+  const { programme, profile } = useProfile();
+  const { online, lastSync } = useBackendStatus();
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [section, setSection] = useState<
     'classroom' | 'my-team' | 'important' | 'feedback' | 'profile'
@@ -80,15 +86,31 @@ export function StudentPGRoutes() {
   const IMPORTANT_TABS = ['academics', 'placement'] as const;
 
   // The bundle this student belongs to decides the classroom tabs.
-  // PG students only get 'live' and 'exam' tabs.
+  // PG students only get 'live' and 'exam' tabs. Chips use the short labels
+  // so nothing wraps on a phone; full labels stay in NAV_TABS.
   const group = programmeGroupOf(programme);
   const CLASSROOM_TABS: NavTab[] = NAV_TABS.filter(item =>
     GROUP_CLASSROOM_TABS[group].includes(item.id)
-  ).map(item => ({ ...item, ...(TAB_META[item.id] ?? {}) }));
+  ).map(item => ({ ...item, label: item.short, ...(TAB_META[item.id] ?? {}) }));
 
   // A reload can carry a tab the bundle does not include (?tab=attendance as
   // a master's student); land on the schedule rather than a blank screen.
   const activeTab = CLASSROOM_TABS.some(item => item.id === tab) ? tab : 'live';
+
+  const firstName = profile?.first_name?.trim();
+  const todayLabel = new Date().toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+  const syncTitle = !online
+    ? 'Backend offline - check your connection'
+    : lastSync == null
+      ? 'Live - checking connection…'
+      : (() => {
+          const mins = Math.max(0, Math.round((Date.now() - lastSync) / 60000));
+          return mins < 1 ? 'Live - synced just now' : `Live - synced ${mins} min ago`;
+        })();
 
   // Keep the tab in the URL so a reload returns to the same view.
   const selectTab = (id: string) => {
@@ -109,8 +131,8 @@ export function StudentPGRoutes() {
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Top row: brand + sidebar toggle + status indicator */}
-          <div className="flex items-center justify-between gap-4 h-16">
+          {/* Top row: brand + greeting + status + theme + menu */}
+          <div className="flex items-center justify-between gap-2 h-16">
             {/* Brand */}
             <div className="flex items-center gap-3 shrink-0">
               <div className="leading-tight">
@@ -121,14 +143,27 @@ export function StudentPGRoutes() {
               </div>
             </div>
 
-            {/* Right side: status indicator + sidebar toggle */}
-            <div className="flex items-center gap-3 shrink-0">
+            {/* Greeting: personal, truncates on narrow screens instead of wrapping */}
+            <div className="flex-1 min-w-0 text-center sm:text-left px-1">
+              <p className="text-sm font-semibold truncate" style={{ color: 'var(--cp-text)' }}>
+                {greetingFor()}
+                {firstName ? `, ${firstName}` : ''}
+              </p>
+              <p className="text-xs truncate" style={{ color: 'var(--cp-muted)' }}>
+                {todayLabel}
+              </p>
+            </div>
+
+            {/* Right side: status indicator + theme toggle + sidebar toggle */}
+            <div className="flex items-center gap-2 shrink-0">
               <span
                 className="w-2.5 h-2.5 rounded-full"
                 style={{ background: online ? 'var(--cp-success)' : 'var(--cp-danger)' }}
-                title={online ? 'Backend connected' : 'Backend offline'}
-                aria-label={online ? 'Backend connected' : 'Backend offline'}
+                title={syncTitle}
+                aria-label={syncTitle}
+                role="status"
               />
+              <ThemeToggle />
               {/* Sidebar Toggle Button in header */}
               <button
                 type="button"

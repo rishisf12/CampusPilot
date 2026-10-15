@@ -92,10 +92,10 @@ export const ALLOWED_EMAIL_DOMAIN = '@iiitdmj.ac.in';
 
 /** Top-level navigation tabs rendered inside the single header. */
 export const NAV_TABS = [
-  { id: 'live', label: 'Live Schedule' },
-  { id: 'attendance', label: 'Attendance' },
-  { id: 'vacant', label: 'Vacant Room Lookup' },
-  { id: 'exam', label: 'Exam' },
+  { id: 'live', label: 'Live Schedule', short: 'Schedule' },
+  { id: 'attendance', label: 'Attendance', short: 'Attendance' },
+  { id: 'vacant', label: 'Vacant Room Lookup', short: 'Free Rooms' },
+  { id: 'exam', label: 'Exam', short: 'Exams' },
 ] as const;
 
 /**

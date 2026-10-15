@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from 'react';
+﻿import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 export interface Tab {
   id: string;
   label: string;
@@ -24,35 +24,108 @@ export default function Tabs({
   active: string;
   onChange: (id: string) => void;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef(new Map<string, HTMLButtonElement>());
+  const lastActiveRef = useRef<string | null>(null);
+  const [indicator, setIndicator] = useState({ left: 0, width: 0, visible: false });
+
+  // Measure the active button so the indicator slides underneath it.
+  // Runs in layout effect so there is no first-paint flash at position 0.
+  // The value-comparison guard matters because parents rebuild the `tabs`
+  // array every render: an unconditional setState here would loop forever.
+  useLayoutEffect(() => {
+    const btn = btnRefs.current.get(active);
+    if (!btn) {
+      setIndicator(prev => (prev.visible ? { ...prev, visible: false } : prev));
+      return;
+    }
+    const left = btn.offsetLeft;
+    const width = btn.offsetWidth;
+    setIndicator(prev =>
+      prev.left === left && prev.width === width && prev.visible
+        ? prev
+        : { left, width, visible: true }
+    );
+    // Scroll only when the active chip itself changes - never on unrelated
+    // re-renders, which would fight the user's own scrolling of the row.
+    if (lastActiveRef.current !== active) {
+      lastActiveRef.current = active;
+      // Keep the active chip in view on small screens without yanking the page.
+      btn.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+    }
+  }, [active]);
+
+  // Re-measure on resize/zoom; the indicator is positioned in pixels.
+  useEffect(() => {
+    const onResize = () => {
+      const btn = btnRefs.current.get(active);
+      if (btn) setIndicator({ left: btn.offsetLeft, width: btn.offsetWidth, visible: true });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [active]);
+
+  // Roving tabindex: arrows move between chips, Tab enters/exits the group.
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const i = tabs.findIndex(t => t.id === active);
+    let next: number | null = null;
+    if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    onChange(tabs[next].id);
+    btnRefs.current.get(tabs[next].id)?.focus();
+  };
+
   return (
     <div
+      ref={listRef}
       role="tablist"
-      className="flex gap-2 p-1.5"
+      onKeyDown={onKeyDown}
+      className="relative flex gap-1 p-1.5 overflow-x-auto scrollbar-thin"
       style={{ borderRadius: 8, background: 'var(--cp-bg)', boxShadow: 'var(--cp-neu-inset)' }}
     >
+      {/* Sliding active indicator. Killed by the global reduced-motion rule. */}
+      <span
+        aria-hidden
+        className="absolute top-1.5 bottom-1.5 transition-all duration-200"
+        style={{
+          left: indicator.left,
+          width: indicator.width,
+          opacity: indicator.visible ? 1 : 0,
+          borderRadius: 6,
+          background: 'var(--cp-primary)',
+          boxShadow: 'var(--cp-clay)',
+        }}
+      />
       {tabs.map(t => {
         const on = t.id === active;
         const hueColor = t.hue && HUE[t.hue] ? HUE[t.hue] : 'currentColor';
         return (
           <button
             key={t.id}
+            ref={el => {
+              if (el) btnRefs.current.set(t.id, el);
+              else btnRefs.current.delete(t.id);
+            }}
             role="tab"
             aria-selected={on}
+            tabIndex={on ? 0 : -1}
             onClick={() => onChange(t.id)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-200"
-            style={
-              on
-                ? {
-                    borderRadius: 6,
-                    background: 'var(--cp-primary)',
-                    color: 'var(--cp-on-primary)',
-                    boxShadow: 'var(--cp-clay)',
-                  }
-                : { borderRadius: 6, background: 'transparent', color: 'var(--cp-muted)' }
-            }
+            className="relative inline-flex items-center justify-center gap-2 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-200"
+            style={{
+              minHeight: 44,
+              borderRadius: 6,
+              color: on ? 'var(--cp-on-primary)' : 'var(--cp-muted)',
+            }}
           >
             {t.icon ? (
-              <span aria-hidden style={{ color: on ? 'var(--cp-on-primary)' : hueColor, display: 'inline-flex' }}>
+              <span
+                aria-hidden
+                style={{ color: on ? 'var(--cp-on-primary)' : hueColor, display: 'inline-flex' }}
+              >
                 {t.icon}
               </span>
             ) : null}
