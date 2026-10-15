@@ -1,7 +1,8 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
+import { Send, Save } from 'lucide-react';
+import { Button, Card, Input } from '@/components/ui';
 import { authApi } from '../../api';
 import ErrorBanner from '../components/ErrorBanner';
-import Spinner from '../components/Spinner';
 
 /**
  * Password reset by emailed code - the fallback when the passkey route does not
@@ -84,7 +85,10 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-12"
+      style={{ background: 'var(--cp-bg)' }}
+    >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
@@ -94,7 +98,7 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
           </p>
         </div>
 
-        <div className="card space-y-4">
+        <Card className="space-y-4">
           {offline && (
             <div className="p-3 rounded-lg border border-warning-200 bg-warning-50 text-warning-700 text-sm">
               Backend offline. Start it with: uvicorn main:app --port 8000
@@ -102,8 +106,10 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
           )}
 
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Reset your password</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+              Reset your password
+            </h2>
+            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
               We will email a code to the address on your account. Use it to set a new password.
             </p>
           </div>
@@ -135,10 +141,9 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
                 <label className="label" htmlFor="reset-identifier">
                   Username or email
                 </label>
-                <input
+                <Input
                   id="reset-identifier"
                   name="identifier"
-                  className="input-field"
                   value={identifier}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     setIdentifier(event.target.value);
@@ -148,9 +153,15 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
                   placeholder="your username"
                 />
               </div>
-              <button type="submit" className="btn-primary w-full" disabled={busy}>
-                {busy ? <Spinner size={18} className="text-white" /> : 'Send reset code'}
-              </button>
+              <Button
+                type="submit"
+                variant="primary"
+                icon={<Send size={18} />}
+                loading={busy}
+                className="w-full"
+              >
+                Send reset code
+              </Button>
             </form>
           ) : (
             <form onSubmit={setNewPassword} className="space-y-4">
@@ -158,10 +169,10 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
                 <label className="label" htmlFor="reset-code">
                   Code from your email
                 </label>
-                <input
+                <Input
                   id="reset-code"
                   name="code"
-                  className="input-field font-mono tracking-widest"
+                  className="font-mono tracking-widest"
                   value={code}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     setCode(event.target.value);
@@ -177,11 +188,10 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
                 <label className="label" htmlFor="reset-password">
                   New password
                 </label>
-                <input
+                <Input
                   id="reset-password"
                   name="new-password"
                   type="password"
-                  className="input-field"
                   value={password}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     setPassword(event.target.value);
@@ -195,11 +205,10 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
                 <label className="label" htmlFor="reset-confirm">
                   Confirm new password
                 </label>
-                <input
+                <Input
                   id="reset-confirm"
                   name="confirm-password"
                   type="password"
-                  className="input-field"
                   value={confirm}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     setConfirm(event.target.value);
@@ -209,11 +218,17 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
                 />
               </div>
 
-              <button type="submit" className="btn-primary w-full" disabled={busy}>
-                {busy ? <Spinner size={18} className="text-white" /> : 'Set new password'}
-              </button>
+              <Button
+                type="submit"
+                variant="primary"
+                icon={<Save size={18} />}
+                loading={busy}
+                className="w-full"
+              >
+                Set new password
+              </Button>
 
-              <p className="text-center text-xs text-gray-500">
+              <p className="text-center text-xs" style={{ color: 'var(--cp-muted)' }}>
                 Did not get it?{' '}
                 <button
                   type="button"
@@ -230,8 +245,11 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
             </form>
           )}
 
-          <div className="border-t border-gray-200 pt-3 text-center">
-            <p className="text-sm text-gray-600">
+          <div
+            className="border-t pt-3 text-center"
+            style={{ borderColor: 'rgba(163,177,198,.3)' }}
+          >
+            <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
               Have your password?{' '}
               <button
                 type="button"
@@ -250,7 +268,7 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
               </button>
             </p>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

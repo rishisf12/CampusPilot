@@ -1,3 +1,5 @@
+import { ArrowLeft } from 'lucide-react';
+import { Badge, Button, Card } from '@/components/ui';
 import {
   GROUP_CLASSROOM_TABS,
   GROUP_DETAILS,
@@ -28,7 +30,10 @@ const COMMON_SECTIONS = ['My Team', 'Feedback', 'Profile'];
 
 export default function SignupProgramme({ onChoose, onBack }: SignupProgrammeProps) {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-12"
+      style={{ background: 'var(--cp-bg)' }}
+    >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
@@ -38,10 +43,12 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
           </p>
         </div>
 
-        <div className="card space-y-4">
+        <Card className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Which programme are you in?</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+              Which programme are you in?
+            </h2>
+            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
               We shape the app around your answer - your classes, your exams, nothing extra in the
               way.
             </p>
@@ -55,31 +62,34 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
                 key={group}
                 type="button"
                 onClick={() => onChoose(group)}
-                className="w-full text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors group"
+                className="neu-raised w-full text-left p-4 rounded-xl hover:-translate-y-px transition-all"
+                aria-label={`Join as ${GROUP_DETAILS[group].title}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-gray-900">{GROUP_DETAILS[group].title}</span>
-                  <span className="text-xs font-medium text-primary-600 bg-primary-50 rounded-full px-2 py-0.5">
-                    {GROUP_DETAILS[group].programmes}
+                  <span className="font-semibold" style={{ color: 'var(--cp-text)' }}>
+                    {GROUP_DETAILS[group].title}
                   </span>
+                  <Badge tone="primary">{GROUP_DETAILS[group].programmes}</Badge>
                 </div>
-                <p className="text-sm text-gray-600 mt-1">{GROUP_DETAILS[group].blurb}</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
+                  {GROUP_DETAILS[group].blurb}
+                </p>
                 <div className="flex flex-wrap gap-1.5 mt-2.5">
                   {[...classroomLabels(group), ...COMMON_SECTIONS].map(label => (
-                    <span
-                      key={label}
-                      className="text-[11px] text-gray-600 bg-gray-100 rounded-full px-2 py-0.5"
-                    >
+                    <Badge key={label} tone="neutral">
                       {label}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               </button>
             ))}
           </div>
 
-          <div className="border-t border-gray-200 pt-3 text-center">
-            <p className="text-sm text-gray-600">
+          <div
+            className="border-t pt-3 text-center"
+            style={{ borderColor: 'rgba(163,177,198,.3)' }}
+          >
+            <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
               Already registered?{' '}
               <button
                 type="button"
@@ -89,8 +99,19 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
                 Sign in
               </button>
             </p>
+            <p className="text-center mt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={<ArrowLeft size={14} />}
+                onClick={onBack}
+              >
+                Back
+              </Button>
+            </p>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

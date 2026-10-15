@@ -6,6 +6,7 @@
  * the 95th percentile *was*, only how long this particular call took - which is
  * the difference between a latency panel and a stopwatch.
  */
+import { Gauge, Server, Siren, TriangleAlert } from 'lucide-react';
 import { Panel, StatTile, EmptyState, num } from '../components/components';
 
 export interface HealthSnapshot {
@@ -64,6 +65,13 @@ interface HealthPanelProps {
   awaiting?: boolean;
 }
 
+const iconProps = {
+  size: 20,
+  strokeWidth: 2,
+  'aria-hidden': true,
+  style: { color: 'currentColor' },
+} as const;
+
 export function HealthPanel({ data, loading }: HealthPanelProps) {
   if (loading)
     return (
@@ -100,9 +108,15 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
     .reduce((s, [, v]) => s + (Number(v) || 0), 0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-live="polite">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Requests" value={num(totalRequests)} hint="since process start" />
+        <StatTile
+          label="Requests"
+          value={num(totalRequests)}
+          hint="since process start"
+          hue="sky"
+          icon={<Server {...iconProps} />}
+        />
         <StatTile
           label="Server errors"
           value={num(total5xx)}
@@ -112,12 +126,22 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
               : 'no traffic yet'
           }
           invertDelta
+          hue="coral"
+          icon={<Siren {...iconProps} />}
         />
-        <StatTile label="Client errors" value={num(total4xx)} hint="4xx responses" />
+        <StatTile
+          label="Client errors"
+          value={num(total4xx)}
+          hint="4xx responses"
+          hue="amber"
+          icon={<TriangleAlert {...iconProps} />}
+        />
         <StatTile
           label="Metrics"
           value={num(http.registry_series)}
           hint={`${num(http.registry_families)} metric names`}
+          hue="slate"
+          icon={<Gauge {...iconProps} />}
         />
         <StatTile
           label="Error rate"
@@ -125,6 +149,7 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
             totalRequests ? `${(((total5xx + total4xx) / totalRequests) * 100).toFixed(2)}%` : '--'
           }
           hint="4xx + 5xx of all requests"
+          hue="coral"
         />
       </div>
 
@@ -209,14 +234,29 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
               ['Android', android],
             ] as Array<[string, CrashStats]>
           ).map(([label, c]) => (
-            <div key={label} className="rounded-xl border border-gray-200 p-4">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            <div
+              key={label}
+              className="p-4"
+              style={{
+                borderRadius: 12,
+                border: '1px solid rgba(163,177,198,.3)',
+                background: 'var(--cp-surface)',
+                boxShadow: 'var(--cp-neu-raised-sm)',
+              }}
+            >
+              <div
+                className="text-xs font-medium uppercase tracking-wide"
+                style={{ color: 'var(--cp-muted)' }}
+              >
                 {label}
               </div>
-              <div className="mt-1 text-2xl font-bold text-gray-900 tabular-nums">
+              <div
+                className="mt-1 text-2xl font-bold tabular-nums"
+                style={{ color: 'var(--cp-text)' }}
+              >
                 {c.sessions === 0 ? '--' : `${c.crash_free_pct}%`}
               </div>
-              <div className="mt-1 text-xs text-gray-500">
+              <div className="mt-1 text-xs" style={{ color: 'var(--cp-muted)' }}>
                 {c.sessions === 0
                   ? 'no sessions recorded yet'
                   : `${num(c.crashed_sessions)} of ${num(c.sessions)} sessions crashed`}
@@ -253,9 +293,28 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
               .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
               .slice(0, 12)
               .map(([route, value]) => (
-                <div key={route} className="flex items-center justify-between text-xs">
-                  <code className="text-gray-600 truncate">{route}</code>
-                  <span className="tabular-nums font-medium text-gray-800 ml-3">{num(value)}</span>
+                <div
+                  key={route}
+                  className="flex items-center justify-between text-xs px-3 py-1.5 transition-colors"
+                  style={{ borderRadius: 8 }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'var(--cp-bg)';
+                    e.currentTarget.style.boxShadow = 'var(--cp-neu-inset)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  <code className="truncate" style={{ color: 'var(--cp-muted)' }}>
+                    {route}
+                  </code>
+                  <span
+                    className="tabular-nums font-medium ml-3"
+                    style={{ color: 'var(--cp-text)' }}
+                  >
+                    {num(value)}
+                  </span>
                 </div>
               ))}
           </div>
@@ -265,28 +324,36 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
       <Panel title="Data freshness">
         <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div>
-            <dt className="text-gray-500">Latest rollup hour</dt>
-            <dd className="mt-0.5 font-medium text-gray-800">
+            <dt style={{ color: 'var(--cp-muted)' }}>Latest rollup hour</dt>
+            <dd className="mt-0.5 font-medium" style={{ color: 'var(--cp-text)' }}>
               {freshness.latest_rollup_hour ?? 'never'}
             </dd>
           </div>
           <div>
-            <dt className="text-gray-500">Rollup lag</dt>
-            <dd className="mt-0.5 font-medium text-gray-800">
+            <dt style={{ color: 'var(--cp-muted)' }}>Rollup lag</dt>
+            <dd className="mt-0.5 font-medium" style={{ color: 'var(--cp-text)' }}>
               {freshness.rollup_lag_minutes === null || freshness.rollup_lag_minutes === undefined
                 ? '--'
                 : `${freshness.rollup_lag_minutes} min`}
             </dd>
           </div>
           <div>
-            <dt className="text-gray-500">Latest crash report</dt>
-            <dd className="mt-0.5 font-medium text-gray-800">
+            <dt style={{ color: 'var(--cp-muted)' }}>Latest crash report</dt>
+            <dd className="mt-0.5 font-medium" style={{ color: 'var(--cp-text)' }}>
               {freshness.latest_crash_at ?? 'never'}
             </dd>
           </div>
         </dl>
         {(freshness.rollup_lag_minutes ?? 0) > 120 && (
-          <p className="mt-3 rounded-lg bg-warning-50 border border-warning-200 px-3 py-2 text-xs text-warning-800">
+          <p
+            className="mt-3 px-3 py-2 text-xs"
+            style={{
+              borderRadius: 12,
+              background: 'var(--cp-bg)',
+              boxShadow: 'var(--cp-neu-inset)',
+              color: 'var(--cp-warning)',
+            }}
+          >
             The hourly rollup is more than two hours behind. Volume figures below are stale until it
             runs — either the rollup timer is not running or the collector has stopped.
           </p>

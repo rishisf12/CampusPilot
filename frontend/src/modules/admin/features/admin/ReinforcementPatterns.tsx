@@ -1,5 +1,7 @@
 import { useEffect, useState, ChangeEvent } from 'react';
+import { FlaskConical, Plus, Trash2 } from 'lucide-react';
 import { reinforcementApi, type ReinforcementPattern } from '@/api';
+import { Badge, Button, Card, Input, Toggle } from '@/components/ui';
 
 interface ReinforcementPatternsProps {
   onError?: (message: string) => void;
@@ -91,149 +93,216 @@ export default function ReinforcementPatterns({ onError }: ReinforcementPatterns
   };
 
   if (loading) {
-    return <div className="card p-8 text-center text-sm text-gray-500">Loading patterns…</div>;
+    return (
+      <Card className="text-center text-sm" style={{ color: 'var(--cp-muted)' }}>
+        Loading patterns…
+      </Card>
+    );
   }
 
   return (
     <div className="space-y-4">
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Reinforcement Patterns</h2>
-        <p className="text-sm text-gray-600 mt-1">
+      <Card>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Reinforcement Patterns
+        </h2>
+        <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
           Patterns learned from PDF parsing mistakes. Applied automatically during timetable
           parsing.
         </p>
-      </div>
+      </Card>
 
       {error && (
-        <div className="p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+        <div
+          className="p-3 text-sm"
+          style={{
+            borderRadius: 12,
+            border: '1px solid rgba(163,177,198,.3)',
+            background: 'var(--cp-bg)',
+            boxShadow: 'var(--cp-neu-inset)',
+            color: 'var(--cp-danger)',
+          }}
+          aria-live="polite"
+        >
           {error}
         </div>
       )}
 
-      <div className="card p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Add New Pattern</h3>
+      <Card className="space-y-4">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Add New Pattern
+        </h3>
         <div className="grid md:grid-cols-2 gap-4">
-          <input
-            type="text"
-            placeholder="Pattern name"
-            value={newPattern.name}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setNewPattern(p => ({ ...p, name: e.target.value }))
-            }
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
-          />
-          <input
-            type="text"
-            placeholder="Regex pattern"
-            value={newPattern.pattern}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setNewPattern(p => ({ ...p, pattern: e.target.value }))
-            }
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono"
-          />
-          <input
-            type="text"
-            placeholder="Replacement"
-            value={newPattern.replacement}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setNewPattern(p => ({ ...p, replacement: e.target.value }))
-            }
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
-          />
-          <input
-            type="text"
-            placeholder="Description (what this fixes)"
-            value={newPattern.description}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setNewPattern(p => ({ ...p, description: e.target.value }))
-            }
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
-          />
-          <input
-            type="text"
-            placeholder="Test input"
-            value={testInput}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setTestInput(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
-          />
+          <div>
+            <span className="label">Pattern name</span>
+            <Input
+              id="rp-name"
+              type="text"
+              placeholder="Pattern name"
+              value={newPattern.name}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setNewPattern(p => ({ ...p, name: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <span className="label">Regex pattern</span>
+            <Input
+              id="rp-pattern"
+              type="text"
+              placeholder="Regex pattern"
+              value={newPattern.pattern}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setNewPattern(p => ({ ...p, pattern: e.target.value }))
+              }
+              className="font-mono"
+            />
+          </div>
+          <div>
+            <span className="label">Replacement</span>
+            <Input
+              id="rp-replacement"
+              type="text"
+              placeholder="Replacement"
+              value={newPattern.replacement}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setNewPattern(p => ({ ...p, replacement: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <span className="label">Description</span>
+            <Input
+              id="rp-description"
+              type="text"
+              placeholder="Description (what this fixes)"
+              value={newPattern.description}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setNewPattern(p => ({ ...p, description: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <span className="label">Test input</span>
+            <Input
+              id="rp-test-input"
+              type="text"
+              placeholder="Test input"
+              value={testInput}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setTestInput(e.target.value)}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
-            onClick={addPattern}
+            variant="primary"
+            size="sm"
+            icon={<Plus size={16} strokeWidth={2} aria-hidden />}
+            loading={saving}
             disabled={saving || !newPattern.name || !newPattern.pattern || !newPattern.replacement}
-            className="btn-primary text-sm disabled:opacity-60"
+            onClick={addPattern}
           >
-            {saving ? 'Adding…' : 'Add Pattern'}
-          </button>
-          <button
+            Add Pattern
+          </Button>
+          <Button
             type="button"
-            onClick={testPattern}
+            variant="secondary"
+            size="sm"
+            icon={<FlaskConical size={16} strokeWidth={2} aria-hidden />}
+            loading={testing}
             disabled={testing || !newPattern.pattern || !newPattern.replacement || !testInput}
             title="Preview this pattern against the test input without saving it"
-            className="btn-ghost text-sm disabled:opacity-60"
+            onClick={testPattern}
           >
-            {testing ? 'Testing…' : 'Test'}
-          </button>
+            Test
+          </Button>
         </div>
         {testOutput !== '' && (
-          <div className="p-3 rounded-lg bg-gray-50 text-sm">
-            <p className="font-mono text-gray-600">Input: {testInput}</p>
-            <p className={`font-mono mt-1 ${testMatched ? 'text-green-600' : 'text-amber-600'}`}>
+          <div
+            className="p-3 text-sm"
+            style={{
+              borderRadius: 12,
+              background: 'var(--cp-bg)',
+              boxShadow: 'var(--cp-neu-inset)',
+            }}
+            aria-live="polite"
+          >
+            <p className="font-mono" style={{ color: 'var(--cp-muted)' }}>
+              Input: {testInput}
+            </p>
+            <p
+              className="font-mono mt-1"
+              style={{ color: testMatched ? 'var(--cp-success)' : 'var(--cp-warning)' }}
+            >
               Output: {testOutput}
             </p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs mt-1" style={{ color: 'var(--cp-muted)' }}>
               {testMatched
                 ? 'Pattern matched and rewrote the input.'
                 : 'No match — the output is identical to the input.'}
             </p>
           </div>
         )}
-      </div>
+      </Card>
 
-      <div className="card p-6">
-        <h3 className="text-sm font-semibold text-gray-900">Active Patterns ({patterns.length})</h3>
-        <div className="space-y-2 mt-3">
+      <Card>
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Active Patterns ({patterns.length})
+        </h3>
+        <div className="space-y-2 mt-3" aria-live="polite">
           {patterns.map(p => (
             <div
               key={p.id}
-              className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50/60"
+              className="flex items-start gap-3 p-3"
+              style={{
+                borderRadius: 12,
+                border: '1px solid rgba(163,177,198,.3)',
+                background: 'var(--cp-bg)',
+                boxShadow: 'var(--cp-neu-inset)',
+              }}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm text-gray-900">{p.name}</span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      p.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {p.enabled ? 'Enabled' : 'Disabled'}
+                  <span className="font-medium text-sm" style={{ color: 'var(--cp-text)' }}>
+                    {p.name}
                   </span>
+                  <Badge tone={p.enabled ? 'success' : 'neutral'}>
+                    {p.enabled ? 'Enabled' : 'Disabled'}
+                  </Badge>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{p.description}</p>
-                <p className="font-mono text-xs text-gray-600 mt-1 break-all">{p.pattern}</p>
-                <p className="font-mono text-xs text-gray-600">→ {p.replacement}</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--cp-muted)' }}>
+                  {p.description}
+                </p>
+                <p
+                  className="font-mono text-xs mt-1 break-all"
+                  style={{ color: 'var(--cp-muted)' }}
+                >
+                  {p.pattern}
+                </p>
+                <p className="font-mono text-xs" style={{ color: 'var(--cp-muted)' }}>
+                  → {p.replacement}
+                </p>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
+              <div className="flex items-center gap-2 shrink-0">
+                <Toggle
+                  checked={p.enabled}
                   onClick={() => togglePattern(p.id, !p.enabled)}
-                  className="px-2 py-1 text-xs rounded border border-gray-200 hover:bg-gray-50"
-                >
-                  {p.enabled ? 'Disable' : 'Enable'}
-                </button>
-                <button
+                  aria-label={`${p.enabled ? 'Disable' : 'Enable'} pattern ${p.name}`}
+                />
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Trash2 size={16} strokeWidth={2} aria-hidden />}
+                  aria-label={`Delete pattern ${p.name}`}
                   onClick={() => deletePattern(p.id)}
-                  className="px-2 py-1 text-xs rounded border border-gray-200 hover:bg-red-50 text-red-600"
-                >
-                  Delete
-                </button>
+                />
               </div>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { KeyRound } from 'lucide-react';
+import { Button, Modal } from '@/components/ui';
 import { createPasskey, isPasskeySupported } from '../lib/passkey';
-import Spinner from '../components/Spinner';
 
 /**
  * The one-time prompt offering to enrol a passkey after a password sign-in.
@@ -40,11 +41,10 @@ export default function PasskeyPrompt({ token, onEnrolled, onDismiss }: PasskeyP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-5 space-y-4">
+    <Modal title="Sign in with a passkey?" onClose={onDismiss}>
+      <div className="space-y-4">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Sign in with a passkey?</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
             Use your fingerprint, face or device PIN next time instead of your password. If you ever
             forget your password, a passkey gets you back in without changing it.
           </p>
@@ -57,26 +57,33 @@ export default function PasskeyPrompt({ token, onEnrolled, onDismiss }: PasskeyP
         )}
 
         {!supported ? (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
             This browser does not support passkeys. Chrome, Edge and Safari all do.
           </p>
         ) : (
           <div className="flex gap-2">
-            <button type="button" onClick={setUp} disabled={busy} className="btn-primary flex-1">
-              {busy ? <Spinner size={18} className="text-white" /> : 'Set up passkey'}
-            </button>
-            <button type="button" onClick={onDismiss} disabled={busy} className="btn-secondary">
+            <Button
+              type="button"
+              variant="primary"
+              icon={<KeyRound size={18} />}
+              loading={busy}
+              onClick={setUp}
+              className="flex-1"
+            >
+              Set up passkey
+            </Button>
+            <Button type="button" variant="secondary" onClick={onDismiss} disabled={busy}>
               Not now
-            </button>
+            </Button>
           </div>
         )}
 
         {!supported && (
-          <button type="button" onClick={onDismiss} className="btn-secondary w-full">
+          <Button type="button" variant="secondary" onClick={onDismiss} className="w-full">
             Close
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

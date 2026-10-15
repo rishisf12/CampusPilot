@@ -1,4 +1,5 @@
-import { lazy, useEffect, useState } from 'react';
+﻿import { lazy, useEffect, useState } from 'react';
+import { CalendarDays, CheckCircle2, DoorOpen, FileText, Menu, X } from 'lucide-react';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { useProfile } from '@shared/hooks/useProfile';
 import { healthApi } from '@/api';
@@ -7,6 +8,7 @@ import { SECTION_LABELS } from '@shared/components/NavIcons';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 import { Sidebar } from '@shared/components/Sidebar';
+import { Tabs } from '@/components/ui';
 
 /** Lazy-loaded features */
 const LiveSchedule = lazy(() => import('./features/schedule/LiveSchedule'));
@@ -42,7 +44,16 @@ function useBackendStatus() {
 interface NavTab {
   id: string;
   label: string;
+  icon?: React.ReactNode;
+  hue?: string;
 }
+
+const TAB_META: Record<string, { icon: React.ReactNode; hue: string }> = {
+  live: { icon: <CalendarDays size={16} strokeWidth={2} aria-hidden />, hue: 'indigo' },
+  attendance: { icon: <CheckCircle2 size={16} strokeWidth={2} aria-hidden />, hue: 'mint' },
+  vacant: { icon: <DoorOpen size={16} strokeWidth={2} aria-hidden />, hue: 'sky' },
+  exam: { icon: <FileText size={16} strokeWidth={2} aria-hidden />, hue: 'amber' },
+};
 
 /**
  * Student UG Routes - defines all routes for undergraduate students.
@@ -66,7 +77,7 @@ export function StudentUGRoutes() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tab, setTab] = useState(() => {
     const requested = new URLSearchParams(window.location.search).get('tab');
-    return NAV_TABS.some(item => item.id === requested) ? requested : 'live';
+    return requested && NAV_TABS.some(item => item.id === requested) ? requested : 'live';
   });
 
   // Important sub-tabs
@@ -76,7 +87,7 @@ export function StudentUGRoutes() {
   const group = programmeGroupOf(programme);
   const CLASSROOM_TABS: NavTab[] = NAV_TABS.filter(item =>
     GROUP_CLASSROOM_TABS[group].includes(item.id)
-  );
+  ).map(item => ({ ...item, ...(TAB_META[item.id] ?? {}) }));
 
   // A reload can carry a tab the bundle does not include (?tab=attendance as
   // a master's student); land on the schedule rather than a blank screen.
@@ -91,9 +102,15 @@ export function StudentUGRoutes() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--cp-bg)' }}>
       {/* Single static header, flush at the top, never scrolls away */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
+      <header
+        className="sticky top-0 z-40"
+        style={{
+          background: 'var(--cp-surface)',
+          borderBottom: '1px solid rgba(163,177,198,.25)',
+        }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top row: brand + sidebar toggle + status indicator */}
           <div className="flex items-center justify-between gap-4 h-16">
@@ -110,7 +127,8 @@ export function StudentUGRoutes() {
             {/* Right side: status indicator + sidebar toggle */}
             <div className="flex items-center gap-3 shrink-0">
               <span
-                className={`w-2.5 h-2.5 rounded-full ${online ? 'bg-success-500' : 'bg-danger-500'}`}
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ background: online ? 'var(--cp-success)' : 'var(--cp-danger)' }}
                 title={online ? 'Backend connected' : 'Backend offline'}
                 aria-label={online ? 'Backend connected' : 'Backend offline'}
               />
@@ -118,41 +136,50 @@ export function StudentUGRoutes() {
               <button
                 type="button"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                className="w-10 h-10 flex items-center justify-center transition-all duration-200"
+                style={
                   sidebarOpen
-                    ? 'bg-primary-50 text-primary-600'
-                    : 'bg-gray-50 hover:bg-gray-100 text-gray-600'
-                }`}
+                    ? {
+                        borderRadius: 16,
+                        background: '#4F46E5',
+                        color: '#fff',
+                        boxShadow: 'var(--cp-clay)',
+                      }
+                    : {
+                        borderRadius: 16,
+                        background: 'var(--cp-surface)',
+                        color: 'var(--cp-muted)',
+                        boxShadow: 'var(--cp-neu-raised-sm)',
+                        border: '1px solid rgba(163,177,198,.3)',
+                      }
+                }
                 aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={sidebarOpen}
               >
-                <svg
-                  className="w-6 h-6 transition-transform duration-200"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                >
-                  {sidebarOpen ? (
-                    <>
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </>
-                  ) : (
-                    <>
-                      <line x1="3" y1="12" x2="21" y2="12" />
-                      <line x1="3" y1="6" x2="21" y2="6" />
-                      <line x1="3" y1="18" x2="21" y2="18" />
-                    </>
-                  )}
-                </svg>
+                {sidebarOpen ? (
+                  <X
+                    size={24}
+                    strokeWidth={2}
+                    aria-hidden
+                    className="transition-transform duration-200"
+                  />
+                ) : (
+                  <Menu
+                    size={24}
+                    strokeWidth={2}
+                    aria-hidden
+                    className="transition-transform duration-200"
+                  />
+                )}
               </button>
             </div>
           </div>
 
           {/* Second row: Main navigation (Classroom, Events, Important, Feedback) */}
-          <div className="flex items-center justify-center gap-1 py-2 border-t border-gray-100 overflow-x-auto">
+          <div
+            className="flex items-center justify-center gap-1 py-2 overflow-x-auto"
+            style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
+          >
             <nav className="flex items-center gap-1" aria-label="Main sections">
               {(['classroom', 'my-team', 'important', 'feedback'] as const).map(id => {
                 const isActive = section === id;
@@ -190,11 +217,23 @@ export function StudentUGRoutes() {
                       }
                     }}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-lg transition-colors ${
+                    className="px-4 py-2 text-sm font-medium whitespace-nowrap transition-all duration-200"
+                    style={
                       isActive
-                        ? 'bg-primary-50 text-primary-600'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
+                        ? {
+                            borderRadius: 16,
+                            background: '#4F46E5',
+                            color: '#fff',
+                            boxShadow: 'var(--cp-clay)',
+                          }
+                        : {
+                            borderRadius: 16,
+                            background: 'var(--cp-surface)',
+                            color: 'var(--cp-muted)',
+                            boxShadow: 'var(--cp-neu-raised-sm)',
+                            border: '1px solid rgba(163,177,198,.3)',
+                          }
+                    }
                   >
                     {label}
                   </button>
@@ -205,44 +244,30 @@ export function StudentUGRoutes() {
 
           {/* Third row: Classroom sub-tabs (only when Classroom is active AND expanded) */}
           {section === 'classroom' && classroomExpanded && (
-            <div className="flex items-center justify-center gap-1 py-2 border-t border-gray-100 overflow-x-auto">
-              <nav className="flex items-center gap-1" aria-label="Classroom">
-                {CLASSROOM_TABS.map((item: NavTab) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => selectTab(item.id)}
-                    aria-current={activeTab === item.id ? 'page' : undefined}
-                    className={`px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-full transition-colors ${
-                      activeTab === item.id
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
+            <div
+              className="flex items-center justify-center gap-1 py-2 overflow-x-auto"
+              style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
+            >
+              <Tabs tabs={CLASSROOM_TABS} active={activeTab} onChange={selectTab} />
             </div>
           )}
 
           {/* Fourth row: Important sub-tabs (only when Important is active AND expanded) */}
           {section === 'important' && importantExpanded && (
-            <div className="flex items-center justify-center gap-1 py-2 border-t border-gray-100 overflow-x-auto">
-              <nav className="flex items-center gap-1" aria-label="Important">
-                {IMPORTANT_TABS.map(item => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => {
-                      // Could add tab state for important if needed
-                    }}
-                    className="px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-full transition-colors bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-                  >
-                    {item === 'academics' ? 'Academics' : 'Placement Cell'}
-                  </button>
-                ))}
-              </nav>
+            <div
+              className="flex items-center justify-center gap-1 py-2 overflow-x-auto"
+              style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
+            >
+              <Tabs
+                tabs={IMPORTANT_TABS.map(item => ({
+                  id: item,
+                  label: item === 'academics' ? 'Academics' : 'Placement Cell',
+                }))}
+                active=""
+                onChange={() => {
+                  // Could add tab state for important if needed
+                }}
+              />
             </div>
           )}
         </div>
@@ -258,7 +283,10 @@ export function StudentUGRoutes() {
       />
 
       {/* Content, centred */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-10">
+      <main
+        role="tabpanel"
+        className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-10"
+      >
         <ModuleErrorBoundary moduleName="student-ug">
           {offline && !online && (
             <ErrorBanner
@@ -285,14 +313,14 @@ export function StudentUGRoutes() {
           )}
 
           {section === 'my-team' && (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12" style={{ color: 'var(--cp-muted)' }}>
               <p className="text-lg font-medium">Collaborations</p>
               <p className="mt-2">Content coming soon.</p>
             </div>
           )}
 
           {section === 'important' && (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12" style={{ color: 'var(--cp-muted)' }}>
               <p className="text-lg font-medium">Important</p>
               <p className="mt-2">Academics and Placement Cell content coming soon.</p>
             </div>
@@ -305,8 +333,17 @@ export function StudentUGRoutes() {
       </main>
 
       {/* Single footer */}
-      <footer className="bg-white border-t border-gray-200 py-4">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500">
+      <footer
+        className="py-4"
+        style={{
+          background: 'var(--cp-surface)',
+          borderTop: '1px solid rgba(163,177,198,.25)',
+        }}
+      >
+        <div
+          className="max-w-7xl mx-auto px-4 text-center text-xs"
+          style={{ color: 'var(--cp-muted)' }}
+        >
           essential &mdash; your campus assistant
         </div>
       </footer>

@@ -7,6 +7,7 @@
  * conclude the app is under attack when in fact the app is fine and nobody has
  * asked it to act on anything.
  */
+import { KeyRound, ShieldAlert, ShieldCheck, ShieldHalf } from 'lucide-react';
 import { Panel, StatTile, EmptyState, AwaitingData, num } from '../components/components';
 
 const KIND_LABELS: Record<string, string> = {
@@ -35,6 +36,13 @@ interface SecurityPanelProps {
   loading?: boolean;
   awaiting?: boolean;
 }
+
+const iconProps = {
+  size: 20,
+  strokeWidth: 2,
+  'aria-hidden': true,
+  style: { color: 'currentColor' },
+} as const;
 
 export function SecurityPanel({ data, loading, awaiting }: SecurityPanelProps) {
   if (awaiting) {
@@ -67,23 +75,35 @@ export function SecurityPanel({ data, loading, awaiting }: SecurityPanelProps) {
   const signalTotal = SIGNAL_KINDS.reduce((s, k) => s + (Number(counts[k]) || 0), 0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-live="polite">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Security events" value={num(total)} hint="all kinds, this window" />
+        <StatTile
+          label="Security events"
+          value={num(total)}
+          hint="all kinds, this window"
+          hue="coral"
+          icon={<ShieldAlert {...iconProps} />}
+        />
         <StatTile
           label="Integrity signals"
           value={num(signalTotal)}
           hint="root / emulator / tamper"
+          hue="amber"
+          icon={<ShieldHalf {...iconProps} />}
         />
         <StatTile
           label="Actioned"
           value={num(blockedTotal)}
           hint="system responded, not just observed"
+          hue="sky"
+          icon={<ShieldCheck {...iconProps} />}
         />
         <StatTile
           label="Response rate"
           value={signalTotal === 0 ? '--' : `${((blockedTotal / signalTotal) * 100).toFixed(0)}%`}
           hint="deliberately low — see below"
+          hue="slate"
+          icon={<KeyRound {...iconProps} />}
         />
       </div>
 
@@ -102,12 +122,20 @@ export function SecurityPanel({ data, loading, awaiting }: SecurityPanelProps) {
               .map(([kind, count]) => (
                 <div
                   key={kind}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
+                  className="flex items-center justify-between px-3 py-2"
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid rgba(163,177,198,.3)',
+                    background: 'var(--cp-surface)',
+                  }}
                 >
-                  <span className="text-xs font-medium text-gray-700">
+                  <span className="text-xs font-medium" style={{ color: 'var(--cp-text)' }}>
                     {KIND_LABELS[kind] || kind}
                   </span>
-                  <span className="tabular-nums text-sm font-semibold text-gray-900">
+                  <span
+                    className="tabular-nums text-sm font-semibold"
+                    style={{ color: 'var(--cp-text)' }}
+                  >
                     {num(count)}
                   </span>
                 </div>
@@ -117,7 +145,7 @@ export function SecurityPanel({ data, loading, awaiting }: SecurityPanelProps) {
       )}
 
       <Panel title="About integrity signals">
-        <div className="space-y-2 text-xs text-gray-600">
+        <div className="space-y-2 text-xs" style={{ color: 'var(--cp-muted)' }}>
           <p>
             Root, emulator and tampering detections are recorded as observations only. They are
             never used to refuse a request.

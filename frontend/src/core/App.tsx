@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+﻿import { Suspense, lazy } from 'react';
 import AuthWrapper, { useAuth } from '@shared/auth/AuthWrapper';
 import { programmeGroupOf } from '@shared/constants';
 import { ProfileProvider } from '@shared/hooks/useProfile';
@@ -12,7 +12,10 @@ const FacultyModule = lazy(() => import('@modules/faculty/main'));
 /** Simple loading fallback while a module chunk loads */
 function ModuleLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ background: 'var(--cp-bg)' }}
+    >
       <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );

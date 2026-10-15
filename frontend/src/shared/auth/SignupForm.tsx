@@ -1,4 +1,6 @@
 import { useMemo, useState, FormEvent, ChangeEvent } from 'react';
+import { UserPlus } from 'lucide-react';
+import { Button, Card, Input, Select, ProgressBar } from '@/components/ui';
 import { authApi } from '../../api';
 import {
   BRANCH_OPTIONS,
@@ -13,7 +15,6 @@ import {
   type ProgrammeGroup,
 } from '../constants';
 import ErrorBanner from '../components/ErrorBanner';
-import Spinner from '../components/Spinner';
 import SignupProgress from './SignupProgress';
 
 /** YYBBBNNN, e.g. 23BCS125. */
@@ -30,13 +31,6 @@ function scorePassword(value: string): number {
 }
 
 const STRENGTH_LABELS = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
-const STRENGTH_BARS = [
-  'bg-danger-500',
-  'bg-danger-500',
-  'bg-warning-500',
-  'bg-success-500',
-  'bg-success-500',
-];
 
 interface SignupFormProps {
   verifiedEmail: string;
@@ -166,7 +160,10 @@ export default function SignupForm({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-10">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-10"
+      style={{ background: 'var(--cp-bg)' }}
+    >
       <div className="w-full max-w-2xl">
         <div className="text-center mb-6">
           <img src="/logo-icon.svg" alt="Essential" className="w-14 h-14 mx-auto" />
@@ -176,7 +173,7 @@ export default function SignupForm({
           </p>
         </div>
 
-        <div className="card space-y-4">
+        <Card className="space-y-4">
           <SignupProgress current="details" />
 
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
@@ -185,9 +182,8 @@ export default function SignupForm({
             {/* Names side by side */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="First name" error={invalid('first_name')}>
-                <input
+                <Input
                   id="su-first"
-                  className="input-field"
                   value={form.first_name}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update('first_name', e.target.value)
@@ -197,9 +193,8 @@ export default function SignupForm({
                 />
               </Field>
               <Field label="Last name" error={invalid('last_name')}>
-                <input
+                <Input
                   id="su-last"
-                  className="input-field"
                   value={form.last_name}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update('last_name', e.target.value)
@@ -213,9 +208,8 @@ export default function SignupForm({
             {/* Gender + programme */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Gender">
-                <select
+                <Select
                   id="su-gender"
-                  className="select-field"
                   value={form.gender}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) => update('gender', e.target.value)}
                 >
@@ -224,7 +218,7 @@ export default function SignupForm({
                       {gender}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field
                 label="Programme"
@@ -234,9 +228,8 @@ export default function SignupForm({
                     : undefined
                 }
               >
-                <select
+                <Select
                   id="su-programme"
-                  className="select-field"
                   value={form.programme}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) => {
                     const programme = e.target.value as Programme;
@@ -267,16 +260,15 @@ export default function SignupForm({
                       {programme}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </div>
 
             {/* Semester + branch */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Semester">
-                <select
+                <Select
                   id="su-semester"
-                  className="select-field"
                   value={form.semester}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                     update('semester', e.target.value)
@@ -287,15 +279,14 @@ export default function SignupForm({
                       {semesterLabel(value)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field
                 label="Branch"
                 hint={branchOptions.length === 1 ? 'Fixed for this programme.' : undefined}
               >
-                <select
+                <Select
                   id="su-branch"
-                  className="select-field"
                   value={form.branch}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) => {
                     update('branch', e.target.value);
@@ -307,22 +298,23 @@ export default function SignupForm({
                       {branch}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </div>
 
             {/* Branch change reveal - a BTech transfer only, so hidden elsewhere. */}
             {canChangeBranch && (
-              <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+              <div className="neu-inset p-3 rounded-xl">
                 <div className="flex flex-wrap items-center gap-3">
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setShowBranchChange(value => !value)}
-                    className="btn-secondary text-sm"
                   >
                     {showBranchChange ? 'Hide branch change' : 'Branch changed'}
-                  </button>
-                  <span className="text-xs text-gray-600">
+                  </Button>
+                  <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
                     Already applied for a branch transfer? Add it now.
                   </span>
                 </div>
@@ -330,9 +322,8 @@ export default function SignupForm({
                 {showBranchChange && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                     <Field label="From branch">
-                      <select
+                      <Select
                         id="su-branch-from"
-                        className="select-field"
                         value={branchFrom}
                         onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                           setBranchFrom(e.target.value)
@@ -344,12 +335,11 @@ export default function SignupForm({
                             {branch}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </Field>
                     <Field label="To branch" error={invalid('branchTo')}>
-                      <select
+                      <Select
                         id="su-branch-to"
-                        className="select-field"
                         value={branchTo}
                         onChange={(e: ChangeEvent<HTMLSelectElement>) => {
                           setBranchTo(e.target.value);
@@ -362,7 +352,7 @@ export default function SignupForm({
                             {branch}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </Field>
                   </div>
                 )}
@@ -372,9 +362,8 @@ export default function SignupForm({
             {/* Username + roll */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Username" error={invalid('username')}>
-                <input
+                <Input
                   id="su-username"
-                  className="input-field"
                   value={form.username}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update('username', e.target.value.replace(/\s/g, ''))
@@ -385,9 +374,9 @@ export default function SignupForm({
                 />
               </Field>
               <Field label="Roll number" error={invalid('roll_number')}>
-                <input
+                <Input
                   id="su-roll"
-                  className="input-field font-mono uppercase"
+                  className="font-mono uppercase"
                   value={form.roll_number}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update(
@@ -408,13 +397,13 @@ export default function SignupForm({
 
             {/* Already verified in step 1, so shown but not editable. */}
             <Field label="College email" hint="Verified in the previous step.">
-              <input
+              <Input
                 id="su-email"
                 type="email"
-                className="input-field bg-gray-50 text-gray-600"
                 value={verifiedEmail}
                 readOnly
                 aria-readonly="true"
+                style={{ color: 'var(--cp-muted)' }}
               />
               <button
                 type="button"
@@ -427,10 +416,9 @@ export default function SignupForm({
 
             {/* Password + strength */}
             <Field label="Password" error={invalid('password')}>
-              <input
+              <Input
                 id="su-password"
                 type="password"
-                className="input-field"
                 value={form.password}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => update('password', e.target.value)}
                 onBlur={() => setTouched(t => ({ ...t, password: true }))}
@@ -439,28 +427,19 @@ export default function SignupForm({
               />
               {form.password && (
                 <div className="mt-2">
-                  <div className="flex gap-1">
-                    {[0, 1, 2, 3].map(index => (
-                      <div
-                        key={index}
-                        className={`h-1.5 flex-1 rounded-full ${
-                          index < strength ? STRENGTH_BARS[strength] : 'bg-gray-200'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Password strength: {STRENGTH_LABELS[strength]}
-                  </p>
+                  <ProgressBar
+                    value={strength}
+                    max={4}
+                    label={`Password strength: ${STRENGTH_LABELS[strength]}`}
+                  />
                 </div>
               )}
             </Field>
 
             <Field label="Confirm password" error={invalid('confirm_password')}>
-              <input
+              <Input
                 id="su-confirm"
                 type="password"
-                className="input-field"
                 value={form.confirm_password}
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
                   update('confirm_password', e.target.value)
@@ -471,12 +450,18 @@ export default function SignupForm({
               />
             </Field>
 
-            <button type="submit" className="btn-primary w-full" disabled={loading}>
-              {loading ? <Spinner size={18} className="text-white" /> : 'Create account'}
-            </button>
+            <Button
+              type="submit"
+              variant="primary"
+              icon={<UserPlus size={18} />}
+              loading={loading}
+              className="w-full"
+            >
+              Create account
+            </Button>
           </form>
 
-          <p className="text-sm text-gray-600 text-center">
+          <p className="text-sm text-center" style={{ color: 'var(--cp-muted)' }}>
             Already registered?{' '}
             <button
               type="button"
@@ -486,7 +471,7 @@ export default function SignupForm({
               Sign in
             </button>
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -508,7 +493,9 @@ function Field({ label, error, hint, children }: FieldProps) {
       {error ? (
         <p className="text-xs text-danger-600 mt-1">{error}</p>
       ) : hint ? (
-        <p className="text-xs text-gray-500 mt-1">{hint}</p>
+        <p className="text-xs mt-1" style={{ color: 'var(--cp-muted)' }}>
+          {hint}
+        </p>
       ) : null}
     </div>
   );

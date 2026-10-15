@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Building2, DoorClosed, DoorOpen, Search } from 'lucide-react';
+import { Badge, Button, Card, Input, Select } from '@/components/ui';
 import { roomsApi } from '@/api';
 import { DAYS } from '@shared/constants';
 import { formatTime } from '@shared/lib/time';
 import { dedupeRooms, normaliseRoom } from '@shared/lib/normalise';
 import useProfileVersion from '@shared/hooks/useProfileVersion';
 import ErrorBanner from '@shared/components/ErrorBanner';
-import Spinner from '@shared/components/Spinner';
 
 interface VacantRoomResult {
   mode: 'live' | 'manual';
@@ -104,81 +105,75 @@ export default function VacantRoomLookup({ onError }: VacantRoomLookupProps) {
     <div className="space-y-4">
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      <div className="card space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Vacant Room Lookup</h3>
+      <Card className="space-y-4">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Vacant Room Lookup
+        </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-[auto_auto_auto] gap-3 items-end">
           <div>
             <span className="label">Day</span>
-            <select
-              id="vr-day"
-              className="select-field"
-              value={day}
-              onChange={e => setDay(e.target.value)}
-            >
+            <Select id="vr-day" value={day} onChange={e => setDay(e.target.value)}>
               <option value="">Select day</option>
               {DAYS.map(item => (
                 <option key={item} value={item}>
                   {item}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <span className="label">Time</span>
-            <input
-              id="vr-hour"
-              type="time"
-              className="input-field"
-              value={hour}
-              onChange={e => setHour(e.target.value)}
-            />
+            <Input id="vr-hour" type="time" value={hour} onChange={e => setHour(e.target.value)} />
           </div>
-          <button
+          <Button
             type="button"
             onClick={search}
-            className="btn-primary text-sm"
+            variant="primary"
+            size="sm"
+            icon={<Search size={16} strokeWidth={2} />}
+            loading={loading}
             disabled={!day || !hour || loading}
           >
-            {loading ? <Spinner size={16} className="text-white" /> : 'Find Vacant Rooms'}
-          </button>
+            Find Vacant Rooms
+          </Button>
         </div>
 
         {result && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-gray-500">
+            <span style={{ color: 'var(--cp-muted)' }}>
               {result.day} at {formatTime(result.time)}
             </span>
             {/* The backend already explains a missing timetable, so show it once. */}
-            {result.message && <span className="text-primary-600">{result.message}</span>}
+            {result.message && <Badge tone="info">{result.message}</Badge>}
           </div>
         )}
-      </div>
+      </Card>
 
       {result && (
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="card">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+          <Card>
+            <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--cp-text)' }}>
               Vacant ({vacantRooms.length})
             </h3>
             {vacantRooms.length ? (
               <div className="flex flex-wrap gap-2">
                 {vacantRooms.map(room => (
-                  <span
-                    key={room}
-                    className="px-2.5 py-1 rounded-lg bg-success-50 text-success-700 text-xs font-mono font-medium"
-                  >
+                  <Badge key={room} tone="success" className="font-mono">
+                    <DoorOpen size={12} strokeWidth={2} aria-hidden />
                     {normaliseRoom(room)}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No vacant rooms at this time.</p>
+              <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
+                No vacant rooms at this time.
+              </p>
             )}
-          </div>
+          </Card>
 
-          <div className="card">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+          <Card>
+            <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--cp-text)' }}>
               Occupied ({result.occupied_rooms?.length || 0})
             </h3>
             {result.occupied_rooms?.length ? (
@@ -186,10 +181,13 @@ export default function VacantRoomLookup({ onError }: VacantRoomLookupProps) {
                 {result.occupied_rooms.map(item => (
                   <div
                     key={`${item.room}-${item.course_code}`}
-                    className="flex items-center justify-between text-sm"
+                    className="flex items-center justify-between gap-2 text-sm"
                   >
-                    <span className="font-mono text-gray-900">{normaliseRoom(item.room)}</span>
-                    <span className="text-xs text-gray-600">
+                    <Badge tone="danger" className="font-mono">
+                      <DoorClosed size={12} strokeWidth={2} aria-hidden />
+                      {normaliseRoom(item.room)}
+                    </Badge>
+                    <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
                       {item.course_code} &middot; {formatTime(item.start_time)} -{' '}
                       {formatTime(item.end_time)}
                     </span>
@@ -197,31 +195,33 @@ export default function VacantRoomLookup({ onError }: VacantRoomLookupProps) {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Nothing is scheduled.</p>
+              <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
+                Nothing is scheduled.
+              </p>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
-      <div className="card">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">All rooms ({allRooms.length})</h3>
+      <Card>
+        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--cp-text)' }}>
+          All rooms ({allRooms.length})
+        </h3>
         {allRooms.length ? (
           <div className="flex flex-wrap gap-2">
             {allRooms.map(room => (
-              <span
-                key={room}
-                className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs font-mono"
-              >
+              <Badge key={room} tone="neutral" className="font-mono">
+                <Building2 size={12} strokeWidth={2} aria-hidden />
                 {normaliseRoom(room)}
-              </span>
+              </Badge>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
             No rooms yet - upload the class timetable from the Live Schedule tab.
           </p>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

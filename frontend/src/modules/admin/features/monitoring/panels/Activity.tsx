@@ -6,6 +6,7 @@
  * campus of 900 and alarming for a campus of 40,000, and the dashboard cannot
  * know which.
  */
+import { Activity, Users, Repeat2, UserPlus } from 'lucide-react';
 import {
   Panel,
   StatTile,
@@ -83,7 +84,7 @@ export function ActivityPanel({ data, monetisation, loading, awaiting }: Activit
   const retention = a.retention || {};
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-live="polite">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile
           label="Active users"
@@ -91,6 +92,8 @@ export function ActivityPanel({ data, monetisation, loading, awaiting }: Activit
           delta={dauDelta}
           deltaLabel="vs previous period"
           hint="distinct people with a session"
+          hue="indigo"
+          icon={<Users size={20} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />}
         />
         <StatTile
           label="Sessions"
@@ -98,9 +101,27 @@ export function ActivityPanel({ data, monetisation, loading, awaiting }: Activit
           delta={sessionsDelta}
           deltaLabel="vs previous period"
           hint={`${num(a.events)} events`}
+          hue="sky"
+          icon={
+            <Activity size={20} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+          }
         />
-        <StatTile label="New users" value={num(nvr.new)} hint="first ever seen in this window" />
-        <StatTile label="Returning" value={num(nvr.returning)} hint="active, not first-time" />
+        <StatTile
+          label="New users"
+          value={num(nvr.new)}
+          hint="first ever seen in this window"
+          hue="mint"
+          icon={
+            <UserPlus size={20} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+          }
+        />
+        <StatTile
+          label="Returning"
+          value={num(nvr.returning)}
+          hint="active, not first-time"
+          hue="amber"
+          icon={<Repeat2 size={20} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />}
+        />
       </div>
 
       <Panel
@@ -116,12 +137,31 @@ export function ActivityPanel({ data, monetisation, loading, awaiting }: Activit
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             {Object.entries(retention).map(([day, r]) => (
-              <div key={day} className="rounded-xl border border-gray-200 p-3 text-center">
-                <div className="text-[11px] font-medium text-gray-500 uppercase">Day {day}</div>
-                <div className="mt-1 text-xl font-bold text-gray-900 tabular-nums">
+              <div
+                key={day}
+                className="p-3 text-center"
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid rgba(163,177,198,.3)',
+                  background: 'var(--cp-surface)',
+                  boxShadow: 'var(--cp-neu-raised-sm)',
+                }}
+              >
+                <div
+                  className="text-[11px] font-medium uppercase"
+                  style={{ color: 'var(--cp-muted)' }}
+                >
+                  Day {day}
+                </div>
+                <div
+                  className="mt-1 text-xl font-bold tabular-nums"
+                  style={{ color: 'var(--cp-text)' }}
+                >
                   {r.cohort === 0 ? '--' : `${r.pct}%`}
                 </div>
-                <div className="mt-0.5 text-[11px] text-gray-400">of {num(r.cohort)}</div>
+                <div className="mt-0.5 text-[11px]" style={{ color: 'var(--cp-muted)' }}>
+                  of {num(r.cohort)}
+                </div>
               </div>
             ))}
           </div>
@@ -169,7 +209,10 @@ export function ActivityPanel({ data, monetisation, loading, awaiting }: Activit
             <MiniBars
               data={(a.hourly || []).map((h): MiniBarDatum => ({ label: h.hour, value: h.events }))}
             />
-            <div className="mt-2 flex justify-between text-[11px] text-gray-400">
+            <div
+              className="mt-2 flex justify-between text-[11px]"
+              style={{ color: 'var(--cp-muted)' }}
+            >
               <span>{a.hourly?.[0]?.hour}</span>
               <span>{a.hourly?.[a.hourly.length - 1]?.hour}</span>
             </div>
@@ -190,24 +233,28 @@ export function ActivityPanel({ data, monetisation, loading, awaiting }: Activit
               delta={monetisation.changes?.verified_revenue_pct}
               deltaLabel="vs previous period"
               hint="store-validated only"
+              hue="mint"
             />
             <StatTile
               label="Ad revenue"
               value={num(monetisation.current?.ad_revenue_micros || 0)}
               delta={monetisation.changes?.ad_revenue_pct}
               deltaLabel="vs previous period"
+              hue="amber"
             />
             <StatTile
               label="Active subscriptions"
               value={num(monetisation.current?.active_subscriptions || 0)}
               delta={monetisation.changes?.subscriptions_pct}
               deltaLabel="vs previous period"
+              hue="sky"
             />
             <StatTile
               label="Total revenue"
               value={num(monetisation.current?.total_revenue_micros || 0)}
               delta={monetisation.changes?.total_revenue_pct}
               deltaLabel="vs previous period"
+              hue="indigo"
             />
           </div>
         </Panel>
@@ -223,13 +270,20 @@ function DimensionList({ rows }: { rows: DimensionRow[] }) {
       {rows.slice(0, 8).map(r => (
         <div key={r.value}>
           <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-gray-700">{r.value}</span>
-            <span className="tabular-nums text-gray-500">{num(r.events)}</span>
+            <span className="font-medium" style={{ color: 'var(--cp-text)' }}>
+              {r.value}
+            </span>
+            <span className="tabular-nums" style={{ color: 'var(--cp-muted)' }}>
+              {num(r.events)}
+            </span>
           </div>
-          <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+          <div
+            className="mt-1 h-1.5 rounded-full overflow-hidden"
+            style={{ background: 'var(--cp-bg)', boxShadow: 'var(--cp-neu-inset)' }}
+          >
             <div
-              className="h-full rounded-full bg-primary-400"
-              style={{ width: `${(r.events / max) * 100}%` }}
+              className="h-full rounded-full"
+              style={{ width: `${(r.events / max) * 100}%`, background: 'var(--cp-primary)' }}
             />
           </div>
         </div>

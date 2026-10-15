@@ -1,4 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  BarChart3,
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Plus,
+  RefreshCw,
+  X,
+} from 'lucide-react';
+import {
+  Badge,
+  Button,
+  Card,
+  IconTile,
+  Input,
+  Modal,
+  ProgressBar,
+  Table,
+  Tabs,
+} from '@/components/ui';
 import { attendanceApi, profileApi, scheduleApi, timetableApi } from '@/api';
 import { istNow, todayIso } from '@shared/lib/time';
 import { afterProfileChange } from '@shared/lib/sync';
@@ -313,15 +335,21 @@ export default function Attendance({ onError }: AttendanceProps) {
     <div className="space-y-4">
       {/* Top bar */}
       <div className="flex flex-wrap items-end gap-3">
-        <button type="button" onClick={addExtraClass} className="btn-secondary text-sm">
-          + Extra Class
-        </button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          icon={<Plus size={16} strokeWidth={2} aria-hidden />}
+          onClick={addExtraClass}
+        >
+          Extra Class
+        </Button>
         <div className="flex items-end gap-2">
           <div>
             <span className="label">Add subject</span>
-            <input
+            <Input
               id="att-add-code"
-              className="input-field w-36 font-mono"
+              className="w-36 font-mono"
               value={extraCode}
               onChange={event => setExtraCode(event.target.value.toUpperCase())}
               onKeyDown={event => {
@@ -333,73 +361,93 @@ export default function Attendance({ onError }: AttendanceProps) {
               placeholder="e.g. OE3E33"
             />
           </div>
-          <button type="button" onClick={addExtraClass} className="btn-primary text-sm">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            icon={<Plus size={16} strokeWidth={2} aria-hidden />}
+            onClick={addExtraClass}
+          >
             Add
-          </button>
+          </Button>
         </div>
         <div className="ml-auto flex items-end gap-2">
           <div>
             <span className="label">Target %</span>
-            <input
+            <Input
               id="att-target"
               type="number"
               min="0"
               max="100"
-              className="input-field w-24"
+              className="w-24"
               value={targetDraft}
               onChange={event => setTargetDraft(event.target.value)}
             />
           </div>
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={saveTarget}
-            className="btn-primary text-sm"
             disabled={Number(targetDraft) === target}
           >
             Save
-          </button>
+          </Button>
         </div>
       </div>
 
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
       {/* Daily banner */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">{ist.date}</p>
-            <p className="text-xs text-gray-500 font-mono">{ist.time}</p>
+      <Card className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <IconTile hue="indigo" size={44}>
+              <CalendarDays
+                size={22}
+                strokeWidth={2}
+                aria-hidden
+                style={{ color: 'currentColor' }}
+              />
+            </IconTile>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+                {ist.date}
+              </p>
+              <p className="text-xs font-mono" style={{ color: 'var(--cp-muted)' }}>
+                {ist.time}
+              </p>
+            </div>
           </div>
           <div className="flex gap-2 text-xs">
-            <span className="px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 font-medium">
+            <Badge tone="primary">
               {todayClasses.length} class{todayClasses.length === 1 ? '' : 'es'} today
-            </span>
-            <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">
+            </Badge>
+            <Badge tone="neutral">
               {todayClasses.length === 0
                 ? 'No classes'
                 : todayState.unmarked > 0
                   ? `${todayState.unmarked} unmarked`
                   : 'All marked'}
-            </span>
+            </Badge>
           </div>
         </div>
 
         {atRisk.length > 0 && (
-          <div className="pt-2 border-t border-gray-100">
-            <p className="text-xs font-semibold text-danger-600 mb-1.5">At risk</p>
+          <div className="pt-2" style={{ borderTop: '1px solid rgba(163,177,198,.3)' }}>
+            <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--cp-text)' }}>
+              At risk
+            </p>
             <div className="flex flex-wrap gap-2">
               {atRisk.map(subject => (
-                <span
-                  key={subject.course_id}
-                  className="px-2.5 py-1 rounded-full bg-danger-50 text-danger-700 text-xs font-medium"
-                >
+                <Badge key={subject.course_id} tone="danger">
                   {subject.course_code} &middot; attend next {subject.must_attend}
-                </span>
+                </Badge>
               ))}
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/*
         No overall card. An average across subjects hides the thing a student
@@ -410,28 +458,30 @@ export default function Attendance({ onError }: AttendanceProps) {
       */}
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-1 border-b border-gray-200">
-        {SUB_TABS.map(item => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setSubTab(item.id)}
-            className={`sub-tab ${subTab === item.id ? 'sub-tab-active' : 'sub-tab-idle'}`}
-          >
-            {item.label}
-          </button>
-        ))}
-        <button type="button" onClick={load} className="btn-ghost ml-auto">
+      <div className="flex items-center gap-2">
+        <Tabs
+          tabs={SUB_TABS.map(item => ({ id: item.id, label: item.label }))}
+          active={subTab}
+          onChange={setSubTab}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          icon={<RefreshCw size={16} strokeWidth={2} aria-hidden />}
+          onClick={load}
+          className="ml-auto"
+        >
           Refresh
-        </button>
+        </Button>
       </div>
 
       {subTab === 'subjects' &&
         (subjects.length === 0 ? (
-          <div className="card text-center py-10 text-sm text-gray-500">
+          <Card className="text-center py-10 text-sm" style={{ color: 'var(--cp-muted)' }}>
             No subjects yet. Upload the class timetable so subjects sync automatically, or add one
             above.
-          </div>
+          </Card>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {subjects.map(subject => (
@@ -451,51 +501,48 @@ export default function Attendance({ onError }: AttendanceProps) {
         ))}
 
       {subTab === 'history' && (
-        <div className="card">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Recent records</h3>
+        <Card>
+          <h3
+            className="text-sm font-semibold mb-3 flex items-center gap-2"
+            style={{ color: 'var(--cp-text)' }}
+          >
+            <BarChart3 size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+            Recent records
+          </h3>
           {records.length === 0 ? (
-            <p className="text-sm text-gray-500">Nothing recorded yet.</p>
+            <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
+              Nothing recorded yet.
+            </p>
           ) : (
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
-                    <th className="py-2 pr-3 font-medium">Date</th>
-                    <th className="py-2 pr-3 font-medium">Course</th>
-                    <th className="py-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {records
-                    .slice()
-                    .reverse()
-                    .slice(0, 50)
-                    .map(record => (
-                      <tr key={record.id}>
-                        <td className="py-2 pr-3 text-gray-700">{record.date}</td>
-                        <td className="py-2 pr-3 font-mono text-gray-900">
-                          {codeById.get(record.course_id) || `#${record.course_id}`}
-                        </td>
-                        <td className="py-2">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              record.status === 'Present'
-                                ? 'bg-success-50 text-success-700'
-                                : record.status === 'Absent'
-                                  ? 'bg-danger-50 text-danger-700'
-                                  : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            {record.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              head={['Date', 'Course', 'Status']}
+              rows={records
+                .slice()
+                .reverse()
+                .slice(0, 50)
+                .map(record => [
+                  <span key="d" style={{ color: 'var(--cp-text)' }}>
+                    {record.date}
+                  </span>,
+                  <span key="c" className="font-mono" style={{ color: 'var(--cp-text)' }}>
+                    {codeById.get(record.course_id) || `#${record.course_id}`}
+                  </span>,
+                  <Badge
+                    key="s"
+                    tone={
+                      record.status === 'Present'
+                        ? 'success'
+                        : record.status === 'Absent'
+                          ? 'danger'
+                          : 'neutral'
+                    }
+                  >
+                    {record.status}
+                  </Badge>,
+                ])}
+            />
           )}
-        </div>
+        </Card>
       )}
 
       {/* Toast with undo */}
@@ -526,6 +573,12 @@ export default function Attendance({ onError }: AttendanceProps) {
 /* Subject card                                                        */
 /* ------------------------------------------------------------------ */
 
+const STATUS_BADGE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  Safe: 'success',
+  Warning: 'warning',
+  Critical: 'danger',
+};
+
 interface SubjectCardProps {
   subject: AttendanceSubject;
   target: number;
@@ -550,44 +603,38 @@ function SubjectCard({
   const recorded = hasRecords(subject);
   const instructor = instructorFor(subject.course_code, slots);
   const tone = recorded ? toneFor(subject.percentage, target) : 'neutral';
-  const barTone =
-    tone === 'success' ? 'bg-success-500' : tone === 'warning' ? 'bg-warning-500' : 'bg-danger-500';
 
   return (
-    <div className={`card p-4 flex flex-col gap-2 ${inTimetable ? '' : 'opacity-70'}`}>
+    <Card className="flex flex-col gap-2" style={inTimetable ? undefined : { opacity: 0.7 }}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900 truncate">
+          <p className="text-sm font-semibold truncate" style={{ color: 'var(--cp-text)' }}>
             {subject.course_name || subject.course_code}
           </p>
-          <p className="text-[11px] font-mono text-gray-500">{subject.course_code}</p>
+          <p className="text-[11px] font-mono" style={{ color: 'var(--cp-muted)' }}>
+            {subject.course_code}
+          </p>
           {/* The subject API has no teacher field, so it is read off the
               timetable, which names one for every class. */}
           {instructor && (
-            <p className="text-[11px] text-gray-500 mt-0.5" title={instructor}>
+            <p
+              className="text-[11px] mt-0.5"
+              style={{ color: 'var(--cp-muted)' }}
+              title={instructor}
+            >
               {instructor}
             </p>
           )}
           {/* Kept, but no longer in the timetable: history is still real. */}
           {!inTimetable && (
-            <p className="text-[10px] text-warning-700 mt-0.5">
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--cp-text)' }}>
               Not in this semester&apos;s timetable
             </p>
           )}
         </div>
-        <span
-          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
-            tone === 'neutral'
-              ? 'bg-gray-100 text-gray-500'
-              : tone === 'success'
-                ? 'bg-success-50 text-success-700'
-                : tone === 'warning'
-                  ? 'bg-warning-50 text-warning-700'
-                  : 'bg-danger-50 text-danger-700'
-          }`}
-        >
+        <Badge tone={recorded ? STATUS_BADGE[subject.status] || 'neutral' : 'neutral'}>
           {recorded ? subject.status : 'No data'}
-        </span>
+        </Badge>
       </div>
 
       <div>
@@ -595,77 +642,94 @@ function SubjectCard({
             invented. A 0/0 subject is not 100% attended. */}
         {recorded ? (
           <>
-            <p className="text-3xl font-bold text-gray-900 leading-none">{subject.percentage}%</p>
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-3xl font-bold leading-none" style={{ color: 'var(--cp-text)' }}>
+              {subject.percentage}%
+            </p>
+            <p className="text-[11px] mt-1" style={{ color: 'var(--cp-muted)' }}>
               {subject.present}/{subject.total_held} attended
             </p>
           </>
         ) : (
           <>
-            <p className="text-3xl font-bold text-gray-300 leading-none">&mdash;</p>
-            <p className="text-[11px] text-gray-500 mt-1">No classes recorded</p>
+            <p className="text-3xl font-bold leading-none" style={{ color: 'var(--cp-muted)' }}>
+              &mdash;
+            </p>
+            <p className="text-[11px] mt-1" style={{ color: 'var(--cp-muted)' }}>
+              No classes recorded
+            </p>
           </>
         )}
       </div>
 
       {/* An empty bar at 0% would read as "you have missed everything". */}
       {recorded && (
-        <div className="w-full h-1 rounded-full bg-gray-200">
-          <div
-            className={`h-1 rounded-full ${barTone} transition-all`}
-            style={{ width: `${Math.min(100, subject.percentage)}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={subject.percentage}
+          max={100}
+          label={`${subject.course_code} attendance`}
+        />
       )}
 
-      <p className="text-[11px] text-gray-500">{advice(subject)}</p>
+      <p className="text-[11px]" style={{ color: 'var(--cp-muted)' }}>
+        {tone !== 'neutral' && (
+          <Badge tone={tone === 'success' ? 'success' : tone === 'warning' ? 'warning' : 'danger'}>
+            {tone === 'success' ? 'On track' : tone === 'warning' ? 'Watch' : 'At risk'}
+          </Badge>
+        )}{' '}
+        {advice(subject)}
+      </p>
 
       {periods.length > 1 && (
         <div className="flex flex-wrap gap-1">
           {periods.map(slot => (
-            <span
-              key={`${slot.id}`}
-              className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-mono"
-              title={slot.room}
-            >
+            <Badge key={`${slot.id}`} tone="neutral" className="font-mono" title={slot.room}>
               P{periods.indexOf(slot) + 1}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
 
       <div className="flex items-center gap-1 mt-auto pt-1">
-        {STATUSES.map(status => {
-          // Without a class today there is nothing to mark.
-          const disabled = status !== 'Cancelled' && !hasClassToday;
-          return (
-            <button
-              key={status}
-              type="button"
-              title={disabled ? 'No class scheduled today' : `Mark ${status}`}
-              onClick={() => onMark(status)}
-              disabled={disabled}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                status === 'Present'
-                  ? 'bg-success-500 text-white hover:bg-success-600'
-                  : status === 'Absent'
-                    ? 'bg-danger-500 text-white hover:bg-danger-600'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              {status === 'Present' ? 'P' : status === 'Absent' ? 'A' : 'C'}
-            </button>
-          );
-        })}
-        <button
+        <Button
           type="button"
-          onClick={onDetails}
-          className="px-2 py-1.5 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100"
+          variant="success"
+          size="sm"
+          icon={<Check size={16} strokeWidth={2} aria-hidden />}
+          title={hasClassToday ? 'Mark Present' : 'No class scheduled today'}
+          onClick={() => onMark('Present')}
+          disabled={!hasClassToday}
+          className="flex-1"
         >
+          Present
+        </Button>
+        <Button
+          type="button"
+          variant="danger"
+          size="sm"
+          icon={<X size={16} strokeWidth={2} aria-hidden />}
+          title={hasClassToday ? 'Mark Absent' : 'No class scheduled today'}
+          onClick={() => onMark('Absent')}
+          disabled={!hasClassToday}
+          className="flex-1"
+        >
+          Absent
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          icon={<Minus size={16} strokeWidth={2} aria-hidden />}
+          title="Mark Cancelled"
+          onClick={() => onMark('Cancelled')}
+          className="flex-1"
+        >
+          Cancelled
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onDetails}>
           Details
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -749,116 +813,137 @@ function CalendarModal({ subject, onClose, onMark }: CalendarModalProps) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-md card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-900">{subject.course_code}</h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700">
-            x
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between mb-2">
-          <button type="button" onClick={() => shift(-1)} className="btn-ghost">
-            &larr; Prev
-          </button>
-          <span className="text-sm font-medium text-gray-800">{monthName}</span>
-          <button type="button" onClick={() => shift(1)} className="btn-ghost">
-            Next &rarr;
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <Spinner size={20} className="text-primary-500" />
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase text-gray-400 mb-1">
-              {WEEKDAYS.map(day => (
-                <span key={day}>{day}</span>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {monthGrid(cursor.year, cursor.month).map((day, index) => {
-                if (day === null) return <span key={`pad-${index}`} />;
-                const date = iso(cursor.year, cursor.month, day);
-                const marks = byDate.get(date) || [];
-                const hasExtra = marks.length > 1;
-                const present = marks.some(m => m.status === 'Present');
-                const absent = marks.some(m => m.status === 'Absent');
-                const cancelled = marks.some(m => m.status === 'Cancelled');
-                const isToday = date === today;
-                const isPast = date < today;
-                const tone = present
-                  ? 'bg-success-500 text-white'
-                  : absent
-                    ? 'bg-danger-500 text-white'
-                    : cancelled
-                      ? 'bg-gray-300 text-gray-700'
-                      : isPast
-                        ? 'bg-gray-100 text-gray-400 border border-dashed border-gray-300'
-                        : 'bg-white text-gray-600 border border-gray-200';
-                return (
-                  <button
-                    key={date}
-                    type="button"
-                    disabled={!isPast}
-                    onClick={() => setSelected(date)}
-                    className={`relative aspect-square rounded-md text-xs font-medium ${tone} ${
-                      isToday ? 'ring-2 ring-primary-500 ring-offset-1' : ''
-                    } ${hasExtra ? 'border-2 border-primary-500' : ''} ${
-                      isPast ? 'cursor-pointer' : 'cursor-default'
-                    }`}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-gray-500">
-              <Legend className="bg-success-500" label="Present" />
-              <Legend className="bg-danger-500" label="Absent" />
-              <Legend className="bg-gray-300" label="Cancelled" />
-              <Legend
-                className="bg-gray-100 border border-dashed border-gray-300"
-                label="Not marked"
-              />
-              <Legend
-                className="bg-white border-2 border-primary-500"
-                label="Extra / multi-period"
-              />
-            </div>
-          </>
-        )}
-
-        {selected && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-700 mb-2">{selected}</p>
-            <div className="flex flex-wrap gap-2">
-              {STATUSES.map(status => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={async () => {
-                    await onMark(selected, status);
-                    setSelected(null);
-                  }}
-                  className="btn-secondary text-xs"
-                >
-                  Mark {status}
-                </button>
-              ))}
-              <button type="button" onClick={() => setSelected(null)} className="btn-ghost">
-                Close
-              </button>
-            </div>
-          </div>
-        )}
+    <Modal title={subject.course_code} onClose={onClose}>
+      <div className="flex items-center justify-between mb-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          icon={<ChevronLeft size={16} strokeWidth={2} aria-hidden />}
+          onClick={() => shift(-1)}
+        >
+          Prev
+        </Button>
+        <span className="text-sm font-medium" style={{ color: 'var(--cp-text)' }}>
+          {monthName}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          icon={<ChevronRight size={16} strokeWidth={2} aria-hidden />}
+          iconPosition="right"
+          onClick={() => shift(1)}
+        >
+          Next
+        </Button>
       </div>
-    </div>
+
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Spinner size={20} className="text-primary-500" />
+        </div>
+      ) : (
+        <>
+          <div
+            className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase mb-1"
+            style={{ color: 'var(--cp-muted)' }}
+          >
+            {WEEKDAYS.map(day => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {monthGrid(cursor.year, cursor.month).map((day, index) => {
+              if (day === null) return <span key={`pad-${index}`} />;
+              const date = iso(cursor.year, cursor.month, day);
+              const marks = byDate.get(date) || [];
+              const hasExtra = marks.length > 1;
+              const present = marks.some(m => m.status === 'Present');
+              const absent = marks.some(m => m.status === 'Absent');
+              const cancelled = marks.some(m => m.status === 'Cancelled');
+              const isToday = date === today;
+              const isPast = date < today;
+              const tone = present
+                ? 'bg-success-500 text-white'
+                : absent
+                  ? 'bg-danger-500 text-white'
+                  : cancelled
+                    ? 'bg-gray-300 text-gray-700'
+                    : isPast
+                      ? 'bg-gray-100 text-gray-400 border border-dashed border-gray-300'
+                      : 'bg-white text-gray-600 border border-gray-200';
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  disabled={!isPast}
+                  onClick={() => setSelected(date)}
+                  aria-label={`${date}${present ? ', present' : absent ? ', absent' : cancelled ? ', cancelled' : ', not marked'}`}
+                  className={`relative aspect-square rounded-md text-xs font-medium ${tone} ${
+                    isToday ? 'ring-2 ring-primary-500 ring-offset-1' : ''
+                  } ${hasExtra ? 'border-2 border-primary-500' : ''} ${
+                    isPast ? 'cursor-pointer' : 'cursor-default'
+                  }`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            className="flex flex-wrap gap-3 mt-3 text-[10px]"
+            style={{ color: 'var(--cp-muted)' }}
+          >
+            <Legend className="bg-success-500" label="Present" />
+            <Legend className="bg-danger-500" label="Absent" />
+            <Legend className="bg-gray-300" label="Cancelled" />
+            <Legend
+              className="bg-gray-100 border border-dashed border-gray-300"
+              label="Not marked"
+            />
+            <Legend className="bg-white border-2 border-primary-500" label="Extra / multi-period" />
+          </div>
+        </>
+      )}
+
+      {selected && (
+        <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(163,177,198,.3)' }}>
+          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cp-text)' }}>
+            {selected}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {STATUSES.map(status => (
+              <Button
+                key={status}
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={
+                  status === 'Present' ? (
+                    <Check size={16} strokeWidth={2} aria-hidden />
+                  ) : status === 'Absent' ? (
+                    <X size={16} strokeWidth={2} aria-hidden />
+                  ) : (
+                    <Minus size={16} strokeWidth={2} aria-hidden />
+                  )
+                }
+                onClick={async () => {
+                  await onMark(selected, status);
+                  setSelected(null);
+                }}
+              >
+                Mark {status}
+              </Button>
+            ))}
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 

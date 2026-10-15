@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CalendarDays, Clock, RefreshCw, Trash2, Users } from 'lucide-react';
+import { Badge, Button, Card, Tabs } from '@/components/ui';
 import { scheduleApi, timetableApi } from '@/api';
 import { DAYS } from '@shared/constants';
 import { formatTime as formatClock, istNow, todayWeekday } from '@shared/lib/time';
@@ -169,20 +171,23 @@ export default function LiveSchedule({ onError }: LiveScheduleProps) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-1 border-b border-gray-200">
-        {SUB_TABS.map(item => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setSubTab(item.id)}
-            className={`sub-tab ${subTab === item.id ? 'sub-tab-active' : 'sub-tab-idle'}`}
-          >
-            {item.label}
-          </button>
-        ))}
-        <button type="button" onClick={load} className="btn-ghost ml-auto" disabled={loading}>
-          {loading ? <Spinner size={14} /> : 'Refresh'}
-        </button>
+      <div className="flex items-center gap-2">
+        <Tabs
+          tabs={SUB_TABS.map(item => ({ id: item.id, label: item.label }))}
+          active={subTab}
+          onChange={setSubTab}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          icon={<RefreshCw size={16} strokeWidth={2} aria-hidden />}
+          loading={loading}
+          onClick={load}
+          className="ml-auto"
+        >
+          Refresh
+        </Button>
       </div>
 
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
@@ -224,11 +229,26 @@ interface ClassCardProps {
   courseLabel: (item: CourseLike) => string;
 }
 
+const TONE_DOT: Record<string, string> = {
+  success: '#10B981',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+};
+
 function ClassCard({ title, tone, item, emptyText, formatTime, courseLabel }: ClassCardProps) {
+  const Icon = title === 'Current Class' ? Clock : CalendarDays;
   return (
-    <div className="card">
-      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-3">
-        <span className={`w-2 h-2 rounded-full bg-${tone}-500`} />
+    <Card>
+      <h3
+        className="text-sm font-semibold flex items-center gap-2 mb-3"
+        style={{ color: 'var(--cp-text)' }}
+      >
+        <span
+          className="w-2 h-2 rounded-full shrink-0"
+          style={{ background: TONE_DOT[tone] || TONE_DOT.success }}
+          aria-hidden
+        />
+        <Icon size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
         {title}
       </h3>
       {item ? (
@@ -238,13 +258,16 @@ function ClassCard({ title, tone, item, emptyText, formatTime, courseLabel }: Cl
           <Cell
             label="Time"
             value={`${formatTime(item.start_time)} - ${formatTime(item.end_time)}`}
+            badge
           />
           <Cell label="Day" value={item.day} />
         </div>
       ) : (
-        <p className="text-sm text-gray-500 py-3">{emptyText}</p>
+        <p className="text-sm py-3" style={{ color: 'var(--cp-muted)' }}>
+          {emptyText}
+        </p>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -252,15 +275,27 @@ interface CellProps {
   label: string;
   value?: string | null;
   mono?: boolean;
+  badge?: boolean;
 }
 
-function Cell({ label, value, mono }: CellProps) {
+function Cell({ label, value, mono, badge }: CellProps) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-gray-400">{label}</p>
-      <p className={`text-sm font-medium text-gray-900 ${mono ? 'font-mono' : ''}`}>
-        {value || '—'}
+      <p className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--cp-muted)' }}>
+        {label}
       </p>
+      {badge && value ? (
+        <Badge tone="info" className="mt-1 font-mono">
+          {value}
+        </Badge>
+      ) : (
+        <p
+          className={`text-sm font-medium ${mono ? 'font-mono' : ''}`}
+          style={{ color: 'var(--cp-text)' }}
+        >
+          {value || '—'}
+        </p>
+      )}
     </div>
   );
 }
@@ -315,13 +350,23 @@ function ScheduleView({
   return (
     <div className="space-y-4">
       {!hasTimetable && (
-        <div className="p-3 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm">
+        <div
+          className="p-3 rounded-lg border border-primary-200 text-sm"
+          style={{ background: 'var(--cp-surface)', color: 'var(--cp-text)' }}
+        >
           No class timetable uploaded yet. Open the Timetable tab to add it.
         </div>
       )}
 
       {todaySlots.length === 0 && hasTimetable && (
-        <div className="p-3 rounded-lg border border-gray-200 bg-white text-gray-600 text-sm">
+        <div
+          className="p-3 rounded-lg border text-sm"
+          style={{
+            background: 'var(--cp-surface)',
+            borderColor: 'rgba(163,177,198,.3)',
+            color: 'var(--cp-muted)',
+          }}
+        >
           No classes for you on {DAY_NAMES[today]}.
         </div>
       )}
@@ -344,23 +389,31 @@ function ScheduleView({
       />
 
       {sameTimeSlot.length > 0 && (
-        <div className="card">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Also running now</h3>
+        <Card>
+          <h3
+            className="text-sm font-semibold mb-3 flex items-center gap-2"
+            style={{ color: 'var(--cp-text)' }}
+          >
+            <Users size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+            Also running now
+          </h3>
           <div className="space-y-2">
             {sameTimeSlot.map(slot => (
               <div
                 key={`${slot.course_code}-${slot.start_time}-${slot.room}`}
-                className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50"
+                className="flex items-center justify-between gap-2 p-2.5 rounded-lg"
+                style={{ background: 'var(--cp-bg)', boxShadow: 'var(--cp-neu-inset)' }}
               >
-                <span className="text-sm text-gray-900 font-mono">{slot.course_code}</span>
-                <span className="text-xs text-gray-600">
-                  {formatTime(slot.start_time)} - {formatTime(slot.end_time)} &middot;{' '}
-                  <span className="font-mono">{slot.room}</span>
+                <span className="text-sm font-mono" style={{ color: 'var(--cp-text)' }}>
+                  {slot.course_code}
                 </span>
+                <Badge tone="info" className="font-mono">
+                  {formatTime(slot.start_time)} - {formatTime(slot.end_time)} &middot; {slot.room}
+                </Badge>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -423,7 +476,10 @@ function TimetableView({ slots, onChanged, totalSlots, hiddenElectives = [] }: T
   return (
     <div className="space-y-4">
       {message && (
-        <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm">
+        <div
+          className="p-3 rounded-lg border text-sm"
+          style={{ background: 'var(--cp-surface)', color: 'var(--cp-text)' }}
+        >
           {message}
         </div>
       )}
@@ -450,8 +506,10 @@ function TimetableView({ slots, onChanged, totalSlots, hiddenElectives = [] }: T
           />
         </FileUpload>
 
-        <div className="card p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-900">Uploaded timetable</h3>
+        <Card className="space-y-3">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+            Uploaded timetable
+          </h3>
           <StatusCard
             label="Slots loaded"
             value={totalSlots ?? slots.length}
@@ -462,20 +520,30 @@ function TimetableView({ slots, onChanged, totalSlots, hiddenElectives = [] }: T
                 : 'Nothing uploaded yet.'
             }
           />
-          <button
+          <Button
             type="button"
+            variant="danger"
+            size="sm"
+            icon={<Trash2 size={16} strokeWidth={2} aria-hidden />}
+            loading={busy}
             onClick={clearAll}
-            className="btn-danger text-sm"
             disabled={busy || (totalSlots ?? slots.length) === 0}
           >
             Clear All
-          </button>
-        </div>
+          </Button>
+        </Card>
       </div>
 
       {hiddenElectives.length > 0 && (
-        <div className="p-3 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-600">
-          <span className="font-medium text-gray-700">
+        <div
+          className="p-3 rounded-lg border text-xs"
+          style={{
+            background: 'var(--cp-surface)',
+            borderColor: 'rgba(163,177,198,.3)',
+            color: 'var(--cp-muted)',
+          }}
+        >
+          <span className="font-medium" style={{ color: 'var(--cp-text)' }}>
             {hiddenElectives.length} elective{hiddenElectives.length === 1 ? '' : 's'} in this
             semester
           </span>{' '}
@@ -504,7 +572,9 @@ function TimetableView({ slots, onChanged, totalSlots, hiddenElectives = [] }: T
       )}
 
       {slots.length > 0 && visibleSlots.length === 0 && (
-        <div className="card text-center py-10 text-sm text-gray-500">No classes on {day}.</div>
+        <Card className="text-center py-10 text-sm" style={{ color: 'var(--cp-muted)' }}>
+          No classes on {day}.
+        </Card>
       )}
     </div>
   );
@@ -528,39 +598,14 @@ function DayFilter({ days, selected, onSelect, count }: DayFilterProps) {
   if (days.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Day</span>
-      <div className="flex flex-wrap items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onSelect('all')}
-          aria-pressed={selected === 'all'}
-          className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
-            selected === 'all'
-              ? 'bg-primary-500 text-white border-primary-500'
-              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          All
-        </button>
-        {days.map(name => (
-          <button
-            key={name}
-            type="button"
-            onClick={() => onSelect(name)}
-            aria-pressed={selected === name}
-            className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
-              selected === name
-                ? 'bg-primary-500 text-white border-primary-500'
-                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-      <span className="text-xs text-gray-500">
+      <Tabs
+        tabs={[{ id: 'all', label: 'All' }, ...days.map(name => ({ id: name, label: name }))]}
+        active={selected}
+        onChange={onSelect}
+      />
+      <Badge tone="neutral">
         {count} class{count === 1 ? '' : 'es'}
-      </span>
+      </Badge>
     </div>
   );
 }
@@ -598,52 +643,63 @@ function TimetableByDay({ slots, hidden = 0 }: TimetableByDayProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-semibold text-gray-900">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
           Timetable
-          <span className="ml-2 text-xs font-normal text-gray-500">
+          <span className="ml-2 text-xs font-normal" style={{ color: 'var(--cp-muted)' }}>
             {total} slot{total === 1 ? '' : 's'} across {byDay.length} day
             {byDay.length === 1 ? '' : 's'}
           </span>
         </h3>
         {/* Explain the gap, so a short list is never mistaken for missing data. */}
         {hidden > 0 && (
-          <span className="text-xs text-gray-500">
+          <Badge tone="neutral">
             {hidden} slot{hidden === 1 ? '' : 's'} hidden - other branches
-          </span>
+          </Badge>
         )}
       </div>
 
       {byDay.map(({ day, slots: daySlots }) => (
-        <div key={day} className="card">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">{DAY_NAMES[day] || day}</h4>
+        <Card key={day}>
+          <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--cp-text)' }}>
+            {DAY_NAMES[day] || day}
+          </h4>
 
           <div className="space-y-2">
             {daySlots.map(slot => (
               <div
                 key={slot.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2"
+                style={{
+                  background: 'var(--cp-bg)',
+                  boxShadow: 'var(--cp-neu-inset)',
+                }}
               >
-                <span className="font-mono text-sm font-semibold text-gray-900 w-24 shrink-0">
+                <span
+                  className="font-mono text-sm font-semibold w-24 shrink-0"
+                  style={{ color: 'var(--cp-text)' }}
+                >
                   {slot.course_code}
                 </span>
 
-                <span className="text-xs text-gray-500 w-20 shrink-0">
+                <span className="text-xs w-20 shrink-0" style={{ color: 'var(--cp-muted)' }}>
                   {slot.instructor || '—'}
                 </span>
 
-                <span className="font-mono text-xs text-primary-600 w-20 shrink-0">
+                <Badge tone="neutral" className="font-mono shrink-0">
                   {slot.room || 'TBA'}
-                </span>
+                </Badge>
 
-                <span className="text-xs text-gray-600 whitespace-nowrap">
+                <Badge tone="info" className="whitespace-nowrap">
                   {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-                </span>
+                </Badge>
 
-                <span className="text-xs text-gray-500 truncate">{slot.branch_or_program}</span>
+                <span className="text-xs truncate" style={{ color: 'var(--cp-muted)' }}>
+                  {slot.branch_or_program}
+                </span>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       ))}
     </div>
   );

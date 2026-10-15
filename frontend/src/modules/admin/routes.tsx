@@ -1,6 +1,8 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+﻿import { Suspense, lazy, useEffect, useState } from 'react';
+import { Activity, Menu, MessageSquare, Smartphone, X } from 'lucide-react';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { healthApi } from '@/api';
+import { Badge, Tabs } from '@/components/ui';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 import { Sidebar } from '@shared/components/Sidebar';
@@ -13,7 +15,10 @@ const Profile = lazy(() => import('@shared/features/profile/Profile'));
 function ModuleLoading() {
   return (
     <div className="flex justify-center py-12">
-      <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      <div
+        className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
+        style={{ borderColor: 'var(--cp-primary)', borderTopColor: 'transparent' }}
+      />
     </div>
   );
 }
@@ -44,6 +49,8 @@ function useBackendStatus() {
 interface AdminTab {
   id: string;
   label: string;
+  icon?: React.ReactNode;
+  hue?: string;
 }
 
 /**
@@ -62,96 +69,110 @@ export function AdminRoutes() {
 
   // Admin sub-tabs (Profile removed - accessed via sidebar)
   const ADMIN_TABS: AdminTab[] = [
-    { id: 'responses', label: 'Feedback Responses' },
-    { id: 'web-monitoring', label: 'Web App Monitoring' },
-    { id: 'android-monitoring', label: 'Android App Monitoring' },
+    {
+      id: 'responses',
+      label: 'Feedback Responses',
+      icon: <MessageSquare size={16} strokeWidth={2} aria-hidden />,
+      hue: 'coral',
+    },
+    {
+      id: 'web-monitoring',
+      label: 'Web App Monitoring',
+      icon: <Activity size={16} strokeWidth={2} aria-hidden />,
+      hue: 'sky',
+    },
+    {
+      id: 'android-monitoring',
+      label: 'Android App Monitoring',
+      icon: <Smartphone size={16} strokeWidth={2} aria-hidden />,
+      hue: 'mint',
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--cp-bg)' }}>
       {/* Single static header, flush at the top, never scrolls away */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
+      <header
+        className="sticky top-0 z-40"
+        style={{
+          background: 'var(--cp-surface)',
+          borderBottom: '1px solid rgba(163,177,198,.25)',
+        }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top row: brand + sidebar toggle + status indicator */}
           <div className="flex items-center justify-between gap-4 h-16">
             {/* Brand */}
             <div className="flex items-center gap-3 shrink-0">
               <div className="leading-tight">
-                <p className="text-lg font-bold text-primary-500">essential</p>
-                <p className="text-[10px] tracking-widest font-semibold text-cyan-600 whitespace-nowrap">
+                <p className="text-lg font-bold" style={{ color: 'var(--cp-primary)' }}>
+                  essential
+                </p>
+                <p
+                  className="text-[10px] tracking-widest font-semibold whitespace-nowrap"
+                  style={{ color: 'var(--cp-info)' }}
+                >
                   YOUR CAMPUS ASSISTANT
                 </p>
               </div>
             </div>
 
-            <span className="px-3 py-1.5 text-sm font-semibold text-primary-600 bg-primary-50 rounded-lg whitespace-nowrap">
-              Admin
-            </span>
+            <Badge tone="primary">Admin</Badge>
 
             {/* Right side: status indicator + sidebar toggle */}
             <div className="flex items-center gap-3 shrink-0">
               <span
-                className={`w-2.5 h-2.5 rounded-full ${online ? 'bg-success-500' : 'bg-danger-500'}`}
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ background: online ? 'var(--cp-success)' : 'var(--cp-danger)' }}
                 title={online ? 'Backend connected' : 'Backend offline'}
                 aria-label={online ? 'Backend connected' : 'Backend offline'}
               />
               {/* Sidebar Toggle Button in header */}
-              {/* Sidebar Toggle Button in header */}
               <button
                 type="button"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                className="w-10 h-10 flex items-center justify-center transition-all duration-200"
+                style={
                   sidebarOpen
-                    ? 'bg-primary-50 text-primary-600'
-                    : 'bg-gray-50 hover:bg-gray-100 text-gray-600'
-                }`}
+                    ? {
+                        borderRadius: 16,
+                        background: '#4F46E5',
+                        color: '#fff',
+                        boxShadow: 'var(--cp-clay)',
+                      }
+                    : {
+                        borderRadius: 16,
+                        background: 'var(--cp-surface)',
+                        color: 'var(--cp-muted)',
+                        boxShadow: 'var(--cp-neu-raised-sm)',
+                        border: '1px solid rgba(163,177,198,.3)',
+                      }
+                }
                 aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={sidebarOpen}
               >
-                <svg
-                  className="w-6 h-6 transition-transform duration-200"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                >
-                  {sidebarOpen ? (
-                    <>
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </>
-                  ) : (
-                    <>
-                      <line x1="3" y1="12" x2="21" y2="12" />
-                      <line x1="3" y1="6" x2="21" y2="6" />
-                      <line x1="3" y1="18" x2="21" y2="18" />
-                    </>
-                  )}
-                </svg>
+                {sidebarOpen ? (
+                  <X
+                    size={24}
+                    strokeWidth={2}
+                    aria-hidden
+                    className="transition-transform duration-200"
+                  />
+                ) : (
+                  <Menu
+                    size={24}
+                    strokeWidth={2}
+                    aria-hidden
+                    className="transition-transform duration-200"
+                  />
+                )}
               </button>
             </div>
           </div>
 
           {/* Second row: Admin sub-tabs */}
-          <div className="flex items-center justify-center gap-1 pb-4">
-            <nav className="flex items-center gap-1" aria-label="Admin sections">
-              {ADMIN_TABS.map(item => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setAdminTab(item.id)}
-                  aria-current={adminTab === item.id ? 'page' : undefined}
-                  className={`px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-full transition-colors ${
-                    adminTab === item.id
-                      ? 'bg-primary-500 text-white'
-                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </nav>
+          <div className="flex items-center justify-center gap-1 py-2 overflow-x-auto">
+            <Tabs tabs={ADMIN_TABS} active={adminTab} onChange={setAdminTab} />
           </div>
         </div>
       </header>
@@ -193,8 +214,17 @@ export function AdminRoutes() {
       </main>
 
       {/* Single footer */}
-      <footer className="bg-white border-t border-gray-200 py-4">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500">
+      <footer
+        className="py-4"
+        style={{
+          background: 'var(--cp-surface)',
+          borderTop: '1px solid rgba(163,177,198,.25)',
+        }}
+      >
+        <div
+          className="max-w-7xl mx-auto px-4 text-center text-xs"
+          style={{ color: 'var(--cp-muted)' }}
+        >
           essential &mdash; your campus assistant
         </div>
       </footer>

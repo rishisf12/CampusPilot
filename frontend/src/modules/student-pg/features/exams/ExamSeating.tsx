@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react';
+import { AlertTriangle, CalendarDays, CheckCircle2, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { Badge, Button, Card, Input, Select, Table, Tabs } from '@/components/ui';
 import { authApi, examApi } from '@/api';
 import { BRANCH_OPTIONS } from '@shared/constants';
 import { formatDate, formatTime, todayIso } from '@shared/lib/time';
@@ -303,12 +305,14 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
   return (
     <div className="space-y-5">
       {/* Quick Roll Lookup - small and centred */}
-      <div className="max-w-xl mx-auto card">
-        <h3 className="text-sm font-semibold text-gray-900 text-center">Quick Roll Lookup</h3>
+      <Card className="max-w-xl mx-auto">
+        <h3 className="text-sm font-semibold text-center" style={{ color: 'var(--cp-text)' }}>
+          Quick Roll Lookup
+        </h3>
         <form onSubmit={runLookup} className="mt-3 flex gap-2">
-          <input
+          <Input
             id="exam-roll"
-            className="input-field font-mono flex-1"
+            className="font-mono flex-1"
             value={roll}
             onChange={event => {
               setRoll(event.target.value.toUpperCase());
@@ -316,13 +320,17 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
             }}
             placeholder="e.g. 23BCS125"
           />
-          <button
+          <Button
             type="submit"
-            className="btn-primary text-sm shrink-0"
+            variant="primary"
+            size="sm"
+            icon={<Search size={16} strokeWidth={2} />}
+            loading={looking}
             disabled={looking || !roll.trim()}
+            className="shrink-0"
           >
-            {looking ? <Spinner size={16} className="text-white" /> : 'Find Room'}
-          </button>
+            Find Room
+          </Button>
         </form>
 
         {lookupError && (
@@ -332,7 +340,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
         )}
 
         {lookup && lookup.exams.length === 0 && (
-          <p className="mt-3 text-sm text-gray-500 text-center">
+          <p className="mt-3 text-sm text-center" style={{ color: 'var(--cp-muted)' }}>
             No exam found for <span className="font-mono">{lookup.roll}</span>.
           </p>
         )}
@@ -340,7 +348,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
         {lookup && lookup.exams.length > 0 && (
           <>
             {lookup.profileFiltered && (
-              <p className="mt-3 text-xs text-gray-500 text-center">
+              <p className="mt-3 text-xs text-center" style={{ color: 'var(--cp-muted)' }}>
                 Filtered to your profile
                 {lookup.profile
                   ? ` (${lookup.profile.branch} · Sem ${lookup.profile.semester})`
@@ -354,23 +362,28 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
                 return (
                   <div
                     key={`${exam.course_code}-${exam.date}-${exam.room}-${index}`}
-                    className={`rounded-lg border p-3 ${
-                      isToday ? 'border-primary-400 bg-primary-50' : 'border-gray-200 bg-white'
-                    }`}
+                    className="neu-raised-sm p-3"
+                    style={isToday ? { borderColor: 'var(--cp-primary)' } : undefined}
                   >
                     {isToday && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-primary-600 mb-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
+                      <Badge tone="primary" className="mb-1 text-[10px] font-bold">
+                        <CalendarDays size={10} strokeWidth={2} aria-hidden />
                         TODAY
-                      </span>
+                      </Badge>
                     )}
-                    <p className="text-sm font-mono font-semibold text-gray-900">
+                    <p
+                      className="text-sm font-mono font-semibold"
+                      style={{ color: 'var(--cp-text)' }}
+                    >
                       {exam.course_code}
                     </p>
-                    <p className="text-xs text-gray-700 mt-0.5">
-                      Room <span className="font-mono text-primary-600">{exam.room || '—'}</span>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--cp-text)' }}>
+                      Room{' '}
+                      <span className="font-mono" style={{ color: 'var(--cp-primary)' }}>
+                        {exam.room || '—'}
+                      </span>
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
                       {formatDate(exam.date)}
                       {exam.day ? ` (${exam.day})` : ''}
                       {exam.start_time
@@ -383,7 +396,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
             </div>
           </>
         )}
-      </div>
+      </Card>
 
       {message && (
         <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm">
@@ -422,18 +435,11 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
       </div>
 
       {/* Views */}
-      <div className="flex items-center gap-1 border-b border-gray-200">
-        {SUB_TABS.map(item => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setSubTab(item.id)}
-            className={`sub-tab ${subTab === item.id ? 'sub-tab-active' : 'sub-tab-idle'}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        tabs={SUB_TABS.map(item => ({ id: item.id, label: item.label }))}
+        active={subTab}
+        onChange={id => setSubTab(id)}
+      />
 
       {loading && !timetable && (
         <div className="flex justify-center py-10">
@@ -512,22 +518,34 @@ function ExamClashCard() {
 
   if (loading) {
     return (
-      <div className="card flex items-center justify-center gap-3 py-5 text-sm text-gray-500">
+      <Card
+        className="flex items-center justify-center gap-3 py-5 text-sm"
+        style={{ color: 'var(--cp-muted)' }}
+      >
         <Spinner size={16} className="text-primary-500" />
         Checking your exam schedule for clashes…
-      </div>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <div className="card">
-        <h3 className="text-sm font-semibold text-gray-900 mb-2">Exam clash check</h3>
+      <Card>
+        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--cp-text)' }}>
+          Exam clash check
+        </h3>
         <ErrorBanner message={error} onDismiss={() => setError(null)} />
-        <button type="button" onClick={load} className="btn-ghost mt-2">
+        <Button
+          type="button"
+          onClick={load}
+          variant="ghost"
+          size="sm"
+          icon={<RefreshCw size={14} strokeWidth={2} />}
+          className="mt-2"
+        >
           Try again
-        </button>
-      </div>
+        </Button>
+      </Card>
     );
   }
 
@@ -535,27 +553,36 @@ function ExamClashCard() {
   const examCount = data?.exam_count || 0;
 
   return (
-    <div className="card">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">Exam clash check</h3>
-          <p className="text-xs text-gray-500">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+            Exam clash check
+          </h3>
+          <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
             Compares your {examCount} exam{examCount === 1 ? '' : 's'} for overlapping times.
           </p>
         </div>
-        <button type="button" onClick={load} className="btn-ghost">
+        <Button
+          type="button"
+          onClick={load}
+          variant="ghost"
+          size="sm"
+          icon={<RefreshCw size={14} strokeWidth={2} />}
+        >
           Re-check
-        </button>
+        </Button>
       </div>
 
       {clashes.length === 0 ? (
         <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-success-500 shrink-0" />
+          <CheckCircle2 size={16} strokeWidth={2} aria-hidden className="shrink-0" />
           No clashes - none of your exams overlap.
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-danger-700">
+          <p className="text-sm text-danger-700 flex items-center gap-2">
+            <AlertTriangle size={16} strokeWidth={2} aria-hidden className="shrink-0" />
             {clashes.length} clash{clashes.length === 1 ? '' : 'es'} found. You cannot sit both
             papers in each pair.
           </p>
@@ -576,22 +603,13 @@ function ExamClashCard() {
                     className="flex items-center gap-2"
                   >
                     {position > 0 && <span className="text-xs font-bold text-danger-600">vs</span>}
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-danger-200 text-xs">
-                      <span className="font-mono font-semibold text-gray-900">
-                        {course.course_code}
-                      </span>
-                      {course.rooms.length > 0 && (
-                        <span className="text-gray-500">
-                          {' '}
-                          @ <span className="font-mono">{course.rooms.join(', ')}</span>
-                        </span>
-                      )}
+                    <Badge tone="danger" className="text-xs">
+                      <span className="font-mono font-semibold">{course.course_code}</span>
+                      {course.rooms.length > 0 && <span> @ {course.rooms.join(', ')}</span>}
                       {course.is_extra && (
-                        <span className="ml-1.5 text-[10px] font-semibold text-primary-600">
-                          EXTRA
-                        </span>
+                        <span className="ml-1.5 text-[10px] font-semibold">EXTRA</span>
                       )}
-                    </span>
+                    </Badge>
                   </span>
                 ))}
               </div>
@@ -599,7 +617,7 @@ function ExamClashCard() {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -628,16 +646,23 @@ function ExamUploadCard({ title, kind, count, onUpload, onRemove }: ExamUploadCa
   return (
     <FileUpload label={title} accept=".pdf,.csv" onUpload={onUpload}>
       {count > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+        <div
+          className="mt-3 pt-3 border-t space-y-2"
+          style={{ borderColor: 'rgba(163,177,198,.3)' }}
+        >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-gray-700">Uploaded ({count} entries)</span>
-            <button
+            <span className="text-xs font-medium" style={{ color: 'var(--cp-text)' }}>
+              Uploaded ({count} entries)
+            </span>
+            <Button
               type="button"
               onClick={onRemove}
-              className="text-xs font-medium text-danger-600 hover:text-danger-700"
+              variant="ghost"
+              size="sm"
+              icon={<Trash2 size={14} strokeWidth={2} />}
             >
               Remove
-            </button>
+            </Button>
           </div>
 
           <UploadPreview
@@ -682,20 +707,20 @@ function TimetableView({
 }: TimetableViewProps) {
   if (!total) {
     return (
-      <div className="card text-center py-10 text-sm text-gray-500">
+      <Card className="text-center py-10 text-sm" style={{ color: 'var(--cp-muted)' }}>
         No exam timetable uploaded yet. Add the exam timetable PDF above.
-      </div>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-3">
-      <div className="card flex flex-wrap items-end gap-3">
+      <Card className="flex flex-wrap items-end gap-3">
         <div>
           <span className="label">Semester</span>
-          <select
+          <Select
             id="exam-semester"
-            className="select-field w-32"
+            className="w-32"
             value={semester}
             onChange={event => setSemester(event.target.value)}
           >
@@ -705,13 +730,13 @@ function TimetableView({
                 {value}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <span className="label">Branch</span>
-          <select
+          <Select
             id="exam-branch"
-            className="select-field w-40"
+            className="w-40"
             value={branch}
             onChange={event => setBranch(event.target.value)}
           >
@@ -721,22 +746,23 @@ function TimetableView({
                 {item}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         {isSynced && (
-          <span className="px-2.5 py-1 rounded-full bg-success-50 text-success-700 text-xs font-medium">
+          <Badge tone="success">
+            <CheckCircle2 size={12} strokeWidth={2} aria-hidden />
             Synced with profile
-          </span>
+          </Badge>
         )}
         {hiddenCount > 0 && (
-          <span className="text-xs text-gray-500">
+          <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
             {hiddenCount} row{hiddenCount === 1 ? '' : 's'} hidden by these filters.
           </span>
         )}
-      </div>
+      </Card>
 
       {hiddenElectives.length > 0 && (
-        <p className="mt-2 text-xs text-gray-500">
+        <p className="mt-2 text-xs" style={{ color: 'var(--cp-muted)' }}>
           {hiddenElectives.length} elective{hiddenElectives.length === 1 ? '' : 's'} in this index{' '}
           {hiddenElectives.length === 1 ? 'is' : 'are'} not in your profile:{' '}
           <span className="font-mono">{hiddenElectives.slice(0, 6).join(', ')}</span>
@@ -746,41 +772,32 @@ function TimetableView({
       )}
 
       {days.length === 0 ? (
-        <div className="card text-center py-8 text-sm text-gray-500">
+        <Card className="text-center py-8 text-sm" style={{ color: 'var(--cp-muted)' }}>
           Nothing matches these filters.
-        </div>
+        </Card>
       ) : (
         days.map((day, index) => (
-          <div key={day.date || index} className="card">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">
+          <div key={day.date || index} className="space-y-2">
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
               Day-{index + 1} {day.day || formatDate(day.date)}
             </h3>
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
-                    <th className="py-2 pr-3 font-medium">Date</th>
-                    <th className="py-2 pr-3 font-medium">Time</th>
-                    <th className="py-2 pr-3 font-medium">Course Code</th>
-                    <th className="py-2 font-medium">Instructor</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {day.exams.map(exam => (
-                    <tr key={exam.id}>
-                      <td className="py-2 pr-3 text-gray-700 whitespace-nowrap">
-                        {formatDate(exam.schedule_date)}
-                      </td>
-                      <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">
-                        {formatTime(exam.start_time)} - {formatTime(exam.end_time)}
-                      </td>
-                      <td className="py-2 pr-3 font-mono text-gray-900">{exam.course_code}</td>
-                      <td className="py-2 text-gray-500">—</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              head={['Date', 'Time', 'Course Code', 'Instructor']}
+              rows={day.exams.map(exam => [
+                <span key="date" className="whitespace-nowrap" style={{ color: 'var(--cp-text)' }}>
+                  {formatDate(exam.schedule_date)}
+                </span>,
+                <span key="time" className="whitespace-nowrap" style={{ color: 'var(--cp-muted)' }}>
+                  {formatTime(exam.start_time)} - {formatTime(exam.end_time)}
+                </span>,
+                <span key="code" className="font-mono" style={{ color: 'var(--cp-text)' }}>
+                  {exam.course_code}
+                </span>,
+                <span key="instructor" style={{ color: 'var(--cp-muted)' }}>
+                  —
+                </span>,
+              ])}
+            />
           </div>
         ))
       )}
@@ -850,14 +867,16 @@ function SeatingView({ data, showAll, setShowAll, onLoad }: SeatingViewProps) {
 
   if (!data) {
     return (
-      <div className="card text-center py-10 text-sm text-gray-500">Loading seating index…</div>
+      <Card className="text-center py-10 text-sm" style={{ color: 'var(--cp-muted)' }}>
+        Loading seating index…
+      </Card>
     );
   }
   if (!data.total) {
     return (
-      <div className="card text-center py-10 text-sm text-gray-500">
+      <Card className="text-center py-10 text-sm" style={{ color: 'var(--cp-muted)' }}>
         No seating index uploaded yet. Add the seating index PDF above.
-      </div>
+      </Card>
     );
   }
 
@@ -865,12 +884,12 @@ function SeatingView({ data, showAll, setShowAll, onLoad }: SeatingViewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="card flex flex-wrap items-end gap-3">
+      <Card className="flex flex-wrap items-end gap-3">
         <div>
           <span className="label">Semester</span>
-          <select
+          <Select
             id="seating-semester"
-            className="select-field w-32"
+            className="w-32"
             value={semester}
             onChange={event => setSemester(event.target.value)}
           >
@@ -880,13 +899,13 @@ function SeatingView({ data, showAll, setShowAll, onLoad }: SeatingViewProps) {
                 {value}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <span className="label">Branch</span>
-          <select
+          <Select
             id="seating-branch"
-            className="select-field w-40"
+            className="w-40"
             value={branch}
             onChange={event => setBranch(event.target.value)}
           >
@@ -896,71 +915,76 @@ function SeatingView({ data, showAll, setShowAll, onLoad }: SeatingViewProps) {
                 {item}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         {isSynced && (
-          <span className="px-2.5 py-1 rounded-full bg-success-50 text-success-700 text-xs font-medium">
+          <Badge tone="success">
+            <CheckCircle2 size={12} strokeWidth={2} aria-hidden />
             Synced with profile
-          </span>
+          </Badge>
         )}
         {hiddenCount > 0 && (
-          <span className="text-xs text-gray-500">
+          <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
             {hiddenCount} row{hiddenCount === 1 ? '' : 's'} hidden by these filters.
           </span>
         )}
-      </div>
+      </Card>
 
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs text-gray-500">{rows.length} entries</span>
+        <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
+          {rows.length} entries
+        </span>
         {rows.length > PREVIEW_ROWS && (
-          <button type="button" onClick={() => setShowAll(!showAll)} className="btn-ghost ml-auto">
+          <Button
+            type="button"
+            onClick={() => setShowAll(!showAll)}
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+          >
             {showAll ? 'Show less' : `Show All (${rows.length})`}
-          </button>
+          </Button>
         )}
-        <button type="button" onClick={onLoad} className="btn-ghost">
+        <Button
+          type="button"
+          onClick={onLoad}
+          variant="ghost"
+          size="sm"
+          icon={<RefreshCw size={14} strokeWidth={2} />}
+        >
           Refresh
-        </button>
+        </Button>
       </div>
 
       {rows.length === 0 ? (
-        <div className="card text-center py-8 text-sm text-gray-500">
+        <Card className="text-center py-8 text-sm" style={{ color: 'var(--cp-muted)' }}>
           Nothing matches these filters.
-        </div>
+        </Card>
       ) : (
-        <div className="card overflow-x-auto scrollbar-thin">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
-                <th className="py-2 pr-3 font-medium">Date</th>
-                <th className="py-2 pr-3 font-medium">Time</th>
-                <th className="py-2 pr-3 font-medium">Lecture Hall</th>
-                <th className="py-2 pr-3 font-medium">Course Code</th>
-                <th className="py-2 font-medium">Roll Numbers</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {visible.map(room => (
-                <tr key={room.id}>
-                  <td className="py-2 pr-3 text-gray-700 whitespace-nowrap">
-                    {formatDate(room.date)}
-                  </td>
-                  <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">
-                    {formatTime(room.start_time)} - {formatTime(room.end_time)}
-                  </td>
-                  <td className="py-2 pr-3 font-mono text-primary-600">{room.room || '—'}</td>
-                  <td className="py-2 pr-3 font-mono text-gray-900">{room.course_code}</td>
-                  <td className="py-2 font-mono text-xs text-gray-600">
-                    {room.roll_start_prefix}
-                    {String(room.roll_start_num).padStart(3, '0')}
-                    {room.roll_start_num === room.roll_end_num
-                      ? ''
-                      : ` - ${room.roll_start_prefix}${String(room.roll_end_num).padStart(3, '0')}`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          head={['Date', 'Time', 'Lecture Hall', 'Course Code', 'Roll Numbers']}
+          rows={visible.map(room => [
+            <span key="date" className="whitespace-nowrap" style={{ color: 'var(--cp-text)' }}>
+              {formatDate(room.date)}
+            </span>,
+            <span key="time" className="whitespace-nowrap" style={{ color: 'var(--cp-muted)' }}>
+              {formatTime(room.start_time)} - {formatTime(room.end_time)}
+            </span>,
+            <span key="room" className="font-mono" style={{ color: 'var(--cp-primary)' }}>
+              {room.room || '—'}
+            </span>,
+            <span key="code" className="font-mono" style={{ color: 'var(--cp-text)' }}>
+              {room.course_code}
+            </span>,
+            <span key="rolls" className="font-mono text-xs" style={{ color: 'var(--cp-muted)' }}>
+              {room.roll_start_prefix}
+              {String(room.roll_start_num).padStart(3, '0')}
+              {room.roll_start_num === room.roll_end_num
+                ? ''
+                : ` - ${room.roll_start_prefix}${String(room.roll_end_num).padStart(3, '0')}`}
+            </span>,
+          ])}
+        />
       )}
     </div>
   );

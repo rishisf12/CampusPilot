@@ -1,3 +1,6 @@
+import { GraduationCap, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Badge, Card } from '@/components/ui';
+
 /**
  * The landing screen: who are you signing in as?
  *
@@ -58,7 +61,10 @@ export default function StartScreen({ onChooseStudent, onChooseAdmin }: StartScr
     else onChooseStudent?.();
   };
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-12"
+      style={{ background: 'var(--cp-bg)' }}
+    >
       <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
           <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
@@ -68,10 +74,14 @@ export default function StartScreen({ onChooseStudent, onChooseAdmin }: StartScr
           </p>
         </div>
 
-        <div className="card space-y-5">
+        <Card className="space-y-5">
           <div className="text-center">
-            <h2 className="text-lg font-semibold text-gray-900">How are you signing in?</h2>
-            <p className="text-sm text-gray-600 mt-1">Choose your role to continue.</p>
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+              How are you signing in?
+            </h2>
+            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
+              Choose your role to continue.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -80,30 +90,36 @@ export default function StartScreen({ onChooseStudent, onChooseAdmin }: StartScr
             ))}
           </div>
 
-          <p className="text-xs text-gray-500 text-center pt-1">
+          <p className="text-xs text-center pt-1" style={{ color: 'var(--cp-muted)' }}>
             Students register with your college email address.
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );
 }
 
 function RoleCard({ role, onChoose }: { role: Role; onChoose: () => void }) {
+  const Icon = role.id === 'admin' ? ShieldCheck : GraduationCap;
   if (!role.available) {
     return (
       <div
-        className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left"
+        className="neu-inset rounded-xl p-4 text-left"
         // Not a control: there is nothing to click, so it is not a button.
         aria-disabled="true"
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="font-semibold text-gray-500">{role.label}</span>
-          <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-200 text-gray-500">
-            Soon
+          <span
+            className="font-semibold flex items-center gap-1.5"
+            style={{ color: 'var(--cp-muted)' }}
+          >
+            <Icon size={18} aria-hidden /> {role.label}
           </span>
+          <Badge tone="neutral">Soon</Badge>
         </div>
-        <p className="text-xs text-gray-500 mt-1.5">{role.detail}</p>
+        <p className="text-xs mt-1.5" style={{ color: 'var(--cp-muted)' }}>
+          {role.detail}
+        </p>
       </div>
     );
   }
@@ -112,15 +128,23 @@ function RoleCard({ role, onChoose }: { role: Role; onChoose: () => void }) {
     <button
       type="button"
       onClick={onChoose}
-      className="rounded-xl border-2 border-primary-500 bg-primary-50 p-4 text-left hover:bg-primary-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition-colors"
+      aria-label={`Continue as ${role.label}`}
+      className="neu-raised rounded-xl p-4 text-left hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition-all"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold text-primary-700">{role.label}</span>
+        <span
+          className="font-semibold flex items-center gap-1.5"
+          style={{ color: 'var(--cp-text)' }}
+        >
+          <Icon size={18} aria-hidden /> {role.label}
+        </span>
         <span aria-hidden="true" className="text-primary-500">
-          &rarr;
+          <ArrowRight size={18} />
         </span>
       </div>
-      <p className="text-xs text-primary-600 mt-1.5">{role.detail}</p>
+      <p className="text-xs mt-1.5" style={{ color: 'var(--cp-muted)' }}>
+        {role.detail}
+      </p>
     </button>
   );
 }

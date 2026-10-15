@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
-import Spinner from './Spinner';
+import { FileText, Upload, X } from 'lucide-react';
+import { Button, Card } from '@/components/ui';
 
 /**
  * Compact uploader.
@@ -84,17 +85,23 @@ export default function FileUpload({
   };
 
   return (
-    <div className="card p-4">
-      <h3 className="text-sm font-semibold text-gray-900">{label}</h3>
-      {hint && <p className="text-xs text-gray-500 mt-0.5">{hint}</p>}
+    <Card className="!p-4">
+      <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+        {label}
+      </h3>
+      {hint && (
+        <p className="text-xs mt-0.5" style={{ color: 'var(--cp-muted)' }}>
+          {hint}
+        </p>
+      )}
 
       <form onSubmit={submit} className="mt-3 space-y-3">
         <div
-          className={`border-2 border-dashed rounded-lg px-4 py-5 text-center transition-colors ${
-            dragActive
-              ? 'border-primary-500 bg-primary-50'
-              : 'border-gray-300 hover:border-primary-400'
-          }`}
+          className="neu-inset rounded-xl px-4 py-5 text-center transition-all duration-200"
+          style={{
+            border: `2px dashed ${dragActive ? 'var(--cp-primary)' : 'rgba(163,177,198,.5)'}`,
+            background: dragActive ? 'rgba(99,102,241,.06)' : 'var(--cp-bg)',
+          }}
           onDragEnter={e => {
             e.preventDefault();
             setDragActive(true);
@@ -116,37 +123,40 @@ export default function FileUpload({
           {file ? (
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 min-w-0">
-                <svg
-                  className="w-5 h-5 text-gray-400 shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.5"
-                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                  />
-                </svg>
-                <span className="text-sm text-gray-800 truncate">{file.name}</span>
+                <FileText
+                  size={20}
+                  strokeWidth={2}
+                  aria-hidden
+                  className="shrink-0"
+                  style={{ color: 'var(--cp-muted)' }}
+                />
+                <span className="text-sm truncate" style={{ color: 'var(--cp-text)' }}>
+                  {file.name}
+                </span>
                 {file.restored && (
-                  <span className="text-[10px] text-gray-400 shrink-0">(not re-selectable)</span>
+                  <span className="text-[10px] shrink-0" style={{ color: 'var(--cp-muted)' }}>
+                    (not re-selectable)
+                  </span>
                 )}
               </div>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
+                icon={<X size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />}
                 onClick={clear}
                 disabled={busy}
-                className="text-xs font-medium text-danger-600 hover:text-danger-700 shrink-0"
-              >
-                Remove
-              </button>
+                aria-label={`Remove ${file.name}`}
+              />
             </div>
           ) : (
-            <label htmlFor={inputId} className="cursor-pointer text-sm text-gray-600">
+            <label
+              htmlFor={inputId}
+              className="cursor-pointer text-sm"
+              style={{ color: 'var(--cp-text)' }}
+            >
               Click to choose a file
-              <span className="block text-xs text-gray-400 mt-0.5">
+              <span className="block text-xs mt-0.5" style={{ color: 'var(--cp-muted)' }}>
                 or drop it here &middot; {accept}
               </span>
             </label>
@@ -154,36 +164,53 @@ export default function FileUpload({
         </div>
 
         {busy && (
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
+          <div
+            className="w-full rounded-full h-1.5"
+            style={{ background: 'var(--cp-bg)', boxShadow: 'var(--cp-neu-inset)' }}
+          >
             <div
-              className="h-1.5 rounded-full bg-primary-500 transition-all"
-              style={{ width: `${progress}%` }}
+              className="h-1.5 rounded-full transition-all"
+              style={{ width: `${progress}%`, background: 'var(--cp-primary)' }}
             />
           </div>
         )}
 
         {error && (
-          <div className="p-2.5 rounded-lg border border-danger-200 bg-danger-50 text-danger-700 text-sm">
+          <div className="p-2.5 rounded-xl border border-danger-200 bg-danger-50 text-danger-700 text-sm">
             {error}
           </div>
         )}
         {done && !error && (
-          <div className="p-2.5 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm">
+          <div className="p-2.5 rounded-xl border border-success-200 bg-success-50 text-success-700 text-sm">
             {done}
           </div>
         )}
 
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="submit"
-            className="btn-primary text-sm"
+            variant="primary"
+            size="sm"
+            icon={
+              <Upload size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+            }
+            loading={busy}
             disabled={busy || !file || file.restored}
           >
-            {busy ? <Spinner size={16} className="text-white" /> : 'Upload'}
-          </button>
+            Upload
+          </Button>
           {/* A restored stub holds no bytes, so keep the picker reachable. */}
           {(!file || file.restored) && (
-            <label htmlFor={inputId} className="btn-secondary text-sm cursor-pointer">
+            <label
+              htmlFor={inputId}
+              className="inline-flex items-center justify-center gap-2 font-medium rounded-[20px] px-3 py-1.5 text-sm cursor-pointer transition-all duration-200 ease-out hover:-translate-y-px active:translate-y-[1px]"
+              style={{
+                background: 'var(--cp-surface)',
+                color: 'var(--cp-text)',
+                border: '1px solid rgba(163,177,198,.3)',
+                boxShadow: 'var(--cp-neu-raised-sm)',
+              }}
+            >
               Choose file
             </label>
           )}
@@ -191,6 +218,6 @@ export default function FileUpload({
       </form>
 
       {children}
-    </div>
+    </Card>
   );
 }

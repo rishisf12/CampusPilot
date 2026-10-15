@@ -1,4 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Button, Card, IconTile } from '@/components/ui';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -48,40 +50,56 @@ export class ModuleErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoun
         return this.props.fallback;
       }
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-          <div className="max-w-md text-center">
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <div className="w-12 h-12 mx-auto mb-4 bg-danger-50 rounded-full flex items-center justify-center">
-                <svg
-                  className="w-6 h-6 text-danger-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-lg font-semibold text-gray-900">Something went wrong</h2>
-              <p className="mt-2 text-sm text-gray-600">
-                This module encountered an error and couldn't load. The rest of the app is still
-                working.
+        <div
+          className="min-h-screen flex items-center justify-center px-4"
+          style={{ background: 'var(--cp-bg)' }}
+        >
+          <div className="max-w-md w-full text-center">
+            <Card className="space-y-4">
+              <IconTile hue="coral" size={48} className="mx-auto">
+                <AlertTriangle
+                  size={24}
+                  strokeWidth={2}
+                  aria-hidden
+                  style={{ color: 'currentColor' }}
+                />
+              </IconTile>
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+                Something went wrong
+              </h2>
+              <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
+                This module encountered an error and couldn&apos;t load. The rest of the app is
+                still working.
               </p>
-              <details className="mt-4 text-left">
-                <summary className="text-sm text-gray-500 cursor-pointer">Error details</summary>
-                <pre className="mt-2 p-3 bg-gray-100 rounded text-xs text-gray-700 overflow-auto max-h-48">
+              <details className="text-left">
+                <summary className="text-sm cursor-pointer" style={{ color: 'var(--cp-muted)' }}>
+                  Error details
+                </summary>
+                <pre
+                  className="mt-2 p-3 rounded-xl text-xs overflow-auto max-h-48 neu-inset"
+                  style={{ color: 'var(--cp-text)' }}
+                >
                   {this.state.error?.message}
                   {this.state.error?.stack}
                 </pre>
               </details>
-              <button onClick={() => window.location.reload()} className="mt-4 btn-primary text-sm">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                icon={
+                  <RefreshCw
+                    size={16}
+                    strokeWidth={2}
+                    aria-hidden
+                    style={{ color: 'currentColor' }}
+                  />
+                }
+                onClick={() => window.location.reload()}
+              >
                 Reload page
-              </button>
-            </div>
+              </Button>
+            </Card>
           </div>
         </div>
       );

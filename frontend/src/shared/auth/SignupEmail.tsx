@@ -1,8 +1,9 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
+import { Send, Check } from 'lucide-react';
+import { Button, Card, Input } from '@/components/ui';
 import { authApi } from '../../api';
 import { GROUP_DETAILS, type ProgrammeGroup } from '../constants';
 import ErrorBanner from '../components/ErrorBanner';
-import Spinner from '../components/Spinner';
 import SignupProgress from './SignupProgress';
 
 /**
@@ -95,7 +96,10 @@ export default function SignupEmail({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-12"
+      style={{ background: 'var(--cp-bg)' }}
+    >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
@@ -105,7 +109,7 @@ export default function SignupEmail({
           </p>
         </div>
 
-        <div className="card space-y-4">
+        <Card className="space-y-4">
           {offline && (
             <div className="p-3 rounded-lg border border-warning-200 bg-warning-50 text-warning-700 text-sm">
               Backend offline. Start it with: uvicorn main:app --port 8000
@@ -113,19 +117,19 @@ export default function SignupEmail({
           )}
 
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
               {stage === 'email' ? 'Verify your college email' : 'Enter the code'}
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
               {stage === 'email'
                 ? 'We check the address first, so a half-created account cannot block you later.'
                 : `We sent a 6-digit code to ${email.trim().toLowerCase()}.`}
             </p>
             {/* The choice from step 0, changeable without restarting the flow. */}
             {programmeGroup && (
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs mt-2" style={{ color: 'var(--cp-muted)' }}>
                 Joining as{' '}
-                <span className="font-medium text-gray-700">
+                <span className="font-medium" style={{ color: 'var(--cp-text)' }}>
                   {GROUP_DETAILS[programmeGroup].title} ({GROUP_DETAILS[programmeGroup].programmes})
                 </span>
                 {onChangeProgramme && (
@@ -161,11 +165,10 @@ export default function SignupEmail({
                 <label className="label" htmlFor="su-start-email">
                   College email
                 </label>
-                <input
+                <Input
                   id="su-start-email"
                   name="email"
                   type="email"
-                  className="input-field"
                   value={email}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     setEmail(event.target.value);
@@ -176,9 +179,15 @@ export default function SignupEmail({
                   required
                 />
               </div>
-              <button type="submit" className="btn-primary w-full" disabled={busy}>
-                {busy ? <Spinner size={18} className="text-white" /> : 'Send code'}
-              </button>
+              <Button
+                type="submit"
+                variant="primary"
+                icon={<Send size={18} />}
+                loading={busy}
+                className="w-full"
+              >
+                Send code
+              </Button>
             </form>
           ) : (
             <form onSubmit={checkCode} className="space-y-4">
@@ -186,12 +195,12 @@ export default function SignupEmail({
                 <label className="label" htmlFor="su-start-code">
                   6-digit code
                 </label>
-                <input
+                <Input
                   id="su-start-code"
                   name="code"
                   inputMode="numeric"
                   maxLength={6}
-                  className="input-field text-center font-mono text-lg tracking-[0.4em]"
+                  className="text-center font-mono text-lg tracking-[0.4em]"
                   value={code}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     setCode(event.target.value.replace(/\D/g, '').slice(0, 6));
@@ -203,9 +212,15 @@ export default function SignupEmail({
                 />
               </div>
 
-              <button type="submit" className="btn-primary w-full" disabled={busy}>
-                {busy ? <Spinner size={18} className="text-white" /> : 'Verify email'}
-              </button>
+              <Button
+                type="submit"
+                variant="primary"
+                icon={<Check size={18} />}
+                loading={busy}
+                className="w-full"
+              >
+                Verify email
+              </Button>
 
               <div className="flex items-center justify-between text-sm pt-1">
                 <button
@@ -224,7 +239,8 @@ export default function SignupEmail({
                     setNotice(null);
                     setError(null);
                   }}
-                  className="text-gray-600 hover:underline"
+                  className="hover:underline"
+                  style={{ color: 'var(--cp-muted)' }}
                 >
                   Change email
                 </button>
@@ -232,8 +248,11 @@ export default function SignupEmail({
             </form>
           )}
 
-          <div className="border-t border-gray-200 pt-3 text-center">
-            <p className="text-sm text-gray-600">
+          <div
+            className="border-t pt-3 text-center"
+            style={{ borderColor: 'rgba(163,177,198,.3)' }}
+          >
+            <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
               Already registered?{' '}
               <button
                 type="button"
@@ -244,7 +263,7 @@ export default function SignupEmail({
               </button>
             </p>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

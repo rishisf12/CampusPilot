@@ -6,23 +6,25 @@
  * any of them is substantial.
  */
 import type { ReactNode } from 'react';
+import { TrendingUp } from 'lucide-react';
+import { Badge, Card, IconTile } from '@/components/ui';
 
 type StatusKey = 'healthy' | 'warning' | 'critical' | 'error' | 'unknown';
 
-const STATUS_STYLES: Record<StatusKey, string> = {
-  healthy: 'bg-success-50 text-success-700 border-success-200',
-  warning: 'bg-warning-50 text-warning-700 border-warning-200',
-  critical: 'bg-danger-50 text-danger-700 border-danger-200',
-  error: 'bg-gray-100 text-gray-700 border-gray-300',
-  unknown: 'bg-gray-50 text-gray-600 border-gray-200',
+const STATUS_TONE: Record<StatusKey, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  healthy: 'success',
+  warning: 'warning',
+  critical: 'danger',
+  error: 'neutral',
+  unknown: 'neutral',
 };
 
 const STATUS_DOTS: Record<StatusKey, string> = {
-  healthy: 'bg-success-500',
-  warning: 'bg-warning-500',
-  critical: 'bg-danger-500',
-  error: 'bg-gray-400',
-  unknown: 'bg-gray-300',
+  healthy: 'var(--cp-success)',
+  warning: 'var(--cp-warning)',
+  critical: 'var(--cp-danger)',
+  error: 'var(--cp-muted)',
+  unknown: 'var(--cp-muted)',
 };
 
 const STATUS_TEXT: Record<StatusKey, string> = {
@@ -42,17 +44,21 @@ const STATUS_TEXT: Record<StatusKey, string> = {
  * an admin would read a clean bill of health for a system nobody has measured.
  */
 export function StatusPill({ status = 'unknown', label }: { status?: string; label?: string }) {
-  const key: StatusKey = status in STATUS_STYLES ? (status as StatusKey) : 'unknown';
+  const key: StatusKey = status in STATUS_TONE ? (status as StatusKey) : 'unknown';
   const text = label ?? STATUS_TEXT[key];
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[key]}`}
-    >
-      <span className={`w-2 h-2 rounded-full ${STATUS_DOTS[key]}`} aria-hidden="true" />
+    <Badge tone={STATUS_TONE[key]}>
+      <span
+        className="w-2 h-2 rounded-full"
+        style={{ background: STATUS_DOTS[key] }}
+        aria-hidden="true"
+      />
       {text}
-    </span>
+    </Badge>
   );
 }
+
+type Hue = 'indigo' | 'mint' | 'amber' | 'coral' | 'sky' | 'slate';
 
 /**
  * One number with an optional change against the previous period.
@@ -68,6 +74,8 @@ export function StatTile({
   deltaLabel,
   hint,
   invertDelta,
+  icon,
+  hue = 'indigo',
 }: {
   label: string;
   value: ReactNode;
@@ -75,30 +83,54 @@ export function StatTile({
   deltaLabel?: string;
   hint?: ReactNode;
   invertDelta?: boolean;
+  icon?: ReactNode;
+  hue?: Hue;
 }) {
   const numeric = typeof delta === 'number' && Number.isFinite(delta);
   const rising = numeric && (delta as number) > 0;
   const good = invertDelta ? !rising : rising;
-  const deltaClass = !numeric
-    ? 'text-gray-400'
+  const deltaColor = !numeric
+    ? 'var(--cp-muted)'
     : Math.abs(delta as number) < 0.05
-      ? 'text-gray-500'
+      ? 'var(--cp-muted)'
       : good
-        ? 'text-success-600'
-        : 'text-danger-600';
+        ? 'var(--cp-success)'
+        : 'var(--cp-danger)';
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-gray-900 tabular-nums">{value}</div>
-      {numeric && (
-        <div className={`mt-1 text-xs font-medium ${deltaClass}`}>
-          {rising ? 'up' : (delta as number) < 0 ? 'down' : 'unchanged'}{' '}
-          {Math.abs(delta as number).toFixed(1)}%{deltaLabel ? ` ${deltaLabel}` : ''}
+    <Card className="flex items-start gap-3 !p-4">
+      <IconTile hue={hue} size={40}>
+        {icon ?? (
+          <TrendingUp size={20} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+        )}
+      </IconTile>
+      <div className="min-w-0">
+        <div
+          className="text-xs font-medium uppercase tracking-wide"
+          style={{ color: 'var(--cp-muted)' }}
+        >
+          {label}
         </div>
-      )}
-      {hint && <div className="mt-1 text-xs text-gray-400">{hint}</div>}
-    </div>
+        <div
+          className="mt-1 text-2xl font-bold tabular-nums"
+          style={{ color: 'var(--cp-text)' }}
+          aria-live="polite"
+        >
+          {value}
+        </div>
+        {numeric && (
+          <div className="mt-1 text-xs font-medium" style={{ color: deltaColor }}>
+            {rising ? 'up' : (delta as number) < 0 ? 'down' : 'unchanged'}{' '}
+            {Math.abs(delta as number).toFixed(1)}%{deltaLabel ? ` ${deltaLabel}` : ''}
+          </div>
+        )}
+        {hint && (
+          <div className="mt-1 text-xs" style={{ color: 'var(--cp-muted)' }}>
+            {hint}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -115,16 +147,27 @@ export function Panel({
   children?: ReactNode;
 }) {
   return (
-    <section className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-      <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-gray-100">
+    <Card className="!p-0 overflow-hidden">
+      <div
+        className="flex items-start justify-between gap-4 px-5 py-4"
+        style={{ borderBottom: '1px solid rgba(163,177,198,.25)' }}
+      >
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+            {title}
+          </h3>
+          {subtitle && (
+            <p className="mt-0.5 text-xs" style={{ color: 'var(--cp-muted)' }}>
+              {subtitle}
+            </p>
+          )}
         </div>
         {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
       </div>
-      <div className="p-5">{children}</div>
-    </section>
+      <div className="p-5" aria-live="polite">
+        {children}
+      </div>
+    </Card>
   );
 }
 
@@ -146,8 +189,14 @@ export function EmptyState({
 }) {
   return (
     <div className="py-10 text-center">
-      <div className="text-sm font-medium text-gray-700">{title}</div>
-      {detail && <div className="mx-auto mt-1 max-w-md text-xs text-gray-500">{detail}</div>}
+      <div className="text-sm font-medium" style={{ color: 'var(--cp-text)' }}>
+        {title}
+      </div>
+      {detail && (
+        <div className="mx-auto mt-1 max-w-md text-xs" style={{ color: 'var(--cp-muted)' }}>
+          {detail}
+        </div>
+      )}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -162,14 +211,30 @@ export function EmptyState({
  */
 export function AwaitingData({ what, how }: { what: string; how?: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/60 p-6">
+    <div
+      className="p-6"
+      style={{
+        borderRadius: 12,
+        border: '1px dashed rgba(163,177,198,.5)',
+        background: 'var(--cp-bg)',
+        boxShadow: 'var(--cp-neu-inset)',
+      }}
+    >
       <div className="flex items-start gap-3">
-        <div className="shrink-0 w-2 h-2 mt-1.5 rounded-full bg-gray-400" aria-hidden="true" />
+        <div
+          className="shrink-0 w-2 h-2 mt-1.5 rounded-full"
+          style={{ background: 'var(--cp-muted)' }}
+          aria-hidden="true"
+        />
         <div>
-          <p className="text-sm font-medium text-gray-700">Awaiting first data</p>
-          <p className="mt-1 text-xs text-gray-600">{what}</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--cp-text)' }}>
+            Awaiting first data
+          </p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--cp-text)' }}>
+            {what}
+          </p>
           {how && (
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-2 text-xs" style={{ color: 'var(--cp-muted)' }}>
               <span className="font-medium">To start collecting:</span> {how}
             </p>
           )}
@@ -239,8 +304,11 @@ export function MiniBars({
       {data.map((d, i) => (
         <div
           key={d.label ?? i}
-          className="flex-1 min-w-[3px] rounded-t bg-primary-400"
-          style={{ height: `${Math.max((d.value / max) * 100, d.value > 0 ? 4 : 1)}%` }}
+          className="flex-1 min-w-[3px] rounded-t"
+          style={{
+            height: `${Math.max((d.value / max) * 100, d.value > 0 ? 4 : 1)}%`,
+            background: 'var(--cp-primary)',
+          }}
           title={`${d.label}: ${format(d.value)}`}
         />
       ))}

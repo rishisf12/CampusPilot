@@ -1,3 +1,6 @@
+import { AlertTriangle, X } from 'lucide-react';
+import { Card, IconTile, Button } from '@/components/ui';
+
 interface ErrorBannerProps {
   message: string | null | undefined;
   onDismiss?: () => void;
@@ -8,34 +11,27 @@ interface ErrorBannerProps {
 export default function ErrorBanner({ message, onDismiss, className = '' }: ErrorBannerProps) {
   if (!message) return null;
   return (
-    <div
+    <Card
       role="alert"
-      className={`p-3 rounded-lg border border-danger-200 bg-danger-50 text-danger-700 text-sm flex items-start gap-3 ${className}`}
+      className={`flex items-start gap-3 !p-3 ${className}`}
+      style={{ borderColor: 'rgba(239,68,68,.35)' }}
     >
-      <svg
-        className="w-4 h-4 mt-0.5 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-      <span className="flex-1">{message}</span>
+      <IconTile hue="coral" size={32}>
+        <AlertTriangle size={18} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+      </IconTile>
+      <span className="flex-1 text-sm" style={{ color: 'var(--cp-danger)' }}>
+        {message}
+      </span>
       {onDismiss && (
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          icon={<X size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />}
           onClick={onDismiss}
-          className="text-danger-500 hover:text-danger-700"
           aria-label="Dismiss"
-        >
-          x
-        </button>
+        />
       )}
-    </div>
+    </Card>
   );
 }

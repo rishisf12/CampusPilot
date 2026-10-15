@@ -11,6 +11,8 @@ import {
   type Programme,
 } from '../../constants';
 import { useState, useMemo } from 'react';
+import { Plus, RefreshCw, Save, X } from 'lucide-react';
+import { Badge, Button, Card, Input, Select } from '@/components/ui';
 import Spinner from '../../components/Spinner';
 import ManagePasskeys from '../../auth/ManagePasskeys';
 import type { ExtraCourseResponse } from '../../types/api';
@@ -194,18 +196,22 @@ export default function Profile() {
 
   if (error) {
     return (
-      <div className="card border-danger-200 bg-danger-50 p-4">
+      <Card className="space-y-3" style={{ borderColor: 'rgba(239,68,68,.35)' }}>
         <p className="text-danger-700">{error}</p>
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
+          icon={
+            <RefreshCw size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+          }
           onClick={() => {
             window.location.reload();
           }}
-          className="mt-2 btn-primary text-sm"
         >
           Reload
-        </button>
-      </div>
+        </Button>
+      </Card>
     );
   }
 
@@ -214,13 +220,12 @@ export default function Profile() {
       <h2 className="text-xl font-semibold text-gray-900">Profile Settings</h2>
 
       {/* Programme & Semester */}
-      <div className="card space-y-4">
+      <Card className="space-y-4">
         <h3 className="text-sm font-semibold text-gray-900">Programme & Semester</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <span className="label">Programme</span>
-            <select
-              className="select-field"
+            <Select
               value={programme || ''}
               onChange={e => {
                 clearMessages();
@@ -244,12 +249,11 @@ export default function Profile() {
                   {p}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <span className="label">Semester</span>
-            <select
-              className="select-field"
+            <Select
               value={semester ?? ''}
               onChange={e => {
                 clearMessages();
@@ -261,16 +265,15 @@ export default function Profile() {
                   {s}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Branch */}
-      <div className="card space-y-4">
+      <Card className="space-y-4">
         <h3 className="text-sm font-semibold text-gray-900">Branch</h3>
-        <select
-          className="select-field"
+        <Select
           value={branchState}
           onChange={e => {
             clearMessages();
@@ -283,11 +286,11 @@ export default function Profile() {
               {b}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Card>
 
       {/* Elective/Extra/Backlog courses */}
-      <div className="card space-y-4">
+      <Card className="space-y-4">
         <h3 className="text-sm font-semibold text-gray-900">Elective/Extra/Backlog courses</h3>
         <p className="text-xs text-gray-500">
           Add courses using either course code or instructor name (as mentioned in timetable). The
@@ -295,63 +298,61 @@ export default function Profile() {
           number and fill in unknown information from known data.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <input
-            className="input-field font-mono"
+          <Input
+            className="font-mono"
             value={extraCode}
             onChange={e => setExtraCode(e.target.value.toUpperCase())}
             placeholder="Course code (e.g. CS501)"
             onKeyDown={e => e.key === 'Enter' && addExtraCourse()}
           />
-          <input
-            className="input-field"
+          <Input
             value={extraInstructor}
             onChange={e => setExtraInstructor(e.target.value)}
             placeholder="Instructor name (as in timetable)"
             onKeyDown={e => e.key === 'Enter' && addExtraCourse()}
           />
         </div>
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
+          icon={<Plus size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />}
           onClick={addExtraCourse}
-          className="btn-primary whitespace-nowrap w-full sm:w-auto"
+          className="whitespace-nowrap w-full sm:w-auto"
         >
           Add
-        </button>
+        </Button>
         {extraCoursesList.length > 0 && (
-          <ul className="space-y-1">
+          <ul className="flex flex-wrap gap-2">
             {extraCoursesList.map(c => (
-              <li
-                key={c.code}
-                className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
-              >
-                <div>
-                  <span className="font-mono text-gray-700">{c.code}</span>
-                  {c.instructor && (
-                    <span className="ml-2 text-xs text-gray-500">— {c.instructor}</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeExtraCourse(c.code)}
-                  className="text-xs text-danger-600 hover:text-danger-800"
-                >
-                  Remove
-                </button>
+              <li key={c.code}>
+                <Badge tone="neutral" className="!py-1.5 !pl-3 !pr-1.5">
+                  <span className="font-mono">{c.code}</span>
+                  {c.instructor && <span className="text-xs opacity-70">— {c.instructor}</span>}
+                  <button
+                    type="button"
+                    onClick={() => removeExtraCourse(c.code)}
+                    aria-label={`Remove ${c.code}`}
+                    className="ml-1 inline-flex items-center justify-center rounded-full p-1 transition-colors hover:bg-black/5"
+                  >
+                    <X size={14} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+                  </button>
+                </Badge>
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </Card>
 
       {/* Attendance target */}
-      <div className="card space-y-4">
+      <Card className="space-y-4">
         <h3 className="text-sm font-semibold text-gray-900">Attendance Target</h3>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="number"
             min="0"
             max="100"
-            className="input-field w-28"
+            className="w-28"
             value={target}
             onChange={e => setTarget(Number(e.target.value))}
           />
@@ -359,10 +360,10 @@ export default function Profile() {
             Used by the Attendance tab for risk colouring.
           </span>
         </div>
-      </div>
+      </Card>
 
       {/* Branch change request */}
-      <div className="card space-y-4">
+      <Card className="space-y-4">
         <h3 className="text-sm font-semibold text-gray-900">Branch Change Request</h3>
         {branchChange.requested && branchChange.to && (
           <div className="p-2.5 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm">
@@ -372,23 +373,18 @@ export default function Profile() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <span className="label">From branch</span>
-            <select
-              className="select-field"
-              value={branchFrom}
-              onChange={e => setBranchFrom(e.target.value)}
-            >
+            <Select value={branchFrom} onChange={e => setBranchFrom(e.target.value)}>
               <option value="">Select branch</option>
               {branchOptions.map(b => (
                 <option key={b} value={b}>
                   {b}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <span className="label">To branch</span>
-            <select
-              className="select-field"
+            <Select
               value={branchTo}
               disabled={noBranchChange}
               onChange={e => setBranchTo(e.target.value)}
@@ -399,7 +395,7 @@ export default function Profile() {
                   {b}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -414,16 +410,17 @@ export default function Profile() {
           </label>
         </div>
         <div className="flex justify-start">
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={submitBranchChange}
-            className="btn-primary text-sm"
             disabled={!noBranchChange && !branchTo}
           >
             {noBranchChange ? 'Cancel pending request' : 'Submit branch change'}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {/* Save button & messages */}
       {message && (
@@ -437,9 +434,17 @@ export default function Profile() {
         </div>
       )}
       <div className="flex justify-start">
-        <button type="button" onClick={save} disabled={saving} className="btn-primary text-sm">
-          {saving ? <Spinner size={16} className="text-white" /> : 'Save profile'}
-        </button>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          icon={<Save size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />}
+          loading={saving}
+          onClick={save}
+          disabled={saving}
+        >
+          Save profile
+        </Button>
       </div>
 
       {/* Passkeys */}

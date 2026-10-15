@@ -1,3 +1,5 @@
+import { Loader2 } from 'lucide-react';
+
 interface SpinnerProps {
   size?: number;
   className?: string;
@@ -5,22 +7,26 @@ interface SpinnerProps {
 
 export default function Spinner({ size = 20, className = '' }: SpinnerProps) {
   return (
-    <svg
-      className={`animate-spin ${className}`}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
+    <span
       role="status"
       aria-label="Loading"
+      className={`inline-flex items-center justify-center ${className}`}
+      style={{
+        width: size + 12,
+        height: size + 12,
+        borderRadius: '50%',
+        background: 'var(--cp-surface)',
+        boxShadow: 'var(--cp-clay)',
+        border: '1px solid rgba(163,177,198,.3)',
+      }}
     >
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-      <path
-        d="M22 12a10 10 0 0 0-10-10"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
+      <Loader2
+        size={size}
+        strokeWidth={2}
+        aria-hidden
+        className="animate-spin"
+        style={{ color: 'currentColor' }}
       />
-    </svg>
+    </span>
   );
 }

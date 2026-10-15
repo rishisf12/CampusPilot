@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Check } from 'lucide-react';
+import { Button, Card, Input } from '@/components/ui';
 import { authApi } from '../../api';
 import { RESEND_COOLDOWN_SECONDS } from '../constants';
 import { readPendingVerification, writePendingVerification } from '../lib/storage';
 import ErrorBanner from '../components/ErrorBanner';
-import Spinner from '../components/Spinner';
 
 // AuthWrapper starts this clock when a signup completes, so the two must agree.
 const COOLDOWN_SECONDS = RESEND_COOLDOWN_SECONDS;
@@ -98,7 +99,10 @@ export default function VerifyEmail({ onVerified, onStartOver }: VerifyEmailProp
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-12"
+      style={{ background: 'var(--cp-bg)' }}
+    >
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <img src="/logo-icon.svg" alt="Essential" className="w-14 h-14 mx-auto" />
@@ -108,10 +112,13 @@ export default function VerifyEmail({ onVerified, onStartOver }: VerifyEmailProp
           </p>
         </div>
 
-        <div className="card space-y-4">
-          <p className="text-sm text-gray-600">
+        <Card className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
             We sent a 6-digit code to{' '}
-            <span className="font-medium text-gray-900">{email || 'your email'}</span>.
+            <span className="font-medium" style={{ color: 'var(--cp-text)' }}>
+              {email || 'your email'}
+            </span>
+            .
           </p>
 
           {notice && (
@@ -126,10 +133,9 @@ export default function VerifyEmail({ onVerified, onStartOver }: VerifyEmailProp
               <label className="label" htmlFor="verify-email">
                 Email
               </label>
-              <input
+              <Input
                 id="verify-email"
                 type="email"
-                className="input-field"
                 value={email}
                 onChange={event => {
                   setEmail(event.target.value);
@@ -143,11 +149,11 @@ export default function VerifyEmail({ onVerified, onStartOver }: VerifyEmailProp
               <label className="label" htmlFor="verify-code">
                 Verification code
               </label>
-              <input
+              <Input
                 id="verify-code"
                 inputMode="numeric"
                 maxLength={6}
-                className="input-field text-center font-mono text-lg tracking-[0.4em]"
+                className="text-center font-mono text-lg tracking-[0.4em]"
                 value={code}
                 onChange={event => {
                   setCode(event.target.value.replace(/\D/g, '').slice(0, 6));
@@ -158,13 +164,16 @@ export default function VerifyEmail({ onVerified, onStartOver }: VerifyEmailProp
               />
             </div>
 
-            <button
+            <Button
               type="submit"
-              className="btn-primary w-full"
+              variant="primary"
+              icon={<Check size={18} />}
+              loading={loading}
               disabled={loading || code.length !== 6}
+              className="w-full"
             >
-              {loading ? <Spinner size={18} className="text-white" /> : 'Verify email'}
-            </button>
+              Verify email
+            </Button>
           </form>
 
           <div className="flex items-center justify-between text-sm pt-1">
@@ -180,11 +189,16 @@ export default function VerifyEmail({ onVerified, onStartOver }: VerifyEmailProp
                   ? 'Sending…'
                   : 'Resend Code'}
             </button>
-            <button type="button" onClick={startOver} className="text-gray-600 hover:underline">
+            <button
+              type="button"
+              onClick={startOver}
+              className="hover:underline"
+              style={{ color: 'var(--cp-muted)' }}
+            >
               Wrong email? Start over
             </button>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

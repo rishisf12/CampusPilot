@@ -1,9 +1,11 @@
 import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
+import { Send, Paperclip, ChevronDown, TriangleAlert, MailCheck } from 'lucide-react';
 import { feedbackApi, profileApi } from '@/api';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { useProfile } from '@shared/hooks/useProfile';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import Spinner from '@shared/components/Spinner';
+import { Button, Card, Input, Textarea, Badge } from '@/components/ui';
 
 interface FeedbackSubmission {
   id: number;
@@ -135,201 +137,233 @@ export default function Feedback() {
 
   return (
     <div className="space-y-4">
-      <div className="card p-6">
-        <p className="text-sm text-gray-600 max-w-xl">
+      <Card>
+        <p className="text-sm max-w-xl" style={{ color: 'var(--cp-muted)' }}>
           Please give us feedback to improve this app and make more convenient for you to use
         </p>
-      </div>
+      </Card>
 
       {ingestStatus && (
-        <div className="card p-4 border-yellow-200 bg-yellow-50">
+        <Card>
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2 text-sm text-yellow-800">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
+            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--cp-warning)' }}>
+              <TriangleAlert size={20} strokeWidth={2} aria-hidden />
               <span>
                 Mail ingestion is off. Set FEED_IMAP_USER and FEED_IMAP_PASSWORD in .env (repo root)
                 to switch it on. Items already in the feed still show.
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
+                icon={
+                  checkingMail ? (
+                    <Spinner size={16} />
+                  ) : (
+                    <MailCheck size={16} strokeWidth={2} aria-hidden />
+                  )
+                }
                 onClick={checkMail}
                 disabled={checkingMail}
-                className="btn-secondary text-sm disabled:opacity-60"
+                loading={checkingMail}
               >
-                {checkingMail ? <Spinner size={16} /> : 'Check mail'}
-              </button>
-              <button
+                Check mail
+              </Button>
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() =>
                   feedbackApi
                     .ingestStatus()
                     .then(setIngestStatus)
                     .catch(() => {})
                 }
-                className="btn-ghost text-sm"
               >
                 Refresh
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       {done && (
-        <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm">
+        <div
+          className="p-3 rounded-2xl border text-sm"
+          style={{ borderColor: 'rgba(163,177,198,.3)', color: 'var(--cp-success)' }}
+        >
           {done}
         </div>
       )}
 
-      <form onSubmit={submit} className="card p-6 space-y-4">
-        <div className="grid sm:grid-cols-3 gap-4">
+      <Card>
+        <form onSubmit={submit} className="space-y-4">
+          <div className="grid sm:grid-cols-3 gap-4">
+            <label className="block">
+              <span
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: 'var(--cp-muted)' }}
+              >
+                Name
+              </span>
+              <Input
+                type="text"
+                value={name}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
+                placeholder="Your name"
+                className="mt-1 w-full"
+              />
+            </label>
+            <label className="block">
+              <span
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: 'var(--cp-muted)' }}
+              >
+                Phone number
+              </span>
+              <Input
+                type="tel"
+                value={phone}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setPhone(event.target.value)}
+                placeholder="Your phone number"
+                className="mt-1 w-full"
+              />
+            </label>
+            <label className="block">
+              <span
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: 'var(--cp-muted)' }}
+              >
+                Email id
+              </span>
+              <Input
+                type="email"
+                value={email}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setEmail(event.target.value)}
+                placeholder="you@iiitdmj.ac.in"
+                className="mt-1 w-full"
+              />
+            </label>
+          </div>
+
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Name
+            <span
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: 'var(--cp-muted)' }}
+            >
+              Subject
             </span>
-            <input
+            <Input
               type="text"
-              value={name}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
-              placeholder="Your name"
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              value={subject}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setSubject(event.target.value)}
+              placeholder="Subject / title"
+              className="mt-1 w-full"
             />
           </label>
+
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Phone number
+            <span
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: 'var(--cp-muted)' }}
+            >
+              Feedback
             </span>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setPhone(event.target.value)}
-              placeholder="Your phone number"
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+            <Textarea
+              value={message}
+              onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setMessage(event.target.value)}
+              placeholder="What should we improve?"
+              rows={4}
+              maxLength={5000}
+              className="mt-1 w-full"
             />
           </label>
+
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Email id
+            <span
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: 'var(--cp-muted)' }}
+            >
+              Upload file (optional)
             </span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setEmail(event.target.value)}
-              placeholder="you@iiitdmj.ac.in"
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+            <Input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv"
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setFile(event.target.files?.[0] || null)
+              }
+              className="mt-1 w-full"
             />
+            <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
+              PDF, image, TXT or CSV, up to the upload limit.
+            </span>
           </label>
-        </div>
 
-        <label className="block">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Subject
-          </span>
-          <input
-            type="text"
-            value={subject}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => setSubject(event.target.value)}
-            placeholder="Subject / title"
-            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Feedback
-          </span>
-          <textarea
-            value={message}
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setMessage(event.target.value)}
-            placeholder="What should we improve?"
-            rows={4}
-            maxLength={5000}
-            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Upload file (optional)
-          </span>
-          <input
-            type="file"
-            accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv"
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              setFile(event.target.files?.[0] || null)
-            }
-            className="mt-1 w-full text-sm text-gray-600"
-          />
-          <span className="text-xs text-gray-400">
-            PDF, image, TXT or CSV, up to the upload limit.
-          </span>
-        </label>
-
-        <button type="submit" disabled={busy} className="btn-primary text-sm disabled:opacity-60">
-          {busy ? 'Submitting…' : 'Submit'}
-        </button>
-      </form>
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            icon={<Send size={16} strokeWidth={2} aria-hidden />}
+            disabled={busy}
+            loading={busy}
+          >
+            Submit
+          </Button>
+        </form>
+      </Card>
 
       {mine.length > 0 && (
-        <div className="card p-6 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-900">Your feedback</h3>
+        <Card className="space-y-3">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+            Your feedback
+          </h3>
           {mine.map(item => (
-            <div key={item.id} className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm">
+            <div
+              key={item.id}
+              className="neu-raised-sm p-3 text-sm"
+              style={{ borderRadius: 16, background: 'var(--cp-surface)' }}
+            >
               <button
                 type="button"
                 onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                aria-expanded={expandedId === item.id}
                 className="w-full flex items-center justify-between text-left"
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-800">{item.subject || 'Feedback'}</span>
+                  <span className="font-semibold" style={{ color: 'var(--cp-text)' }}>
+                    {item.subject || 'Feedback'}
+                  </span>
                   {item.attachment_original && (
-                    <span className="inline-flex items-center gap-1 text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
-                      <svg
-                        className="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                        />
-                      </svg>
+                    <Badge tone="primary">
+                      <Paperclip size={14} strokeWidth={2} aria-hidden />
                       {item.attachment_original}
-                    </span>
+                    </Badge>
                   )}
                 </div>
-                <svg
-                  className={`w-4 h-4 text-gray-400 transition-transform ${expandedId === item.id ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
+                <ChevronDown
+                  size={16}
+                  strokeWidth={2}
+                  aria-hidden
+                  className={`transition-transform ${expandedId === item.id ? 'rotate-180' : ''}`}
+                  style={{ color: 'var(--cp-muted)' }}
+                />
               </button>
 
               {expandedId === item.id && (
-                <div className="mt-3 space-y-2 pt-3 border-t border-gray-200 animate-slide-down">
-                  <p className="text-gray-800 whitespace-pre-wrap">{item.message}</p>
-                  <div className="grid sm:grid-cols-2 gap-2 text-xs text-gray-500">
+                <div
+                  className="mt-3 space-y-2 pt-3 animate-slide-down"
+                  style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
+                >
+                  <p className="whitespace-pre-wrap" style={{ color: 'var(--cp-text)' }}>
+                    {item.message}
+                  </p>
+                  <div
+                    className="grid sm:grid-cols-2 gap-2 text-xs"
+                    style={{ color: 'var(--cp-muted)' }}
+                  >
                     <span>
                       {item.name} · {item.email}
                     </span>
@@ -341,14 +375,24 @@ export default function Feedback() {
                   {(item.replies || []).map(reply => (
                     <div
                       key={reply.id}
-                      className="mt-2 rounded-lg border border-primary-100 bg-primary-50 p-2.5"
+                      className="mt-2 p-2.5"
+                      style={{
+                        borderRadius: 12,
+                        background: 'var(--cp-bg)',
+                        boxShadow: 'var(--cp-neu-inset)',
+                      }}
                     >
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-500">
+                      <p
+                        className="text-[11px] font-semibold uppercase tracking-wide"
+                        style={{ color: 'var(--cp-primary)' }}
+                      >
                         Admin response
                       </p>
-                      <p className="mt-0.5 text-gray-800">{reply.message}</p>
+                      <p className="mt-0.5" style={{ color: 'var(--cp-text)' }}>
+                        {reply.message}
+                      </p>
                       {reply.created_at && (
-                        <p className="mt-1 text-[10px] text-gray-400">
+                        <p className="mt-1 text-[10px]" style={{ color: 'var(--cp-muted)' }}>
                           {new Date(reply.created_at).toLocaleString()}
                         </p>
                       )}
@@ -358,7 +402,7 @@ export default function Feedback() {
               )}
             </div>
           ))}
-        </div>
+        </Card>
       )}
     </div>
   );

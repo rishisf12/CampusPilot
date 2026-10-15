@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The registration step ladder, shared by every signup screen.
  *
  * Programme -> Email -> Code -> Details. The programme choice comes first
@@ -23,7 +23,7 @@ const LABELS: Record<SignupStage, string> = {
 export default function SignupProgress({ current }: { current: SignupStage }) {
   const activeIndex = ORDER.indexOf(current);
   return (
-    <ol className="flex items-center gap-2 text-xs">
+    <ol className="flex items-center gap-2 text-xs" aria-label="Signup progress">
       {ORDER.map((stage, index) => (
         <Step
           key={stage}
@@ -50,23 +50,36 @@ interface StepProps {
 function Step({ n, label, done, active, last }: StepProps) {
   return (
     <li
-      className={`flex items-center gap-2 ${active ? 'text-primary-600' : done ? 'text-success-600' : 'text-gray-400'}`}
+      aria-current={active ? 'step' : undefined}
+      className="flex items-center gap-2"
+      style={{ color: active ? 'var(--cp-text)' : done ? '#047857' : 'var(--cp-muted)' }}
     >
       <span className="flex items-center gap-1.5">
         <span
-          className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold ${
+          className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold"
+          style={
             done
-              ? 'bg-success-500 text-white'
+              ? { background: '#4F46E5', color: '#fff', boxShadow: 'var(--cp-clay)' }
               : active
-                ? 'bg-primary-500 text-white'
-                : 'bg-gray-200 text-gray-500'
-          }`}
+                ? { background: '#4F46E5', color: '#fff', boxShadow: 'var(--cp-clay)' }
+                : {
+                    background: 'var(--cp-bg)',
+                    color: 'var(--cp-muted)',
+                    boxShadow: 'var(--cp-neu-inset)',
+                  }
+          }
         >
-          {done ? '✓' : n}
+          {done ? 'âœ“' : n}
         </span>
         <span className="hidden sm:inline">{label}</span>
       </span>
-      {!last && <span className="flex-1 h-px bg-gray-200 min-w-4" aria-hidden="true" />}
+      {!last && (
+        <span
+          className="flex-1 h-px min-w-4"
+          style={{ background: 'rgba(163,177,198,.4)' }}
+          aria-hidden="true"
+        />
+      )}
     </li>
   );
 }

@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+﻿import { Suspense } from 'react';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 
 function ModuleLoading() {
@@ -18,11 +18,16 @@ export function FacultyRoutes() {
   return (
     <ModuleErrorBoundary moduleName="faculty">
       <Suspense fallback={<ModuleLoading />}>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div
+          className="min-h-screen flex items-center justify-center neu-raised m-4"
+          style={{ background: 'var(--cp-bg)' }}
+        >
           <div className="text-center">
-            <h1 className="text-2xl font-semibold text-gray-900">Faculty Module</h1>
-            <p className="text-gray-600 mt-2">
-              Coming soon — faculty features are not yet implemented.
+            <h1 className="text-2xl font-semibold" style={{ color: 'var(--cp-text)' }}>
+              Faculty Module
+            </h1>
+            <p className="mt-2" style={{ color: 'var(--cp-muted)' }}>
+              Coming soon â€” faculty features are not yet implemented.
             </p>
           </div>
         </div>

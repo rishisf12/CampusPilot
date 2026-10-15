@@ -1,5 +1,7 @@
 import { useEffect, useState, ChangeEvent } from 'react';
+import { MessageSquareReply, Paperclip, Send } from 'lucide-react';
 import { feedbackApi } from '@/api';
+import { Badge, Button, Card, Tabs, Textarea } from '@/components/ui';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import ReinforcementPatterns from './ReinforcementPatterns';
 import Users from './Users';
@@ -25,6 +27,15 @@ interface AdminPanelProps {
   onError?: (message: string) => void;
 }
 
+const SUB_TABS = [
+  { id: 'feedback', label: 'Feedback Responses' },
+  { id: 'patterns', label: 'Reinforcement Patterns' },
+  { id: 'users', label: 'Users' },
+  { id: 'data', label: 'Data' },
+] as const;
+
+type SubTab = (typeof SUB_TABS)[number]['id'];
+
 /**
  * Admin panel (developer): every feedback response with a Respond button.
  *
@@ -34,7 +45,7 @@ interface AdminPanelProps {
  * feedback entry.
  */
 export default function AdminPanel({ onError }: AdminPanelProps) {
-  const [tab, setTab] = useState<'feedback' | 'patterns' | 'users' | 'data'>('feedback');
+  const [tab, setTab] = useState<SubTab>('feedback');
   const [items, setItems] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,98 +94,81 @@ export default function AdminPanel({ onError }: AdminPanelProps) {
 
   if (loading) {
     return (
-      <div className="card p-8 text-center text-sm text-gray-500">Loading feedback responses…</div>
+      <Card className="text-center text-sm" style={{ color: 'var(--cp-muted)' }}>
+        Loading feedback responses…
+      </Card>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1 border-b border-gray-200 pb-3">
-        <button
-          type="button"
-          onClick={() => setTab('feedback')}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-            tab === 'feedback'
-              ? 'bg-primary-50 text-primary-600'
-              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-          }`}
-        >
-          Feedback Responses
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('patterns')}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-            tab === 'patterns'
-              ? 'bg-primary-50 text-primary-600'
-              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-          }`}
-        >
-          Reinforcement Patterns
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('users')}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-            tab === 'users'
-              ? 'bg-primary-50 text-primary-600'
-              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-          }`}
-        >
-          Users
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('data')}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-            tab === 'data'
-              ? 'bg-primary-50 text-primary-600'
-              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-          }`}
-        >
-          Data
-        </button>
-      </div>
+      <Tabs
+        tabs={SUB_TABS.map(item => ({ id: item.id, label: item.label }))}
+        active={tab}
+        onChange={id => setTab(id as SubTab)}
+      />
 
       {tab === 'feedback' && (
         <>
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-gray-900">Feedback responses</h2>
-            <p className="text-sm text-gray-600 mt-1">
+          <Card>
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+              Feedback responses
+            </h2>
+            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
               {items.length} submission{items.length === 1 ? '' : 's'} from students.
             </p>
-          </div>
+          </Card>
 
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
           {items.length === 0 && (
-            <div className="card p-8 text-center text-sm text-gray-500">No feedback yet.</div>
+            <Card className="text-center text-sm" style={{ color: 'var(--cp-muted)' }}>
+              No feedback yet.
+            </Card>
           )}
 
           {items.map(item => (
-            <div key={item.id} className="card p-6 space-y-3">
-              <p className="text-sm text-gray-800">{item.message}</p>
-              <p className="text-xs text-gray-500">
+            <Card key={item.id} className="space-y-3" aria-live="polite">
+              <p className="text-sm" style={{ color: 'var(--cp-text)' }}>
+                {item.message}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
                 {item.name} · {item.email}
                 {item.phone ? ` · ${item.phone}` : ''}
-                {item.attachment_original ? ` · 📎 ${item.attachment_original}` : ''}
               </p>
+              {item.attachment_original && (
+                <Badge tone="neutral">
+                  <Paperclip size={12} strokeWidth={2} aria-hidden />
+                  {item.attachment_original}
+                </Badge>
+              )}
 
               {(item.replies || []).map(reply => (
                 <div
                   key={reply.id}
-                  className="rounded-lg border border-primary-100 bg-primary-50 p-3 text-sm"
+                  className="p-3 text-sm"
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid rgba(163,177,198,.3)',
+                    background: 'var(--cp-bg)',
+                    boxShadow: 'var(--cp-neu-inset)',
+                  }}
                 >
-                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-500">
+                  <p
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: 'var(--cp-primary)' }}
+                  >
                     Admin response
                   </p>
-                  <p className="mt-1 text-gray-800">{reply.message}</p>
+                  <p className="mt-1" style={{ color: 'var(--cp-text)' }}>
+                    {reply.message}
+                  </p>
                 </div>
               ))}
 
               {openId === item.id ? (
                 <div className="space-y-2">
-                  <textarea
+                  <Textarea
                     value={drafts[item.id] || ''}
                     onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
                       setDrafts(prev => ({ ...prev, [item.id]: event.target.value }))
@@ -182,36 +176,37 @@ export default function AdminPanel({ onError }: AdminPanelProps) {
                     placeholder="Write your response…"
                     rows={3}
                     maxLength={5000}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                    aria-label="Response text"
                   />
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button
                       type="button"
-                      onClick={() => send(item.id)}
+                      variant="primary"
+                      size="sm"
+                      icon={<Send size={16} strokeWidth={2} aria-hidden />}
+                      loading={sending}
                       disabled={sending || !(drafts[item.id] || '').trim()}
-                      className="btn-primary text-sm disabled:opacity-60"
+                      onClick={() => send(item.id)}
                     >
-                      {sending ? 'Sending…' : 'Submit'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOpenId(null)}
-                      className="btn-ghost text-sm"
-                    >
+                      Submit
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setOpenId(null)}>
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
+                  icon={<MessageSquareReply size={16} strokeWidth={2} aria-hidden />}
                   onClick={() => setOpenId(item.id)}
-                  className="btn-ghost text-sm"
                 >
                   Respond to feedback
-                </button>
+                </Button>
               )}
-            </div>
+            </Card>
           ))}
         </>
       )}

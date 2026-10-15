@@ -5,6 +5,7 @@
  * verified (store-validated) and unverified (client-claimed) so an admin
  * can distinguish auditable revenue from claims.
  */
+import { BadgeCheck, CreditCard, Megaphone, Wallet } from 'lucide-react';
 import { Panel, StatTile, EmptyState, AwaitingData, num } from '../components/components';
 
 interface RevenueBucket {
@@ -42,6 +43,13 @@ interface MonetisationPanelProps {
   awaiting?: boolean;
 }
 
+const iconProps = {
+  size: 20,
+  strokeWidth: 2,
+  'aria-hidden': true,
+  style: { color: 'currentColor' },
+} as const;
+
 export function MonetisationPanel({ data, loading, awaiting }: MonetisationPanelProps) {
   if (awaiting) {
     return (
@@ -75,7 +83,7 @@ export function MonetisationPanel({ data, loading, awaiting }: MonetisationPanel
   const br = data.breakdowns || {};
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-live="polite">
       {/* Revenue overview */}
       <Panel
         title="Revenue overview"
@@ -88,6 +96,8 @@ export function MonetisationPanel({ data, loading, awaiting }: MonetisationPanel
             delta={c.verified_revenue_pct ?? null}
             deltaLabel="vs previous period"
             hint="store-validated only"
+            hue="mint"
+            icon={<BadgeCheck {...iconProps} />}
           />
           <StatTile
             label="Unverified claims"
@@ -96,18 +106,24 @@ export function MonetisationPanel({ data, loading, awaiting }: MonetisationPanel
             deltaLabel="not audited"
             hint="client-reported only"
             invertDelta
+            hue="amber"
+            icon={<CreditCard {...iconProps} />}
           />
           <StatTile
             label="Ad revenue"
             value={num(m.ad_revenue_micros)}
             delta={c.ad_revenue_pct ?? null}
             deltaLabel="vs previous period"
+            hue="sky"
+            icon={<Megaphone {...iconProps} />}
           />
           <StatTile
             label="Total revenue"
             value={num(m.total_revenue_micros)}
             delta={c.total_revenue_pct ?? null}
             deltaLabel="vs previous period"
+            hue="indigo"
+            icon={<Wallet {...iconProps} />}
           />
         </div>
       </Panel>
@@ -120,11 +136,13 @@ export function MonetisationPanel({ data, loading, awaiting }: MonetisationPanel
             value={num(m.active_subscriptions)}
             delta={c.subscriptions_pct ?? null}
             deltaLabel="vs previous period"
+            hue="indigo"
           />
           <StatTile
             label="New this period"
             value={num(Math.max(0, (m.active_subscriptions || 0) - (p.active_subscriptions || 0)))}
             hint="net growth"
+            hue="mint"
           />
         </div>
       </Panel>
@@ -135,8 +153,8 @@ export function MonetisationPanel({ data, loading, awaiting }: MonetisationPanel
         subtitle="Impressions, clicks and eCPM (revenue per 1000 impressions)."
       >
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatTile label="Impressions" value={num(ad.impressions)} />
-          <StatTile label="Clicks" value={num(ad.clicks)} />
+          <StatTile label="Impressions" value={num(ad.impressions)} hue="sky" />
+          <StatTile label="Clicks" value={num(ad.clicks)} hue="sky" />
           <StatTile
             label="CTR"
             value={
@@ -181,7 +199,7 @@ export function MonetisationPanel({ data, loading, awaiting }: MonetisationPanel
 
       {/* Note about unverified */}
       <Panel title="Data quality">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
           {data.note ||
             'Unverified purchases are labelled as claims, not revenue. Enable ENABLE_STORE_VERIFY to validate receipts with the app store.'}
         </p>
@@ -197,13 +215,20 @@ function DimensionList({ rows }: { rows: Array<{ value: string; events: number }
       {rows.slice(0, 8).map(r => (
         <div key={r.value}>
           <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-gray-700">{r.value}</span>
-            <span className="tabular-nums text-gray-500">{num(r.events)}</span>
+            <span className="font-medium" style={{ color: 'var(--cp-text)' }}>
+              {r.value}
+            </span>
+            <span className="tabular-nums" style={{ color: 'var(--cp-muted)' }}>
+              {num(r.events)}
+            </span>
           </div>
-          <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+          <div
+            className="mt-1 h-1.5 rounded-full overflow-hidden"
+            style={{ background: 'var(--cp-bg)', boxShadow: 'var(--cp-neu-inset)' }}
+          >
             <div
-              className="h-full rounded-full bg-primary-400"
-              style={{ width: `${(r.events / max) * 100}%` }}
+              className="h-full rounded-full"
+              style={{ width: `${(r.events / max) * 100}%`, background: 'var(--cp-primary)' }}
             />
           </div>
         </div>

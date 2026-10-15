@@ -10,7 +10,9 @@
  * time yet, and inventing a duration would mean rewriting rows every time a
  * later scan closed it.
  */
+import { ClipboardList, History, Siren, Wrench } from 'lucide-react';
 import { Panel, StatTile, StatusPill, EmptyState, num } from '../components/components';
+import { Table } from '@/components/ui';
 
 interface ScanRow {
   scan_id: string;
@@ -53,6 +55,13 @@ interface HistoryPanelProps {
   onSelect?: (subsection: string | null) => void;
 }
 
+const iconProps = {
+  size: 20,
+  strokeWidth: 2,
+  'aria-hidden': true,
+  style: { color: 'currentColor' },
+} as const;
+
 export function HistoryPanel({ data, loading }: HistoryPanelProps) {
   if (loading)
     return (
@@ -67,15 +76,33 @@ export function HistoryPanel({ data, loading }: HistoryPanelProps) {
   const open = incidents.filter(i => i.open);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-live="polite">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Scans recorded" value={num(scans.length)} />
-        <StatTile label="Open incidents" value={num(open.length)} invertDelta />
-        <StatTile label="Total incidents" value={num(incidents.length)} />
+        <StatTile
+          label="Scans recorded"
+          value={num(scans.length)}
+          hue="indigo"
+          icon={<History {...iconProps} />}
+        />
+        <StatTile
+          label="Open incidents"
+          value={num(open.length)}
+          invertDelta
+          hue="coral"
+          icon={<Siren {...iconProps} />}
+        />
+        <StatTile
+          label="Total incidents"
+          value={num(incidents.length)}
+          hue="amber"
+          icon={<ClipboardList {...iconProps} />}
+        />
         <StatTile
           label="Tool calls audited"
           value={num(toolCalls.length)}
           hint="every scan tool invocation"
+          hue="sky"
+          icon={<Wrench {...iconProps} />}
         />
       </div>
 
@@ -93,18 +120,33 @@ export function HistoryPanel({ data, loading }: HistoryPanelProps) {
             {incidents.map((inc, i) => (
               <div
                 key={`${inc.subsection}-${inc.started_at}-${i}`}
-                className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2"
+                className="flex items-center justify-between gap-3 px-3 py-2 transition-colors"
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid rgba(163,177,198,.3)',
+                  background: 'var(--cp-surface)',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'var(--cp-bg)';
+                  e.currentTarget.style.boxShadow = 'var(--cp-neu-inset)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'var(--cp-surface)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               >
                 <div className="min-w-0">
-                  <div className="text-xs font-medium text-gray-800">{inc.subsection}</div>
-                  <div className="text-[11px] text-gray-500">
+                  <div className="text-xs font-medium" style={{ color: 'var(--cp-text)' }}>
+                    {inc.subsection}
+                  </div>
+                  <div className="text-[11px]" style={{ color: 'var(--cp-muted)' }}>
                     started {inc.started_at}
                     {inc.ended_at ? ` · cleared ${inc.ended_at}` : ' · not cleared yet'}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <StatusPill status={inc.status} />
-                  <span className="text-xs tabular-nums text-gray-500">
+                  <span className="text-xs tabular-nums" style={{ color: 'var(--cp-muted)' }}>
                     {inc.open ? 'ongoing' : formatDuration(inc.duration_s)}
                   </span>
                 </div>
@@ -126,13 +168,27 @@ export function HistoryPanel({ data, loading }: HistoryPanelProps) {
         ) : (
           <div className="space-y-2">
             {scans.map(s => (
-              <div key={s.scan_id} className="rounded-lg border border-gray-200 px-3 py-2">
+              <div
+                key={s.scan_id}
+                className="px-3 py-2"
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid rgba(163,177,198,.3)',
+                  background: 'var(--cp-surface)',
+                }}
+              >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-medium text-gray-800">{s.subsection}</span>
+                  <span className="text-xs font-medium" style={{ color: 'var(--cp-text)' }}>
+                    {s.subsection}
+                  </span>
                   <StatusPill status={s.status} />
                 </div>
-                {s.summary && <p className="mt-1 text-xs text-gray-600">{s.summary}</p>}
-                <div className="mt-1 text-[11px] text-gray-400">
+                {s.summary && (
+                  <p className="mt-1 text-xs" style={{ color: 'var(--cp-muted)' }}>
+                    {s.summary}
+                  </p>
+                )}
+                <div className="mt-1 text-[11px]" style={{ color: 'var(--cp-muted)' }}>
                   {s.created_at} · {s.duration_ms} ms · window {s.window?.start?.slice(0, 16)} →{' '}
                   {s.window?.end?.slice(0, 16)}
                   {s.model ? ` · ${s.model}` : ''}
@@ -150,32 +206,30 @@ export function HistoryPanel({ data, loading }: HistoryPanelProps) {
             detail="Every scan records each tool it calls here, which is what makes 'the scan never invented a number' a checkable claim rather than an assertion."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="text-left text-gray-500">
-                <tr>
-                  <th className="py-1.5 pr-3 font-medium">Scan</th>
-                  <th className="py-1.5 pr-3 font-medium">Tool</th>
-                  <th className="py-1.5 pr-3 font-medium">Metric key</th>
-                  <th className="py-1.5 pr-3 font-medium text-right">Rows</th>
-                  <th className="py-1.5 font-medium">When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {toolCalls.slice(0, 40).map((t, i) => (
-                  <tr key={`${t.scan_id}-${i}`} className="border-t border-gray-100">
-                    <td className="py-1.5 pr-3 font-mono text-gray-500">{t.scan_id.slice(0, 8)}</td>
-                    <td className="py-1.5 pr-3 text-gray-800">{t.tool}</td>
-                    <td className="py-1.5 pr-3 font-mono text-gray-500">{t.metric_key || '--'}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">
-                      {num(t.row_count)}
-                    </td>
-                    <td className="py-1.5 text-gray-500">{t.at}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            head={['Scan', 'Tool', 'Metric key', 'Rows', 'When']}
+            rows={toolCalls.slice(0, 40).map((t, i) => [
+              <span key={`s-${i}`} className="font-mono" style={{ color: 'var(--cp-muted)' }}>
+                {t.scan_id.slice(0, 8)}
+              </span>,
+              <span key={`t-${i}`} style={{ color: 'var(--cp-text)' }}>
+                {t.tool}
+              </span>,
+              <span key={`m-${i}`} className="font-mono" style={{ color: 'var(--cp-muted)' }}>
+                {t.metric_key || '--'}
+              </span>,
+              <span
+                key={`r-${i}`}
+                className="tabular-nums"
+                style={{ color: 'var(--cp-text)', textAlign: 'right', display: 'block' }}
+              >
+                {num(t.row_count)}
+              </span>,
+              <span key={`w-${i}`} style={{ color: 'var(--cp-muted)' }}>
+                {t.at}
+              </span>,
+            ])}
+          />
         )}
       </Panel>
     </div>

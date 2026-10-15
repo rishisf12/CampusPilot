@@ -220,7 +220,10 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
 
   if (status === 'checking') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'var(--cp-bg)' }}
+      >
         <Spinner size={32} className="text-primary-500" />
       </div>
     );

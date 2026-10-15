@@ -1,7 +1,8 @@
 import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
+import { LogIn, ArrowLeft } from 'lucide-react';
+import { Button, Card, Input } from '@/components/ui';
 import { clearEmailJustVerified, readEmailJustVerified } from '../lib/storage';
 import ErrorBanner from '../components/ErrorBanner';
-import Spinner from '../components/Spinner';
 
 /**
  * Sign in. Username and password only - email is not accepted.
@@ -65,7 +66,10 @@ export default function LoginForm({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-12"
+      style={{ background: 'var(--cp-bg)' }}
+    >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
@@ -75,7 +79,7 @@ export default function LoginForm({
           </p>
         </div>
 
-        <div className="card space-y-4">
+        <Card className="space-y-4">
           {offline && (
             <div className="p-3 rounded-lg border border-warning-200 bg-warning-50 text-warning-700 text-sm">
               Backend offline. Start it with: uvicorn main:app --port 8000
@@ -106,10 +110,9 @@ export default function LoginForm({
               <label className="label" htmlFor="login-username">
                 Username
               </label>
-              <input
+              <Input
                 id="login-username"
                 name="username"
-                className="input-field"
                 value={username}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => {
                   setUsername(event.target.value);
@@ -124,11 +127,10 @@ export default function LoginForm({
               <label className="label" htmlFor="login-password">
                 Password
               </label>
-              <input
+              <Input
                 id="login-password"
                 name="password"
                 type="password"
-                className="input-field"
                 value={password}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => {
                   setPassword(event.target.value);
@@ -139,9 +141,15 @@ export default function LoginForm({
               />
             </div>
 
-            <button type="submit" className="btn-primary w-full" disabled={loading}>
-              {loading ? <Spinner size={18} className="text-white" /> : 'Sign In'}
-            </button>
+            <Button
+              type="submit"
+              variant="primary"
+              icon={<LogIn size={18} />}
+              loading={loading}
+              className="w-full"
+            >
+              Sign In
+            </Button>
           </form>
 
           {/* Below the button, as a secondary route rather than competing with it. */}
@@ -155,7 +163,7 @@ export default function LoginForm({
             </button>
           </div>
 
-          <p className="text-sm text-gray-600 text-center pt-1">
+          <p className="text-sm text-center pt-1" style={{ color: 'var(--cp-muted)' }}>
             No account?{' '}
             <button
               type="button"
@@ -169,16 +177,18 @@ export default function LoginForm({
           {/* Back to the role choice, for anyone in the wrong place. */}
           {onChangeRole && (
             <p className="text-center">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
+                icon={<ArrowLeft size={14} />}
                 onClick={onChangeRole}
-                className="text-xs text-gray-500 hover:text-gray-700"
               >
                 Not a student? Change role
-              </button>
+              </Button>
             </p>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

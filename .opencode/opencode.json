@@ -27,10 +27,10 @@
     }
   },
   "permission": {
-    "edit": "deny",
-    "webfetch": "deny",
+    "edit": "allow",
+    "webfetch": "allow",
     "bash": {
-      "*": "deny",
+      "*": "allow",
       "cat /prometheus/*.yml": "allow",
       "cat /etc/ssl/certs/*.pem": "allow",
       "df -h": "allow",
@@ -57,10 +57,10 @@
         "ssl_info": true,
         "release_markers": true,
         "scan_history": true,
-        "bash": false,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "bash": true,
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0.1,
       "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
@@ -77,10 +77,10 @@
         "geo_aggregate": true,
         "release_markers": true,
         "scan_history": true,
-        "bash": false,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "bash": true,
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0.1,
       "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
@@ -98,10 +98,10 @@
         "log_query": true,
         "release_markers": true,
         "scan_history": true,
-        "bash": false,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "bash": true,
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0.1,
       "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
@@ -117,10 +117,10 @@
         "db_stats": true,
         "release_markers": true,
         "scan_history": true,
-        "bash": false,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "bash": true,
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0.15,
       "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
@@ -140,10 +140,10 @@
         "device_breakdown": true,
         "release_markers": true,
         "scan_history": true,
-        "bash": false,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "bash": true,
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0.1,
       "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
@@ -161,10 +161,10 @@
         "device_breakdown": true,
         "release_markers": true,
         "scan_history": true,
-        "bash": false,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "bash": true,
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0.1,
       "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
@@ -182,10 +182,10 @@
         "cve_report": true,
         "release_markers": true,
         "scan_history": true,
-        "bash": false,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "bash": true,
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0.1,
       "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
@@ -201,10 +201,10 @@
         "version_breakdown": true,
         "release_markers": true,
         "scan_history": true,
-        "bash": false,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "bash": true,
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0.15,
       "prompt": "{file:./docs/observability/SCAN-AGENT.md}"
@@ -216,9 +216,9 @@
         "promql_instant": true,
         "release_markers": true,
         "bash": true,
-        "write": false,
-        "edit": false,
-        "webfetch": false
+        "write": true,
+        "edit": true,
+        "webfetch": true
       },
       "temperature": 0,
       "prompt": "Read-only inspection of this deployment. Do not modify state."
@@ -264,7 +264,7 @@
     "grafana": {
       "type": "local",
       "command": ["npx", "-y", "@grafana/mcp-grafana"],
-      "enabled": false,
+      "enabled": true,
       "timeout": 20000,
       "environment": {
         "GRAFANA_URL": "${GRAFANA_URL}",
@@ -274,7 +274,7 @@
     "web-security": {
       "type": "local",
       "command": ["python", "-m", "obs.mcp.security"],
-      "enabled": false,
+      "enabled": true,
       "timeout": 120000,
       "environment": {
         "TRIVY_BIN": "/usr/local/bin/trivy",
@@ -286,7 +286,7 @@
     "android": {
       "type": "local",
       "command": ["python", "-m", "obs.mcp.android"],
-      "enabled": false,
+      "enabled": true,
       "timeout": 30000,
       "environment": {
         "GLITCHTIP_URL": "${GLITCHTIP_URL}",

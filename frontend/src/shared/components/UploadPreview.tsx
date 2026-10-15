@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Eye, X } from 'lucide-react';
+import { Button, Card } from '@/components/ui';
 
-const DEFAULT_ROW = 'mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2';
+const DEFAULT_ROW = 'mt-3 pt-3 flex items-center justify-between gap-2';
 
 /** Metadata for the newest upload, as returned by the `latest` endpoints. */
 export interface LatestUploadInfo {
@@ -98,17 +100,30 @@ export default function UploadPreview({
   return (
     <>
       {latest?.available ? (
-        <div className={rowClassName}>
-          <span className="text-xs text-gray-500 truncate" title={name}>
-            Latest: {name}
-          </span>
-          <button type="button" onClick={open} disabled={opening} className="btn-ghost shrink-0">
-            {opening ? 'Loading…' : 'Preview'}
-          </button>
-        </div>
+        <Card className="!p-3 mt-3">
+          <div className={rowClassName} style={{ marginTop: 0, paddingTop: 0 }}>
+            <span className="text-xs truncate" style={{ color: 'var(--cp-muted)' }} title={name}>
+              Latest: {name}
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={<Eye size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />}
+              loading={opening}
+              onClick={open}
+              disabled={opening}
+              className="shrink-0"
+            >
+              Preview
+            </Button>
+          </div>
+        </Card>
       ) : (
         emptyHint && (
-          <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">{emptyHint}</p>
+          <p className="mt-3 pt-3 text-xs" style={{ color: 'var(--cp-muted)' }}>
+            {emptyHint}
+          </p>
         )
       )}
 
@@ -116,17 +131,31 @@ export default function UploadPreview({
 
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50">
-          <div className="card w-full max-w-4xl h-[85vh] flex flex-col p-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200">
-              <span className="text-sm font-semibold text-gray-900 truncate" title={preview.name}>
+          <Card className="w-full max-w-4xl h-[85vh] flex flex-col !p-0 overflow-hidden">
+            <div
+              className="flex items-center justify-between gap-3 px-4 py-3"
+              style={{ borderBottom: '1px solid rgba(163,177,198,.25)' }}
+            >
+              <span
+                className="text-sm font-semibold truncate"
+                style={{ color: 'var(--cp-text)' }}
+                title={preview.name}
+              >
                 {preview.name}
               </span>
-              <button type="button" onClick={close} className="btn-ghost shrink-0">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={<X size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />}
+                onClick={close}
+                aria-label="Close preview"
+              >
                 Close
-              </button>
+              </Button>
             </div>
             {/\.csv$/i.test(preview.name) ? (
-              <p className="p-4 text-sm text-gray-600">
+              <p className="p-4 text-sm" style={{ color: 'var(--cp-muted)' }}>
                 This upload is a CSV file, which cannot be shown in the PDF viewer.
               </p>
             ) : (
@@ -136,7 +165,7 @@ export default function UploadPreview({
                 className="flex-1 w-full border-0"
               />
             )}
-          </div>
+          </Card>
         </div>
       )}
     </>

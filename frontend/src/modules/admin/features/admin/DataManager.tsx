@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Trash2, Upload } from 'lucide-react';
 import { timetableApi, examApi } from '@/api';
+import { Button, Card } from '@/components/ui';
 import ErrorBanner from '@shared/components/ErrorBanner';
 
 export default function DataManager({ onError }: { onError?: (m: string) => void }) {
@@ -81,50 +83,77 @@ export default function DataManager({ onError }: { onError?: (m: string) => void
     kind: 'timetable' | 'exam-tt' | 'exam-seat';
     accept: string;
   }) => (
-    <div className="card p-4 flex flex-wrap items-center justify-between gap-3">
+    <Card className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p className="text-sm font-medium text-gray-900">{title}</p>
-        <p className="text-xs text-gray-500">{sub}</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--cp-text)' }}>
+          {title}
+        </p>
+        <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
+          {sub}
+        </p>
       </div>
       <div className="flex items-center gap-2">
-        <label className="btn-primary text-sm cursor-pointer">
-          {busy === kind ? 'Working…' : 'Upload'}
-          <input
-            type="file"
-            accept={accept}
-            className="hidden"
-            disabled={busy !== null}
-            onChange={e => {
-              const f = e.target.files?.[0];
-              e.target.value = '';
-              if (f) up(kind, f);
-            }}
-          />
-        </label>
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
+          icon={<Upload size={16} strokeWidth={2} aria-hidden />}
+          loading={busy === kind}
+          disabled={busy !== null}
+          onClick={() => document.getElementById(`upload-${kind}`)?.click()}
+        >
+          Upload
+        </Button>
+        <input
+          id={`upload-${kind}`}
+          type="file"
+          accept={accept}
+          className="hidden"
+          disabled={busy !== null}
+          onChange={e => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) up(kind, f);
+          }}
+        />
+        <Button
+          type="button"
+          variant="danger"
+          size="sm"
+          icon={<Trash2 size={16} strokeWidth={2} aria-hidden />}
           disabled={busy !== null}
           onClick={() => clear(kind)}
-          className="btn-ghost text-sm disabled:opacity-50"
         >
           Delete
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 
   return (
     <div className="space-y-4">
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Data</h2>
-        <p className="text-sm text-gray-600 mt-1">
+      <Card>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Data
+        </h2>
+        <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }} aria-live="polite">
           Timetable slots: {ttOptions?.total_slots ?? '—'}
           {' · '}Exam rows: {status ? `${status.timetable_rows}/${status.seating_rows}` : '—'}
           {' · '}Latest timetable file: {tt?.available ? tt.filename : 'none'}
         </p>
-      </div>
+      </Card>
       {msg && (
-        <div className="rounded-xl border border-success-200 bg-success-50 px-4 py-3 text-xs text-success-800">
+        <div
+          className="px-4 py-3 text-xs"
+          style={{
+            borderRadius: 12,
+            border: '1px solid rgba(163,177,198,.3)',
+            background: 'var(--cp-bg)',
+            boxShadow: 'var(--cp-neu-inset)',
+            color: 'var(--cp-success)',
+          }}
+          aria-live="polite"
+        >
           {msg}
         </div>
       )}

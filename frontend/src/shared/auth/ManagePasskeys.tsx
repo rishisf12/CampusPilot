@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { KeyRound, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui';
 import { authApi } from '../../api';
 import { createPasskey, isPasskeySupported } from '../lib/passkey';
 import { getToken } from '../lib/storage';
 import ErrorBanner from '../components/ErrorBanner';
-import Spinner from '../components/Spinner';
 
 /**
  * Manage the passkeys on this account.
@@ -112,10 +113,12 @@ export default function ManagePasskeys() {
   };
 
   return (
-    <div className="card space-y-4">
+    <div className="neu-raised p-6 space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-gray-900">Passkeys</h3>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Passkeys
+        </h3>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--cp-muted)' }}>
           Sign in with your fingerprint, face or device PIN instead of your password. Remove a
           passkey if you lose the device that holds it.
         </p>
@@ -131,10 +134,10 @@ export default function ManagePasskeys() {
 
       {loading ? (
         <div className="flex justify-center py-4">
-          <Spinner size={20} className="text-primary-500" />
+          <Button variant="ghost" loading aria-label="Loading passkeys" />
         </div>
       ) : passkeys.length === 0 ? (
-        <p className="text-sm text-gray-600">
+        <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
           No passkeys yet. Add one and you can sign in without typing your password - and get back
           in if you forget it.
         </p>
@@ -143,44 +146,52 @@ export default function ManagePasskeys() {
           {passkeys.map(item => (
             <li
               key={item.credential_id}
-              className="border border-gray-200 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3"
+              className="neu-inset rounded-xl px-3 py-2.5 flex items-center justify-between gap-3"
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{item.label}</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm font-medium truncate" style={{ color: 'var(--cp-text)' }}>
+                  {item.label}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
                   {describeAge(item.created_at)} &middot; {lastUsed(item.last_used_at)}
                 </p>
               </div>
 
               {confirmingId === item.credential_id ? (
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
                     {passkeys.length === 1 ? 'Remove your only passkey?' : 'Remove?'}
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="danger"
+                    size="sm"
+                    icon={<Trash2 size={16} />}
+                    loading={busy === item.credential_id}
                     onClick={() => removeDevice(item.credential_id)}
-                    disabled={busy === item.credential_id}
-                    className="px-2 py-1 text-xs font-medium rounded bg-danger-600 text-white hover:bg-danger-700 disabled:opacity-50"
                   >
-                    {busy === item.credential_id ? 'Removing' : 'Yes, remove'}
-                  </button>
-                  <button
+                    Yes, remove
+                  </Button>
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setConfirmingId(null)}
-                    className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Trash2 size={16} />}
                   onClick={() => setConfirmingId(item.credential_id)}
-                  className="shrink-0 text-xs font-medium text-danger-600 hover:text-danger-700"
+                  aria-label={`Remove passkey ${item.label}`}
                 >
                   Remove
-                </button>
+                </Button>
               )}
             </li>
           ))}
@@ -188,16 +199,19 @@ export default function ManagePasskeys() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
+          icon={<KeyRound size={16} />}
+          loading={busy === 'add'}
           onClick={addDevice}
           disabled={busy === 'add' || !supported}
-          className="btn-primary text-sm"
         >
-          {busy === 'add' ? <Spinner size={16} className="text-white" /> : 'Add a passkey'}
-        </button>
+          Add a passkey
+        </Button>
         {!supported && (
-          <span className="text-xs text-gray-500">
+          <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
             This browser does not support passkeys. Chrome, Edge and Safari all do.
           </span>
         )}

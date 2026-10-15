@@ -1,3 +1,6 @@
+import { AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react';
+import { Card, IconTile } from '@/components/ui';
+
 type Tone = 'success' | 'warning' | 'danger' | 'primary' | 'default';
 
 interface StatusCardProps {
@@ -14,13 +17,21 @@ interface StatusCardProps {
  * `tone` drives the colour: safe/warning/critical map onto the success,
  * warning and danger palettes used across the app.
  */
-const TONES: Record<Tone, string> = {
-  success: 'border-success-200 bg-success-50 text-success-700',
-  warning: 'border-warning-200 bg-warning-50 text-warning-700',
-  danger: 'border-danger-200 bg-danger-50 text-danger-700',
-  primary: 'border-primary-200 bg-primary-50 text-primary-700',
-  default: 'border-gray-200 bg-gray-50 text-gray-700',
-};
+const HUES = {
+  success: 'mint',
+  warning: 'amber',
+  danger: 'coral',
+  primary: 'indigo',
+  default: 'slate',
+} as const;
+
+const ICONS = {
+  success: CheckCircle2,
+  warning: AlertTriangle,
+  danger: XCircle,
+  primary: Info,
+  default: AlertTriangle,
+} as const;
 
 export default function StatusCard({
   label,
@@ -29,12 +40,29 @@ export default function StatusCard({
   tone = 'default',
   extra = null,
 }: StatusCardProps) {
+  const Icon = ICONS[tone] || ICONS.default;
   return (
-    <div className={`rounded-xl border p-4 ${TONES[tone] || TONES.default}`}>
-      <p className="text-xs uppercase tracking-wide opacity-80">{label}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
-      {subtext && <p className="text-xs mt-1 opacity-80">{subtext}</p>}
-      {extra}
-    </div>
+    <Card className="!p-4 flex items-start gap-3">
+      <IconTile hue={HUES[tone] || 'slate'} size={40}>
+        <Icon size={20} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
+      </IconTile>
+      <div className="min-w-0 flex-1">
+        <p
+          className="text-xs font-medium uppercase tracking-wide"
+          style={{ color: 'var(--cp-muted)' }}
+        >
+          {label}
+        </p>
+        <p className="text-2xl font-bold mt-1" style={{ color: 'var(--cp-text)' }}>
+          {value}
+        </p>
+        {subtext && (
+          <p className="text-xs mt-1" style={{ color: 'var(--cp-muted)' }}>
+            {subtext}
+          </p>
+        )}
+        {extra}
+      </div>
+    </Card>
   );
 }

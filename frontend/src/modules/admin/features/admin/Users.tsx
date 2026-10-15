@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { adminApi, AdminUser } from '@/api';
+import { Badge, Button, Card, Input, Select, Table } from '@/components/ui';
 import ErrorBanner from '@shared/components/ErrorBanner';
 
 export default function Users({ onError }: { onError?: (m: string) => void }) {
@@ -65,118 +67,155 @@ export default function Users({ onError }: { onError?: (m: string) => void }) {
   };
 
   if (loading)
-    return <div className="card p-8 text-center text-sm text-gray-500">Loading users…</div>;
+    return (
+      <Card className="text-center text-sm" style={{ color: 'var(--cp-muted)' }}>
+        Loading users…
+      </Card>
+    );
 
   return (
     <div className="space-y-4">
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Users</h2>
-        <p className="text-sm text-gray-600 mt-1">
+      <Card>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Users
+        </h2>
+        <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
           {total} accounts
           {stats
             ? ` · ${stats.admins} admins · ${stats.students} students · ${stats.verified} verified`
             : ''}
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div className="w-64 max-w-full">
+            <span className="label">Search</span>
+            <Input
+              id="admin-user-search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  setPage(1);
+                  load();
+                }
+              }}
+              placeholder="Search email, username, name, roll number…"
+            />
+          </div>
+          <div>
+            <span className="label">Role</span>
+            <Select
+              id="admin-role-filter"
+              value={roleFilter}
+              onChange={e => {
+                setRoleFilter(e.target.value);
                 setPage(1);
-                load();
-              }
-            }}
-            placeholder="Search email, username, name, roll number…"
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm w-64"
-          />
-          <select
-            value={roleFilter}
-            onChange={e => {
-              setRoleFilter(e.target.value);
-              setPage(1);
-            }}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
-          >
-            <option value="">All roles</option>
-            <option value="admin">Admin</option>
-            <option value="student">Student</option>
-          </select>
-          <button
+              }}
+            >
+              <option value="">All roles</option>
+              <option value="admin">Admin</option>
+              <option value="student">Student</option>
+            </Select>
+          </div>
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
+            icon={<Search size={16} strokeWidth={2} aria-hidden />}
             onClick={() => {
               setPage(1);
               load();
             }}
-            className="btn-primary text-sm"
           >
             Search
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      {users.map(u => (
-        <div key={u.id} className="card p-4 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              {u.username} <span className="text-gray-400">· {u.email}</span>
-            </p>
-            <p className="text-xs text-gray-500">
-              {u.full_name || '—'} {u.roll_number ? `· ${u.roll_number}` : ''} · {u.role}{' '}
-              {u.is_email_verified ? '· verified' : '· unverified'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {u.role === 'admin' ? (
-              <button
-                type="button"
-                disabled={acting === u.id}
-                onClick={() => changeRole(u, 'student')}
-                className="btn-ghost text-sm disabled:opacity-60"
-              >
-                Demote
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={acting === u.id}
-                onClick={() => changeRole(u, 'admin')}
-                className="btn-primary text-sm disabled:opacity-60"
-              >
-                Make admin
-              </button>
-            )}
-          </div>
+      {users.length === 0 ? (
+        <Card className="text-center text-sm" style={{ color: 'var(--cp-muted)' }}>
+          No users found.
+        </Card>
+      ) : (
+        <div aria-live="polite">
+          <Table
+            head={['User', 'Role', 'Status', 'Actions']}
+            rows={users.map(u => [
+              <span key="u">
+                <span
+                  className="block text-sm font-medium truncate"
+                  style={{ color: 'var(--cp-text)' }}
+                >
+                  {u.username} <span style={{ color: 'var(--cp-muted)' }}>· {u.email}</span>
+                </span>
+                <span className="block text-xs" style={{ color: 'var(--cp-muted)' }}>
+                  {u.full_name || '—'} {u.roll_number ? `· ${u.roll_number}` : ''}
+                </span>
+              </span>,
+              <Badge key="r" tone={u.role === 'admin' ? 'primary' : 'neutral'}>
+                {u.role}
+              </Badge>,
+              <Badge key="s" tone={u.is_email_verified ? 'success' : 'warning'}>
+                {u.is_email_verified ? 'verified' : 'unverified'}
+              </Badge>,
+              u.role === 'admin' ? (
+                <Button
+                  key="a"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={acting === u.id}
+                  onClick={() => changeRole(u, 'student')}
+                >
+                  Demote
+                </Button>
+              ) : (
+                <Button
+                  key="a"
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  disabled={acting === u.id}
+                  onClick={() => changeRole(u, 'admin')}
+                >
+                  Make admin
+                </Button>
+              ),
+            ])}
+          />
         </div>
-      ))}
-
-      {users.length === 0 && (
-        <div className="card p-8 text-center text-sm text-gray-500">No users found.</div>
       )}
 
-      <div className="flex items-center justify-between text-sm text-gray-600">
-        <span>
+      <div
+        className="flex items-center justify-between text-sm"
+        style={{ color: 'var(--cp-muted)' }}
+      >
+        <span aria-live="polite">
           Page {page} · {total} total
         </span>
         <div className="flex gap-2">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
+            icon={<ChevronLeft size={16} strokeWidth={2} aria-hidden />}
             disabled={page <= 1}
             onClick={() => setPage(p => Math.max(1, p - 1))}
-            className="btn-ghost text-sm disabled:opacity-50"
           >
             Prev
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
+            iconPosition="right"
+            icon={<ChevronRight size={16} strokeWidth={2} aria-hidden />}
             disabled={users.length < 20}
             onClick={() => setPage(p => p + 1)}
-            className="btn-ghost text-sm disabled:opacity-50"
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
     </div>
