@@ -20,6 +20,22 @@ from core.config import get_settings
 from core.database import get_session
 from core.deps import get_current_admin
 from features.monitoring.infrastructure import collector
+# Response models live in `schemas` and are imported, not redefined here. This
+# module previously declared its own copies of ScanResponse, SubsectionInfo,
+# SubsectionsResponse, ScanHistoryResponse and RollupResponse, which shadowed
+# the canonical ones. `response_model=` then filtered against the local copy, so
+# adding a field to `schemas.SubsectionsResponse` had no effect on the wire and
+# the change vanished with no error.
+#
+# `ScanResult` is deliberately NOT imported from here: below it means the
+# database model.
+from features.monitoring.api.schemas import (
+    RollupResponse,
+    ScanHistoryResponse,
+    ScanResponse,
+    SubsectionInfo,
+    SubsectionsResponse,
+)
 from features.monitoring.services import queries, rollup, scan_service
 from features.monitoring.domain.models import (
     CrashReport,
@@ -237,51 +253,17 @@ SUBSECTIONS: tuple[dict[str, str], ...] = (
 # --------------------------------------------------------------------------
 
 class ScanRequest(BaseModel):
-    """Request body for triggering a scan."""
+    """Request body for triggering a scan.
+
+    Kept here rather than in `schemas` because it carries the per-request model
+    override, which the shared `ScanRequest` does not.
+    """
     window_days: int = Field(default=7, ge=1, le=90)
     model: Optional[str] = Field(default=None, description="Override model (e.g. 'qwen2.5:7b')")
 
 
-class ScanResponse(BaseModel):
-    """Response from a scan trigger."""
-    scan_id: str
-    subsection: str
-    status: str
-    summary: str
-    findings: list[dict[str, Any]]
-    root_causes: list[str]
-    actions: list[dict[str, Any]]
-    confidence: dict[str, Any]
-    window_start: datetime
-    window_end: datetime
-    duration_ms: int
-    model: str
-    created_at: datetime
-
-
-class SubsectionInfo(BaseModel):
-    id: str
-    platform: str
-    group: str
-    title: str
-
-
-class SubsectionsResponse(BaseModel):
-    subsections: list[SubsectionInfo]
-
-
-class ScanHistoryResponse(BaseModel):
-    scans: list[dict[str, Any]]
-    incidents: list[dict[str, Any]]
-    tool_calls: list[dict[str, Any]]
-
-
-class RollupResponse(BaseModel):
-    start: str
-    end: str
-    buckets: int
-    rows_written: int
-    events_scanned: int
+# ScanResponse, SubsectionInfo, SubsectionsResponse, ScanHistoryResponse and
+# RollupResponse are imported from `features.monitoring.api.schemas` above.
 
 
 # --------------------------------------------------------------------------
@@ -331,8 +313,17 @@ def _incident_from_transition(sub: str, t: StatusTransition, next_t: Optional[St
 
 @monitoring_router.get("/subsections", response_model=SubsectionsResponse)
 def list_subsections(_admin=Depends(get_current_admin)):
-    """Return the canonical eight subsections."""
-    return {"subsections": [SubsectionInfo(**s) for s in SUBSECTIONS]}
+    """Return the canonical eight subsections, plus what this install can do.
+
+    The flags come from settings rather than being inferred by the client, so
+    "Scan now" is offered exactly when the backend would accept the request.
+    """
+    settings = get_settings()
+    return {
+        "subsections": [SubsectionInfo(**s) for s in SUBSECTIONS],
+        "scan_enabled": settings.scan_enabled,
+        "scan_llm_enabled": settings.scan_llm_enabled,
+    }
 
 
 # --------------------------------------------------------------------------

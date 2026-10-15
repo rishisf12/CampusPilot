@@ -151,6 +151,19 @@ class SubsectionInfo(BaseModel):
 class SubsectionsResponse(BaseModel):
     subsections: list[SubsectionInfo]
 
+    #: Whether "Scan now" should be offered at all. Reported here rather than
+    #: hardcoded in the UI: the button used to be permanently disabled with a
+    #: tooltip blaming the installation, which was wrong as soon as
+    #: SCAN_ENABLED turned on. The client already fetches this endpoint on
+    #: mount, so capability costs no extra round trip.
+    scan_enabled: bool = False
+
+    #: Whether Stage 2 (the local LLM narrative) is on. Reported separately
+    #: because a scan still works without it - the rule engine owns every
+    #: number - so the UI can say "rules only" instead of implying a scan is
+    #: degraded.
+    scan_llm_enabled: bool = False
+
 
 class ScanHistoryResponse(BaseModel):
     scans: list[dict[str, Any]]

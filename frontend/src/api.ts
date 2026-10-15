@@ -480,8 +480,44 @@ export const adminApi = {
 // the server rather than being duplicated in the UI - a hardcoded copy would
 // eventually disagree with the backend's allowlist and produce a button that
 // always fails with no obvious cause.
+export interface ScanResultResponse {
+  scan_id: string;
+  subsection: string;
+  status: 'healthy' | 'warning' | 'critical' | 'error';
+  summary: string;
+  findings: Array<{ title: string; severity: string; evidence: unknown[] }>;
+  root_causes: string[];
+  actions: Array<{ action: string; priority: number; detail: string }>;
+  confidence: { level?: string; missing_data?: string[]; tools_failed?: string[] };
+  window_start: string;
+  window_end: string;
+  duration_ms: number;
+  /** "rule-engine-v1", or "rule-engine-v1+llm" when Stage 2 contributed. */
+  model: string;
+  created_at: string;
+}
+
 export const monitoringApi = {
-  subsections: () => request<{ subsections: MonitoringSubsection[] }>('/monitoring/subsections'),
+  subsections: () =>
+    request<{
+      subsections: MonitoringSubsection[];
+      scan_enabled: boolean;
+      scan_llm_enabled: boolean;
+    }>('/monitoring/subsections'),
+
+  /**
+   * Run a scan for one subsection.
+   *
+   * Synchronous on the server and fast in practice: the rule engine answers in
+   * tens of milliseconds. Stage 2 (a local LLM) is off by default, and when
+   * enabled it adds minutes on CPU, so the UI shows a pending state rather
+   * than appearing to have hung.
+   */
+  scan: (subsection: string, windowDays = 7) =>
+    request<ScanResultResponse>(`/monitoring/scan/${subsection}`, {
+      method: 'POST',
+      body: { window_days: windowDays },
+    }),
 
   /** Everything the panels need, one round trip, one consistent window. */
   overview: (days = 7, platform: string | null = null) => {

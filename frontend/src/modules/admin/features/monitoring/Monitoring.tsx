@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Web App Monitoring and Android App Monitoring.
  *
  * Two groups of four subsections, sharing one data fetch. The eight subsections
@@ -19,9 +19,11 @@
  *   is reported next to the numbers rather than buried.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Download, RefreshCw, ScanLine } from 'lucide-react';
 
-import { monitoringApi, adminApi } from '@/api';
+import { monitoringApi, adminApi, type ScanResultResponse } from '@/api';
 import type { MonitoringSubsection } from '@shared/types/api';
+import { Badge, Button, Card } from '@/components/ui';
 import { ActivityPanel, type ActivityData } from './panels/Activity';
 import { FeedbackPanel, type FeedbackData } from './panels/Feedback';
 import { HealthPanel, type HealthData } from './panels/Health';
@@ -65,14 +67,30 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rolling, setRolling] = useState(false);
+  // Scan capability, reported by the server on the call above. Previously the
+  // button was hardcoded off, so enabling SCAN_ENABLED changed nothing here and
+  // the tooltip kept blaming the installation.
+  const [scanEnabled, setScanEnabled] = useState(false);
+  const [scanLlmEnabled, setScanLlmEnabled] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [lastScan, setLastScan] = useState<ScanResultResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     monitoringApi
       .subsections()
-      .then((r: { subsections: MonitoringSubsection[] }) => {
-        if (!cancelled) setSubsections(r.subsections || []);
-      })
+      .then(
+        (r: {
+          subsections: MonitoringSubsection[];
+          scan_enabled?: boolean;
+          scan_llm_enabled?: boolean;
+        }) => {
+          if (cancelled) return;
+          setSubsections(r.subsections || []);
+          setScanEnabled(Boolean(r.scan_enabled));
+          setScanLlmEnabled(Boolean(r.scan_llm_enabled));
+        }
+      )
       .catch(() => {
         if (!cancelled) setError('Could not load the subsection list.');
       });
@@ -150,6 +168,27 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
     }
   }
 
+  async function runScan() {
+    if (!scanEnabled || scanning || !selected || selected === HISTORY_TAB) return;
+    setScanning(true);
+    setLastScan(null);
+    try {
+      const result = await monitoringApi.scan(selected, days);
+      setLastScan(result);
+      // The scan is persisted, so the history tab is now stale.
+      try {
+        const fresh = (await monitoringApi.history(selected, 50)) as HistoryData;
+        setHistory(fresh);
+      } catch {
+        // A stale history is not worth failing the whole scan over.
+      }
+    } catch {
+      setError('The scan did not complete. Check that the API is running.');
+    } finally {
+      setScanning(false);
+    }
+  }
+
   async function runExport(format: 'json' | 'csv') {
     if (selected === HISTORY_TAB || !selected) return;
     setExporting(format);
@@ -185,126 +224,191 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
   return (
     <div className="space-y-4">
       {/* Toolbar: range, freshness, manual rollup */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
-        <div className="flex items-center gap-1" role="group" aria-label="Date range">
-          {RANGES.map(r => (
-            <button
-              key={r.days}
-              type="button"
-              onClick={() => setDays(r.days)}
-              aria-pressed={days === r.days}
-              className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
-                days === r.days ? 'bg-primary-500 text-white' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+      <Card className="flex flex-wrap items-center justify-between gap-3 !p-4">
+        <div
+          className="flex items-center gap-2 p-1.5"
+          role="group"
+          aria-label="Date range"
+          style={{ borderRadius: 20, background: 'var(--cp-bg)', boxShadow: 'var(--cp-neu-inset)' }}
+        >
+          {RANGES.map(r => {
+            const on = days === r.days;
+            return (
+              <button
+                key={r.days}
+                type="button"
+                onClick={() => setDays(r.days)}
+                aria-pressed={on}
+                className="px-4 py-2 text-xs font-medium transition-all duration-200"
+                style={
+                  on
+                    ? {
+                        borderRadius: 16,
+                        background: '#4F46E5',
+                        color: '#fff',
+                        boxShadow: 'var(--cp-clay)',
+                      }
+                    : { borderRadius: 16, background: 'transparent', color: 'var(--cp-muted)' }
+                }
+              >
+                {r.label}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <FreshnessBadge overview={overview} />
-          <button
+          <Button
             type="button"
-            onClick={() => runExport('json')}
+            variant="secondary"
+            size="sm"
+            icon={<Download size={16} strokeWidth={2} aria-hidden />}
+            loading={exporting === 'json'}
             disabled={exporting !== null || selected === 'E_HISTORY'}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            onClick={() => runExport('json')}
             title="Download this subsection as JSON"
           >
-            {exporting === 'json' ? 'Exporting…' : 'Export JSON'}
-          </button>
-          <button
+            Export JSON
+          </Button>
+          <Button
             type="button"
-            onClick={() => runExport('csv')}
+            variant="secondary"
+            size="sm"
+            icon={<Download size={16} strokeWidth={2} aria-hidden />}
+            loading={exporting === 'csv'}
             disabled={exporting !== null || selected === 'E_HISTORY'}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            onClick={() => runExport('csv')}
             title="Download this subsection as CSV"
           >
-            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
-          </button>
-          <button
+            Export CSV
+          </Button>
+          <Button
             type="button"
-            onClick={runRollup}
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw size={16} strokeWidth={2} aria-hidden />}
+            loading={rolling}
             disabled={rolling}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            onClick={runRollup}
             title="Recompute the hourly rollup now instead of waiting for the timer"
           >
-            {rolling ? 'Rolling up…' : 'Rebuild rollup'}
-          </button>
+            Rebuild rollup
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {error && (
-        <div className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-xs text-danger-800">
+        <div
+          className="px-4 py-3 text-xs"
+          style={{
+            borderRadius: 12,
+            border: '1px solid rgba(163,177,198,.3)',
+            background: 'var(--cp-bg)',
+            boxShadow: 'var(--cp-neu-inset)',
+            color: 'var(--cp-danger)',
+          }}
+          role="alert"
+          aria-live="polite"
+        >
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4">
         {/* Subsection nav */}
-        <nav
-          className="bg-white border border-gray-200 rounded-xl p-2 h-fit"
-          aria-label="Monitoring subsections"
-        >
-          {groups.map(([group, items]) => (
-            <div key={group} className="mb-3 last:mb-0">
-              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                {group}
-              </div>
-              {items.map(s => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelected(s.id)}
-                  aria-current={selected === s.id ? 'page' : undefined}
-                  className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors ${
-                    selected === s.id
-                      ? 'bg-primary-50 text-primary-700 font-semibold'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
+        <Card className="!p-2 h-fit">
+          <nav aria-label="Monitoring subsections">
+            {groups.map(([group, items]) => (
+              <div key={group} className="mb-3 last:mb-0">
+                <div
+                  className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: 'var(--cp-muted)' }}
                 >
-                  {s.title}
-                </button>
-              ))}
-            </div>
-          ))}
+                  {group}
+                </div>
+                {items.map(s => {
+                  const on = selected === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelected(s.id)}
+                      aria-current={on ? 'page' : undefined}
+                      className="w-full text-left px-2 py-1.5 text-xs transition-all duration-200"
+                      style={
+                        on
+                          ? {
+                              borderRadius: 12,
+                              background: '#4F46E5',
+                              color: '#fff',
+                              boxShadow: 'var(--cp-clay)',
+                              fontWeight: 600,
+                            }
+                          : { borderRadius: 12, color: 'var(--cp-muted)', fontWeight: 400 }
+                      }
+                    >
+                      {s.title}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
 
-          {/* History is a tab across all eight, not a ninth subsection. It is
-              kept out of the server-provided list so the count of eight stays
-              authoritative and a scan allowlist keyed on those ids cannot drift. */}
-          <div className="border-t border-gray-100 pt-2 mt-1">
-            <button
-              type="button"
-              onClick={() => setSelected('E_HISTORY')}
-              aria-current={selected === 'E_HISTORY' ? 'page' : undefined}
-              className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors ${
-                selected === 'E_HISTORY'
-                  ? 'bg-primary-50 text-primary-700 font-semibold'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Scan history
-            </button>
-          </div>
-        </nav>
+            {/* History is a tab across all eight, not a ninth subsection. It is
+                kept out of the server-provided list so the count of eight stays
+                authoritative and a scan allowlist keyed on those ids cannot drift. */}
+            <div className="pt-2 mt-1" style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}>
+              <button
+                type="button"
+                onClick={() => setSelected('E_HISTORY')}
+                aria-current={selected === 'E_HISTORY' ? 'page' : undefined}
+                className="w-full text-left px-2 py-1.5 text-xs transition-all duration-200"
+                style={
+                  selected === 'E_HISTORY'
+                    ? {
+                        borderRadius: 12,
+                        background: '#4F46E5',
+                        color: '#fff',
+                        boxShadow: 'var(--cp-clay)',
+                        fontWeight: 600,
+                      }
+                    : { borderRadius: 12, color: 'var(--cp-muted)', fontWeight: 400 }
+                }
+              >
+                Scan history
+              </button>
+            </div>
+          </nav>
+        </Card>
 
         {/* Panel */}
-        <div>
+        <div aria-live="polite">
           <div className="flex items-center justify-between gap-3 mb-3">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">
+              <h2 className="text-base font-semibold" style={{ color: 'var(--cp-text)' }}>
                 {selected === 'E_HISTORY' ? 'Scan history' : (current?.title ?? 'Monitoring')}
               </h2>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
                 {selected === 'E_HISTORY'
                   ? 'Every scan verdict, the incident log, and the tool-call audit'
                   : current
-                    ? `${current.group} · ${current.id}`
-                    : 'Loading subsection list…'}
+                    ? `${current.group} Â· ${current.id}`
+                    : 'Loading subsection listâ€¦'}
               </p>
             </div>
-            {selected !== 'E_HISTORY' && <ScanButton subsection={selected} enabled={false} />}
+            {selected !== 'E_HISTORY' && (
+              <ScanButton
+                subsection={selected}
+                enabled={scanEnabled}
+                llmEnabled={scanLlmEnabled}
+                scanning={scanning}
+                onScan={runScan}
+              />
+            )}
           </div>
+
+          {lastScan && <ScanOutcome result={lastScan} llmEnabled={scanLlmEnabled} />}
 
           <PanelBody
             current={current}
@@ -348,7 +452,7 @@ function PanelBody({
   // `current` is the server-provided subsection matching the selection, so it is
   // undefined for E_HISTORY - which is exactly why that tab is not in the
   // server's list. Checking `current` first (which this did originally) makes
-  // the `case HISTORY_TAB` below unreachable, and the tab renders "Loading…"
+  // the `case HISTORY_TAB` below unreachable, and the tab renders "Loadingâ€¦"
   // forever with nothing in the console to explain it.
   if (selected === HISTORY_TAB) {
     return <HistoryPanel data={history} loading={loading} />;
@@ -396,33 +500,105 @@ function PanelBody({
 
 function Loading() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">
-      Loading…
-    </div>
+    <Card className="text-center text-sm" style={{ color: 'var(--cp-muted)' }} aria-live="polite">
+      Loadingâ€¦
+    </Card>
   );
 }
 
 /**
- * "Scan now" placeholder.
+ * "Scan now".
  *
- * Disabled on purpose in this phase. It is rendered rather than omitted so the
- * shape of the UI is settled, and it says why it is off — a permanently greyed
- * button with no explanation is worse than no button.
+ * `enabled` is the server's SCAN_ENABLED flag, read from the same
+ * `/monitoring/subsections` call that supplies the list, so the button is
+ * offered exactly when the backend would accept the request. It was previously
+ * hardcoded off and blamed the installation, which stayed wrong the moment
+ * scanning was switched on.
  */
-function ScanButton({ subsection, enabled }: { subsection: string; enabled: boolean }) {
+function ScanButton({
+  subsection,
+  enabled,
+  llmEnabled,
+  scanning,
+  onScan,
+}: {
+  subsection: string;
+  enabled: boolean;
+  llmEnabled: boolean;
+  scanning: boolean;
+  onScan: () => void;
+}) {
   return (
-    <button
+    <Button
       type="button"
-      disabled={!enabled}
+      variant="secondary"
+      size="sm"
+      icon={<ScanLine size={16} strokeWidth={2} aria-hidden />}
+      onClick={onScan}
+      disabled={!enabled || scanning}
       title={
-        enabled
-          ? `Run a read-only AI scan of ${subsection}`
-          : 'AI scanning is not enabled on this installation (SCAN_ENABLED)'
+        !enabled
+          ? 'AI scanning is not enabled on this installation (SCAN_ENABLED)'
+          : llmEnabled
+            ? `Scan ${subsection} with the rule engine and the local LLM. On CPU the model can take minutes.`
+            : `Scan ${subsection} with the rule engine only. Every figure comes from measured metrics.`
       }
-      className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-400 cursor-not-allowed"
     >
-      Scan now
-    </button>
+      {scanning ? 'Scanning…' : 'Scan now'}
+    </Button>
+  );
+}
+
+const SCAN_STATUS_TONES: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  healthy: 'success',
+  warning: 'warning',
+  critical: 'danger',
+  error: 'neutral',
+};
+
+/**
+ * What the scan just returned.
+ *
+ * Rendered inline rather than only in the history tab so the answer is where
+ * the question was asked. The `model` field is shown verbatim: an admin should
+ * be able to see that this verdict came from the rule engine and not from a
+ * model, because only one of the two is authoritative on the numbers.
+ */
+function ScanOutcome({ result, llmEnabled }: { result: ScanResultResponse; llmEnabled: boolean }) {
+  const missing = result.confidence?.missing_data ?? [];
+  return (
+    <Card className="mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <Badge tone={SCAN_STATUS_TONES[result.status] ?? 'neutral'}>{result.status}</Badge>
+        <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
+          {result.model} · {result.duration_ms} ms · {new Date(result.created_at).toLocaleString()}
+        </span>
+      </div>
+      <p className="text-sm" style={{ color: 'var(--cp-text)' }}>
+        {result.summary}
+      </p>
+      {!llmEnabled && (
+        <p className="mt-2 text-xs" style={{ color: 'var(--cp-muted)' }}>
+          Rule engine only. The LLM narrative stage is off, so this summary is generated from the
+          thresholds rather than written by a model.
+        </p>
+      )}
+      {missing.length > 0 && (
+        <p className="mt-1 text-xs" style={{ color: 'var(--cp-muted)' }}>
+          Not measured: {missing.join(', ')}
+        </p>
+      )}
+      {result.findings.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {result.findings.map((f, i) => (
+            <li key={`${f.title}-${i}`} className="text-xs">
+              <span style={{ color: 'var(--cp-text)' }}>{f.title}</span>
+              <span style={{ color: 'var(--cp-muted)' }}> — {f.severity}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
@@ -438,28 +614,17 @@ function FreshnessBadge({ overview }: { overview: ActivityData | null }) {
   const lag = (overview as { data_freshness?: { rollup_lag_minutes?: number | null } } | null)
     ?.data_freshness?.rollup_lag_minutes;
   if (lag === null || lag === undefined) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full border border-gray-200 bg-gray-50 text-gray-600">
-        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" aria-hidden="true" />
-        No telemetry received
-      </span>
-    );
+    return <Badge tone="neutral">No telemetry received</Badge>;
   }
   const stale = lag > 120;
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full border ${
-        stale
-          ? 'bg-warning-50 border-warning-200 text-warning-800'
-          : 'bg-success-50 border-success-200 text-success-700'
-      }`}
-      title="Age of the newest hourly rollup bucket"
-    >
+    <Badge tone={stale ? 'warning' : 'success'} title="Age of the newest hourly rollup bucket">
       <span
-        className={`w-1.5 h-1.5 rounded-full ${stale ? 'bg-warning-500' : 'bg-success-500'}`}
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ background: stale ? 'var(--cp-warning)' : 'var(--cp-success)' }}
         aria-hidden="true"
       />
       {stale ? `Data ${Math.round(lag / 60)}h old` : 'Data current'}
-    </span>
+    </Badge>
   );
 }
