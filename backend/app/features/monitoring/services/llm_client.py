@@ -25,9 +25,18 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaConfig(BaseModel):
-    """Configuration for Ollama client."""
+    """Configuration for the Stage 2 client.
+
+    Despite the name this is provider-agnostic: every supported backend speaks
+    the OpenAI chat-completions shape (local Ollama, Groq free tier,
+    HuggingFace Inference, NVIDIA NIM). Only the base URL, model and key
+    change. `api_key` empty means no auth header, which is correct for local
+    Ollama.
+    """
+
     base_url: str = "http://ollama:11434/v1"
     model: str = "qwen3:4b"
+    api_key: str = ""
     timeout: float = 240.0
     temperature: float = 0.1
 
@@ -47,15 +56,43 @@ class LLMError(Exception):
     """LLM-related error."""
 
 
+def resolve_llm_config(settings) -> "OllamaConfig":
+    """Build the Stage 2 client config from settings.
+
+    `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY` win when set; otherwise the legacy
+    `OLLAMA_*` values apply so existing local setups keep working untouched.
+    `GROQ_API_KEY` is accepted as a fallback key name because that is what
+    Groq's own dashboard labels it.
+    """
+    base_url = settings.llm_base_url or settings.ollama_base_url
+    model = settings.llm_model or settings.ollama_model
+    api_key = (
+        settings.llm_api_key
+        or getattr(settings, "groq_api_key", "")
+        or ""
+    )
+    return OllamaConfig(
+        base_url=base_url,
+        model=model,
+        api_key=api_key,
+        timeout=settings.ollama_timeout,
+    )
+
+
 class OllamaClient:
     """Async client for Ollama's OpenAI-compatible API."""
 
     def __init__(self, config: Optional[OllamaConfig] = None):
         self.config = config or OllamaConfig(
-            base_url=os.getenv("OLLAMA_BASE_URL", "http://ollama:11434/v1"),
-            model=os.getenv("OLLAMA_MODEL", "qwen3:8b"),
+            base_url=os.getenv("LLM_BASE_URL")
+            or os.getenv("OLLAMA_BASE_URL", "http://ollama:11434/v1"),
+            model=os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL", "qwen3:4b"),
+            api_key=os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY", ""),
         )
         self._client: Optional[httpx.AsyncClient] = None
+        self._headers: dict[str, str] = (
+            {"Authorization": f"Bearer {self.config.api_key}"} if self.config.api_key else {}
+        )
 
     async def __aenter__(self) -> "OllamaClient":
         self._client = httpx.AsyncClient(
@@ -126,7 +163,7 @@ class OllamaClient:
             response = await client.post(
                 "/chat/completions",
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", **self._headers},
             )
             response.raise_for_status()
             data = response.json()
@@ -180,7 +217,7 @@ class OllamaClient:
         """
         try:
             client = await self._ensure_client()
-            response = await client.get("/models", timeout=10.0)
+            response = await client.get("/models", timeout=10.0, headers=self._headers or None)
             response.raise_for_status()
             data = response.json()
             names = [

@@ -135,7 +135,7 @@ def _schema():
     # Base first: a previous interrupted run may have left tables behind.
     with contextlib.suppress(Exception):
         command.downgrade(cfg, "base")
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "heads")
     # Catch-up for tables that exist via create_all in prod but never via
     # Alembic (social.feedback, academic.timetable_slot, ...). Prod gets
     # them from create_all on fresh installs; tests get them here so the

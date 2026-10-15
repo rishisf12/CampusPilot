@@ -54,6 +54,23 @@ import models  # noqa: E402,F401  - imported for the side effect of registering 
 # perfectly in sync. `alembic check` in CI catches that case, which is why it
 # is a required step rather than an optional one.
 from features.monitoring.domain import models as _monitoring_models  # noqa: E402,F401
+# Every feature-local models module, so autogenerate sees the full schema.
+# Each import was verified to resolve; a missing one here means a missing
+# table in the next autogenerate at best, and a DROP TABLE for live data at
+# worst (see the note above).
+from features.alerts import models as _alerts_models  # noqa: E402,F401
+from features.analytics import models as _analytics_models  # noqa: E402,F401
+from features.audit import models as _audit_models  # noqa: E402,F401
+from features.broadcasts import models as _broadcasts_models  # noqa: E402,F401
+from features.errors import models as _errors_models  # noqa: E402,F401
+from features.flags import models as _flags_models  # noqa: E402,F401
+from features.force_update import models as _force_update_models  # noqa: E402,F401
+from features.health import models as _health_models  # noqa: E402,F401
+from features.maintenance import models as _maintenance_models  # noqa: E402,F401
+from features.moderation import models as _moderation_models  # noqa: E402,F401
+from features.remote_config import models as _remote_config_models  # noqa: E402,F401
+from features.security import models as _security_models  # noqa: E402,F401
+from features.user_control import models as _user_control_models  # noqa: E402,F401
 
 from core.config import settings  # noqa: E402
 

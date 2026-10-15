@@ -454,6 +454,51 @@ export interface AdminUser {
   created_at: string | null;
 }
 
+export interface AdminFlag {
+  id: number;
+  key: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  rollout_percentage: number;
+  target_roles: string[];
+  target_user_ids: number[];
+  target_platforms: string[];
+  target_app_versions: string[];
+  target_rules: { attribute: string; operator: string; values: string[] }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminMaintenanceWindow {
+  id: number;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  global_maintenance: boolean;
+  target_features: string[];
+  message: string | null;
+  allow_list_user_ids: number[];
+  bypass_roles: string[];
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminRemoteConfig {
+  id: number;
+  key: string;
+  value: Record<string, unknown>;
+  value_type: string;
+  description: string | null;
+  schema_json: Record<string, unknown> | null;
+  schema_version: number;
+  is_public: boolean;
+  updated_by: number | null;
+  updated_at: string;
+}
+
 export const adminApi = {
   users: (params: { search?: string; role?: string; page?: number; size?: number } = {}) => {
     const search = new URLSearchParams();
@@ -471,6 +516,427 @@ export const adminApi = {
     request<{ total: number; admins: number; students: number; verified: number }>('/admin/stats'),
   exportSubsection: (subsection: string, days = 30, format: 'json' | 'csv' = 'json') =>
     request<unknown>(`/monitoring/export/${subsection}?days=${days}&format=${format}`),
+
+  // Feature Flags
+  flags: () =>
+    request<{ total: number; page: number; size: number; flags: AdminFlag[] }>('/admin/flags'),
+  createFlag: (data: {
+    key: string;
+    name: string;
+    description?: string;
+    enabled?: boolean;
+    rollout_percentage?: number;
+    target_roles?: string[];
+    target_user_ids?: number[];
+    target_platforms?: string[];
+    target_app_versions?: string[];
+    target_rules?: { attribute: string; operator: string; values: string[] }[];
+  }) => request<AdminFlag>('/admin/flags', { method: 'POST', body: data }),
+  getFlag: (key: string) => request<AdminFlag>(`/admin/flags/${key}`),
+  updateFlag: (key: string, data: Partial<AdminFlag>) =>
+    request<AdminFlag>(`/admin/flags/${key}`, { method: 'PATCH', body: data }),
+  deleteFlag: (key: string) => request<void>(`/admin/flags/${key}`, { method: 'DELETE' }),
+
+  // Maintenance
+  maintenance: () =>
+    request<{ total: number; page: number; size: number; windows: AdminMaintenanceWindow[] }>(
+      '/admin/maintenance'
+    ),
+  createMaintenance: (data: {
+    name: string;
+    description?: string;
+    global_maintenance?: boolean;
+    target_features?: string[];
+    message?: string;
+    allow_list_user_ids?: number[];
+    bypass_roles?: string[];
+    scheduled_start?: string;
+    scheduled_end?: string;
+  }) => request<AdminMaintenanceWindow>('/admin/maintenance', { method: 'POST', body: data }),
+  getMaintenance: (id: number) => request<AdminMaintenanceWindow>(`/admin/maintenance/${id}`),
+  updateMaintenance: (id: number, data: Partial<AdminMaintenanceWindow>) =>
+    request<AdminMaintenanceWindow>(`/admin/maintenance/${id}`, { method: 'PATCH', body: data }),
+  deleteMaintenance: (id: number) =>
+    request<void>(`/admin/maintenance/${id}`, { method: 'DELETE' }),
+
+  // Remote Config
+  remoteConfigs: (publicOnly = false) =>
+    request<{ total: number; page: number; size: number; configs: AdminRemoteConfig[] }>(
+      `/admin/remote-config?public_only=${publicOnly}`
+    ),
+  createRemoteConfig: (data: {
+    key: string;
+    value: Record<string, unknown>;
+    value_type?: string;
+    description?: string;
+    schema_json?: Record<string, unknown>;
+    schema_version?: number;
+    is_public?: boolean;
+  }) => request<AdminRemoteConfig>('/admin/remote-config', { method: 'POST', body: data }),
+  getRemoteConfig: (key: string) => request<AdminRemoteConfig>(`/admin/remote-config/${key}`),
+  updateRemoteConfig: (key: string, data: Partial<AdminRemoteConfig>) =>
+    request<AdminRemoteConfig>(`/admin/remote-config/${key}`, { method: 'PATCH', body: data }),
+  deleteRemoteConfig: (key: string) =>
+    request<void>(`/admin/remote-config/${key}`, { method: 'DELETE' }),
+  rollbackRemoteConfig: (key: string, version: number) =>
+    request<AdminRemoteConfig>(`/admin/remote-config/${key}/rollback`, {
+      method: 'POST',
+      body: { version },
+    }),
+  getRemoteConfigHistory: (key: string, limit = 50) =>
+    request<{
+      history: Array<{
+        schema_version: number;
+        value: unknown;
+        value_type: string;
+        changed_by: number | null;
+        change_reason: string | null;
+        created_at: string;
+      }>;
+    }>(`/admin/remote-config/${key}/history?limit=${limit}`),
+
+  // Errors
+  errors: () =>
+    request<{
+      errors: Array<{
+        fingerprint: string;
+        message: string;
+        status: string;
+        count: number;
+        first_seen: string;
+        last_seen: string;
+        assignee: string | null;
+      }>;
+    }>('/admin/errors'),
+
+  // Analytics
+  analyticsOverview: (days = 7) =>
+    request<{
+      dau: number;
+      wau: number;
+      mau: number;
+      retention_d7: number;
+      new_signups: number;
+      verified_rate: number;
+    }>(`/admin/analytics/overview?days=${days}`),
+  featureUsage: (days = 7) =>
+    request<Array<{ feature: string; unique_users: number; opens: number; platform: string }>>(
+      `/admin/analytics/feature-usage?days=${days}`
+    ),
+  retention: (days = 7) =>
+    request<{ d1: number; d7: number; d30: number }>(`/admin/analytics/retention?days=${days}`),
+  platformVersions: (days = 7) =>
+    request<Array<{ platform: string; version: string; unique_users: number; count: number }>>(
+      `/admin/analytics/platforms?days=${days}`
+    ),
+  runAggregation: (date?: string) =>
+    request<{ date: string; aggregations: Array<{ metric: string; count: number }> }>(
+      `/admin/analytics/aggregate/daily${date ? `?date=${date}` : ''}`,
+      { method: 'POST' }
+    ),
+  detectAnomalies: (date?: string) =>
+    request<{
+      detected: number;
+      anomalies: Array<{
+        metric: string;
+        expected: number;
+        actual: number;
+        deviation_pct: number;
+        severity: string;
+      }>;
+    }>(`/admin/analytics/anomalies/detect${date ? `?date=${date}` : ''}`, { method: 'POST' }),
+  getEvents: (
+    params: {
+      event_name?: string;
+      user_id?: number;
+      platform?: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+    } = {}
+  ) => {
+    const search = new URLSearchParams();
+    if (params.event_name) search.set('event_name', params.event_name);
+    if (params.user_id) search.set('user_id', String(params.user_id));
+    if (params.platform) search.set('platform', params.platform);
+    if (params.since) search.set('since', params.since);
+    if (params.until) search.set('until', params.until);
+    if (params.limit) search.set('limit', String(params.limit));
+    return request<{
+      events: Array<{
+        id: number;
+        event_name: string;
+        user_id: number | null;
+        platform: string;
+        app_version: string | null;
+        properties: unknown | null;
+        created_at: string;
+      }>;
+    }>(`/admin/analytics/events?${search}`);
+  },
+  trackEvent: (data: {
+    event_name: string;
+    user_id?: number;
+    session_id?: string;
+    platform?: string;
+    app_version?: string;
+    properties?: Record<string, unknown>;
+  }) =>
+    request<{ id: number; event_name: string; created_at: string }>('/admin/analytics/track', {
+      method: 'POST',
+      body: data,
+    }),
+  trackBatch: (
+    events: Array<{
+      event_name: string;
+      user_id?: number;
+      session_id?: string;
+      platform?: string;
+      app_version?: string;
+      properties?: Record<string, unknown>;
+    }>
+  ) =>
+    request<{ tracked: number }>('/admin/analytics/track/batch', {
+      method: 'POST',
+      body: { events },
+    }),
+
+  // Segments
+  segments: (isActive?: boolean) => {
+    const search = new URLSearchParams();
+    if (isActive !== undefined) search.set('is_active', String(isActive));
+    return request<{
+      segments: Array<{
+        id: number;
+        name: string;
+        description: string | null;
+        criteria_json: Record<string, unknown>;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>(`/admin/analytics/segments?${search}`);
+  },
+  createSegment: (data: {
+    name: string;
+    description?: string;
+    criteria_json: Record<string, unknown>;
+  }) =>
+    request<{
+      id: number;
+      name: string;
+      criteria_json: Record<string, unknown>;
+      is_active: boolean;
+      created_at: string;
+    }>('/admin/analytics/segments', { method: 'POST', body: data }),
+  getSegment: (id: number) =>
+    request<{
+      id: number;
+      name: string;
+      description: string | null;
+      criteria_json: Record<string, unknown>;
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+    }>(`/admin/analytics/segments/${id}`),
+  updateSegment: (
+    id: number,
+    data: {
+      name?: string;
+      description?: string;
+      criteria_json?: Record<string, unknown>;
+      is_active?: boolean;
+    }
+  ) =>
+    request<{
+      id: number;
+      name: string;
+      criteria_json: Record<string, unknown>;
+      is_active: boolean;
+      updated_at: string;
+    }>(`/admin/analytics/segments/${id}`, { method: 'PATCH', body: data }),
+  deleteSegment: (id: number) =>
+    request<void>(`/admin/analytics/segments/${id}`, { method: 'DELETE' }),
+  segmentUsers: (segmentId: number) =>
+    request<{ segment_id: number; user_count: number; user_ids: number[] }>(
+      `/admin/analytics/segments/${segmentId}/users`
+    ),
+
+  // Funnels
+  funnels: (isActive?: boolean) => {
+    const search = new URLSearchParams();
+    if (isActive !== undefined) search.set('is_active', String(isActive));
+    return request<{
+      funnels: Array<{
+        id: number;
+        name: string;
+        description: string | null;
+        steps: string[];
+        window_hours: number;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>(`/admin/analytics/funnels?${search}`);
+  },
+  createFunnel: (data: {
+    name: string;
+    description?: string;
+    steps: string[];
+    window_hours?: number;
+  }) =>
+    request<{
+      id: number;
+      name: string;
+      description: string | null;
+      steps: string[];
+      window_hours: number;
+      created_at: string;
+    }>('/admin/analytics/funnels', { method: 'POST', body: data }),
+  analyzeFunnel: (id: number, days = 7) =>
+    request<{
+      funnel_id: number;
+      name: string;
+      steps: Array<{ step: string; users: number; conversion: number }>;
+    }>(`/admin/analytics/funnels/${id}/analyze?days=${days}`),
+
+  // Anomalies
+  anomalies: (status?: string, severity?: string, days = 7) => {
+    const search = new URLSearchParams();
+    if (status) search.set('status', status);
+    if (severity) search.set('severity', severity);
+    search.set('days', String(days));
+    return request<{
+      anomalies: Array<{
+        id: number;
+        metric_name: string;
+        dimension: string | null;
+        dimension_value: string | null;
+        expected_value: number;
+        actual_value: number;
+        deviation_pct: number;
+        severity: string;
+        description: string;
+        status: string;
+        detected_at: string;
+      }>;
+    }>(`/admin/analytics/anomalies?${search}`);
+  },
+  updateAnomaly: (id: number, status: string) =>
+    request<{ id: number; status: string }>(`/admin/analytics/anomalies/${id}`, {
+      method: 'PATCH',
+      body: { status },
+    }),
+
+  // The backend serves this under /admin/analytics/users/{id}/360, where the
+  // analytics service (events, errors, profile joins) lives - not under
+  // /admin/users. An earlier revision of this path 404d on every lookup.
+  user360: (id: string) =>
+    request<{
+      user: {
+        id: number;
+        email: string;
+        username: string;
+        full_name: string | null;
+        roll_number: string | null;
+        role: string;
+        is_email_verified: boolean;
+        created_at: string | null;
+      };
+      profile: {
+        full_name: string | null;
+        phone: string | null;
+        branch: string | null;
+        semester: number | null;
+        programme: string | null;
+      } | null;
+      recent_events: Array<{ event_name: string; platform: string; created_at: string }>;
+      teams: number[];
+      recent_errors: Array<{ fingerprint: string; platform: string; created_at: string }>;
+    }>(`/admin/analytics/users/${id}/360`),
+
+  // Security
+  securityEvents: () =>
+    request<{
+      events: Array<{
+        type: string;
+        severity: string;
+        actor_email: string | null;
+        actor_id: number | null;
+        details: string | null;
+        ip_hash: string | null;
+        created_at: string;
+      }>;
+    }>('/admin/security/events'),
+
+  // Audit
+  auditLogs: (
+    params: {
+      search?: string;
+      action?: string;
+      actor_id?: number;
+      target_type?: string;
+      target_id?: string;
+      page?: number;
+      size?: number;
+    } = {}
+  ) => {
+    const search = new URLSearchParams();
+    if (params.search) search.set('search', params.search);
+    if (params.action) search.set('action', params.action);
+    if (params.actor_id) search.set('actor_id', String(params.actor_id));
+    if (params.target_type) search.set('target_type', params.target_type);
+    if (params.target_id) search.set('target_id', params.target_id);
+    search.set('page', String(params.page ?? 1));
+    search.set('size', String(params.size ?? 50));
+    return request<{
+      total: number;
+      page: number;
+      size: number;
+      logs: Array<{
+        id: number;
+        actor_id: number | null;
+        actor_email: string | null;
+        actor_role: string | null;
+        action: string;
+        target_type: string | null;
+        target_id: string | null;
+        before_json: unknown | null;
+        after_json: unknown | null;
+        ip_hash: string | null;
+        user_agent_hash: string | null;
+        request_id: string | null;
+        created_at: string;
+      }>;
+    }>(`/admin/audit?${search}`);
+  },
+  exportAuditLogs: (
+    params: {
+      search?: string;
+      action?: string;
+      actor_id?: number;
+      target_type?: string;
+      target_id?: string;
+      format?: 'json' | 'csv';
+    } = {}
+  ) => {
+    const search = new URLSearchParams();
+    if (params.search) search.set('search', params.search);
+    if (params.action) search.set('action', params.action);
+    if (params.actor_id) search.set('actor_id', String(params.actor_id));
+    if (params.target_type) search.set('target_type', params.target_type);
+    if (params.target_id) search.set('target_id', params.target_id);
+    if (params.format) search.set('format', params.format);
+    return request<Blob>(`/admin/audit/export?${search}`);
+  },
+
+  // Settings
+  getSettings: () => request<Record<string, unknown>>('/admin/settings'),
+  updateSetting: (key: string, value: unknown) =>
+    request<{ key: string; value: unknown }>(`/admin/settings/${key}`, {
+      method: 'PATCH',
+      body: { value },
+    }),
 };
 
 // ------------------------------------------------------------ monitoring

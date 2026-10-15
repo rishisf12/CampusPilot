@@ -1,11 +1,34 @@
-import { useEffect, useState, ChangeEvent } from 'react';
-import { MessageSquareReply, Paperclip, Send } from 'lucide-react';
+import { useEffect, useState, ChangeEvent, lazy } from 'react';
+import {
+  MessageSquareReply,
+  Paperclip,
+  Send,
+  Settings,
+  Shield,
+  BarChart3,
+  FileText,
+  Wrench,
+  Users,
+  AlertTriangle,
+  TrendingUp,
+  Search,
+} from 'lucide-react';
 import { feedbackApi } from '@/api';
 import { Badge, Button, Card, Tabs, Textarea } from '@/components/ui';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import ReinforcementPatterns from './ReinforcementPatterns';
-import Users from './Users';
+import UsersModule from './Users';
 import DataManager from './DataManager';
+
+// Lazy-load new admin tabs
+const Control = lazy(() => import('./Control').then(m => ({ default: m.default })));
+const MonitoringLive = lazy(() => import('./MonitoringLive').then(m => ({ default: m.default })));
+const Errors = lazy(() => import('./Errors').then(m => ({ default: m.default })));
+const Analytics = lazy(() => import('./Analytics').then(m => ({ default: m.default })));
+const User360 = lazy(() => import('./User360').then(m => ({ default: m.default })));
+const Security = lazy(() => import('./Security').then(m => ({ default: m.default })));
+const Audit = lazy(() => import('./Audit').then(m => ({ default: m.default })));
+const SettingsTab = lazy(() => import('./SettingsTab').then(m => ({ default: m.default })));
 
 interface FeedbackResponse {
   id: number;
@@ -28,10 +51,22 @@ interface AdminPanelProps {
 }
 
 const SUB_TABS = [
-  { id: 'feedback', label: 'Feedback Responses' },
-  { id: 'patterns', label: 'Reinforcement Patterns' },
-  { id: 'users', label: 'Users' },
-  { id: 'data', label: 'Data' },
+  {
+    id: 'feedback',
+    label: 'Feedback Responses',
+    icon: <MessageSquareReply size={16} strokeWidth={2} />,
+  },
+  { id: 'patterns', label: 'Reinforcement Patterns', icon: <Wrench size={16} strokeWidth={2} /> },
+  { id: 'users', label: 'Users', icon: <Users size={16} strokeWidth={2} /> },
+  { id: 'data', label: 'Data', icon: <FileText size={16} strokeWidth={2} /> },
+  { id: 'control', label: 'Control', icon: <Settings size={16} strokeWidth={2} /> },
+  { id: 'monitoring', label: 'Monitoring Live', icon: <BarChart3 size={16} strokeWidth={2} /> },
+  { id: 'errors', label: 'Errors', icon: <AlertTriangle size={16} strokeWidth={2} /> },
+  { id: 'analytics', label: 'Analytics', icon: <TrendingUp size={16} strokeWidth={2} /> },
+  { id: 'user360', label: 'User 360', icon: <Users size={16} strokeWidth={2} /> },
+  { id: 'security', label: 'Security', icon: <Shield size={16} strokeWidth={2} /> },
+  { id: 'audit', label: 'Audit', icon: <Search size={16} strokeWidth={2} /> },
+  { id: 'settings', label: 'Settings', icon: <Settings size={16} strokeWidth={2} /> },
 ] as const;
 
 type SubTab = (typeof SUB_TABS)[number]['id'];
@@ -103,7 +138,7 @@ export default function AdminPanel({ onError }: AdminPanelProps) {
   return (
     <div className="space-y-4">
       <Tabs
-        tabs={SUB_TABS.map(item => ({ id: item.id, label: item.label }))}
+        tabs={SUB_TABS.map(item => ({ id: item.id, label: item.label, icon: item.icon }))}
         active={tab}
         onChange={id => setTab(id as SubTab)}
       />
@@ -212,10 +247,16 @@ export default function AdminPanel({ onError }: AdminPanelProps) {
       )}
 
       {tab === 'patterns' && <ReinforcementPatterns onError={(msg: string) => setError(msg)} />}
-
-      {tab === 'users' && <Users onError={(msg: string) => setError(msg)} />}
-
+      {tab === 'users' && <UsersModule onError={(msg: string) => setError(msg)} />}
       {tab === 'data' && <DataManager onError={(msg: string) => setError(msg)} />}
+      {tab === 'control' && <Control onError={(msg: string) => setError(msg)} />}
+      {tab === 'monitoring' && <MonitoringLive onError={(msg: string) => setError(msg)} />}
+      {tab === 'errors' && <Errors onError={(msg: string) => setError(msg)} />}
+      {tab === 'analytics' && <Analytics onError={(msg: string) => setError(msg)} />}
+      {tab === 'user360' && <User360 onError={(msg: string) => setError(msg)} />}
+      {tab === 'security' && <Security onError={(msg: string) => setError(msg)} />}
+      {tab === 'audit' && <Audit onError={(msg: string) => setError(msg)} />}
+      {tab === 'settings' && <SettingsTab onError={(msg: string) => setError(msg)} />}
     </div>
   );
 }

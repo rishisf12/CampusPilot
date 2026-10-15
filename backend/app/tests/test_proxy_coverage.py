@@ -64,7 +64,7 @@ def _backend_prefixes() -> set[str]:
     prefixes: set[str] = set()
 
     for path in BACKEND.rglob("*.py"):
-        if "venv" in path.parts or "tests" in path.parts:
+        if "venv" in path.parts or "tests" in path.parts or "scripts" in path.parts:
             continue
         prefixes.update(_ROUTER_PREFIX_RE.findall(path.read_text(encoding="utf-8")))
 

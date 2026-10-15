@@ -337,8 +337,13 @@ def test_data_migration_detects_null_in_not_null_column(tmp_path):
     #   role              - column added later without NOT NULL, so it is NULL
     #   is_email_verified - absent from the legacy file entirely, so it reads as
     #                       NULL and falls back to its model default of False
+    #   is_suspended      - added with the admin user-control feature; same
+    #                       absent-column repair to its default of False
+    #   is_banned         - same as is_suspended
     # The point of the assertion is that `role` is repaired from the *model
     # default* rather than guessed at or left NULL for Postgres to reject.
-    assert repairs == 2, f"expected 2 NOT NULL repairs, got {repairs}"
+    assert repairs == 4, f"expected 4 NOT NULL repairs, got {repairs}"
     assert values["role"] == "student"
     assert values["is_email_verified"] is False
+    assert values["is_suspended"] is False
+    assert values["is_banned"] is False

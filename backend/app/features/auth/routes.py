@@ -558,6 +558,30 @@ async def login(
             detail="Email not verified. Please check your inbox for the verification code.",
         )
 
+    # Account standing, written by the admin suspend/ban actions. Checked here
+    # rather than only at the action endpoint so the standing is actually
+    # enforced: without this, suspending an account changed nothing about what
+    # it could do. An expired suspension lapses on its own. Existing sessions
+    # are ended by the force-logout action, which stamps password_changed_at.
+    if user.is_banned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been banned. Contact the administrator.",
+        )
+    if user.is_suspended:
+        # Timezone care: Postgres returns timestamptz as aware, but a row
+        # written by SQLite or an old migration may hold a naive value, and
+        # comparing aware with naive raises TypeError (a 500) instead of
+        # refusing the login. Normalise to aware UTC first.
+        suspended_until = user.suspended_until
+        if suspended_until is not None and suspended_until.tzinfo is None:
+            suspended_until = suspended_until.replace(tzinfo=timezone.utc)
+        if suspended_until is None or suspended_until > datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This account is suspended. Contact the administrator.",
+            )
+
     access_token = create_access_token(user.id, user.username, user.password_changed_at)
     return TokenResponse(access_token=access_token)
 

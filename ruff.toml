@@ -95,25 +95,25 @@ ignore = [
 # `IS TRUE` rather than `= TRUE`, which is not equivalent on every dialect.
 # Every E712 in this repo is of that shape, so it is scoped out per module
 # instead of globally - the rule stays active for real `if flag == True:` bugs.
-"backend/backend/features/monitoring/services/queries.py" = ["E712"]
-"backend/backend/features/monitoring/services/scan_service.py" = ["E712"]
-"backend/backend/features/schedule/routes.py" = ["E712"]
-"backend/backend/features/exam/clash.py" = ["E712"]
-"backend/backend/features/teams/matching.py" = ["E712"]
+"backend/app/features/monitoring/services/queries.py" = ["E712"]
+"backend/app/features/monitoring/services/scan_service.py" = ["E712"]
+"backend/app/features/schedule/routes.py" = ["E712"]
+"backend/app/features/exam/clash.py" = ["E712"]
+# NOTE: features/teams was deleted; its ignore entry was removed with it.
 
 # main.py registers middleware and then imports the routers. The ordering is
 # load-bearing (a router module imports from `core.config`, which must be
 # configured first), and moving the imports would be a behavioural change for
 # no lint benefit. `schedule/service.py` is listed here as well as above: it
 # both builds a day->int map before importing and filters on a boolean column.
-"backend/backend/main.py" = ["E402"]
-"backend/backend/features/rooms/service.py" = ["E402"]
-"backend/backend/features/schedule/service.py" = ["E402", "E712"]
+"backend/app/main.py" = ["E402"]
+"backend/app/features/rooms/service.py" = ["E402"]
+"backend/app/features/schedule/service.py" = ["E402", "E712"]
 
 # `format` is a declared query parameter on the CSV export endpoints. Renaming
 # it to `format_` would change the public API, so the shadowing is accepted
 # and documented rather than renamed away.
-"backend/backend/features/monitoring/api/routes.py" = ["A002"]
+"backend/app/features/monitoring/api/routes.py" = ["A002"]
 
 [format]
 quote-style = "double"

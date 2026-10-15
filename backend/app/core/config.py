@@ -99,18 +99,27 @@ class Settings(BaseSettings):
     #: without a model is not full of ERROR verdicts.
     scan_enabled: bool = Field(default=False, alias="SCAN_ENABLED")
 
-    #: Stage 2 of a scan: a local LLM writes the human summary, root causes
-    #: and prioritised actions, while Stage 1 (the rule engine) owns every
-    #: number. The LLM is an enhancement only - `run_stage2_scan` degrades to
-    #: the rule verdict if any of this fails, which is why an installation with
-    #: no model still produces correct scans.
-    #:
-    #: These were missing entirely while `scan_service` read them, so the LLM
-    #: stage raised AttributeError on every scan and silently degraded.
-    ollama_base_url: str = Field(default="http://localhost:11434/v1", alias="OLLAMA_BASE_URL")
+    #: Which LLM backend writes the Stage 2 narrative: "off" (rule engine only),
+    #: "ollama" (local server), or "openai-compatible" (any hosted endpoint that
+    #: speaks the OpenAI chat-completions shape - Groq free tier, HuggingFace
+    #: Inference, NVIDIA NIM, OpenRouter). The client code path is identical;
+    #: only the base URL, model and key change. Default stays off so a fresh
+    #: install never waits on a model.
+    llm_provider: str = Field(default="off", alias="LLM_PROVIDER")
+    #: API key for hosted providers (Groq, HF, NIM...). Empty means no auth
+    #: header is sent, which is correct for a local Ollama. Never logged.
+    llm_api_key: str = Field(default="", alias="LLM_API_KEY")
+    #: Overrides the provider default below when set. Empty falls back to the
+    #: matching OLLAMA_* value, so existing local setups keep working.
+    llm_base_url: str = Field(default="", alias="LLM_BASE_URL")
+    llm_model: str = Field(default="", alias="LLM_MODEL")
+    #: Accepted as a fallback key name because Groq's dashboard labels it this
+    #: way. `LLM_API_KEY` wins when both are set.
+    groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     #: qwen3:4b rather than 8b. On CPU the 8b model did not return inside the
     #: timeout on this workload; 4b produces the same schema-valid verdict in a
     #: fraction of the time, and the summary is the only field it writes.
+    ollama_base_url: str = Field(default="http://localhost:11434/v1", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:4b", alias="OLLAMA_MODEL")
     ollama_timeout: float = Field(default=240.0, alias="OLLAMA_TIMEOUT")
 

@@ -71,9 +71,9 @@ from features.monitoring.api.schemas import (
 from features.monitoring.api.schemas import ScanResult as ScanResultSchema
 from features.monitoring.services.llm_client import (
     OllamaClient,
-    OllamaConfig,
     load_system_prompt,
     build_user_prompt,
+    resolve_llm_config,
     LLMError,
 )
 from core.config import get_settings
@@ -735,11 +735,7 @@ async def _run_llm_stage(
     """Run the LLM stage to generate summary, root causes, and actions."""
     settings = get_settings()
 
-    config = OllamaConfig(
-        base_url=settings.ollama_base_url,
-        model=settings.ollama_model,
-        timeout=settings.ollama_timeout,
-    )
+    config = resolve_llm_config(settings)
 
     system_prompt = load_system_prompt()
     user_prompt = build_user_prompt(subsection, {

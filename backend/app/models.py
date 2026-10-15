@@ -1,8 +1,10 @@
 """SQLModel tables for ClassPilot."""
 from datetime import date, time, datetime
-from typing import Optional, List
+from typing import Any, Optional, List
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON
-from sqlalchemy import Date, DateTime, UniqueConstraint, func, Enum as SAEnum, Integer, ForeignKey
+from sqlalchemy.dialects import postgresql
+import sqlalchemy as sa
+from sqlalchemy import BigInteger, Date, DateTime, Identity, UniqueConstraint, func, Enum as SAEnum, Integer, ForeignKey
 from enum import Enum
 
 
@@ -214,6 +216,17 @@ class User(SQLModel, table=True):
     password_changed_at: Optional[datetime] = Field(
         default=None, sa_column=Column("password_changed_at", DateTime, nullable=True)
     )
+    #: Account standing, written by the admin suspend/ban actions. Checked at
+    #: login: a suspended or banned account gets 403 even with the right
+    #: password. `suspended_until` lets a suspension lapse on its own; NULL
+    #: means indefinite. Without these columns the suspend/ban buttons recorded
+    #: a log row and changed nothing - the assignment raised ValueError because
+    #: the fields did not exist.
+    is_suspended: bool = Field(default=False)
+    suspended_until: Optional[datetime] = Field(
+        default=None, sa_column=Column("suspended_until", DateTime, nullable=True)
+    )
+    is_banned: bool = Field(default=False)
     #: Server-side defaults: SQLModel 0.0.22 cannot use `default_factory` under
     #: Pydantic 2.10, so the timestamp is filled by the database instead.
     created_at: datetime = Field(
@@ -664,3 +677,227 @@ class FeedCursor(SQLModel, table=True):
         default=None,
         sa_column=Column("updated_at", DateTime, nullable=False, server_default=func.now()),
     )
+
+class AuditLog(SQLModel, table=True):
+    __tablename__ = "audit_log"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, Identity(), primary_key=True))
+    actor_id: Optional[int] = Field(default=None, index=True)
+    actor_email: Optional[str] = Field(default=None, max_length=255)
+    actor_role: Optional[str] = Field(default=None, max_length=50)
+    action: str = Field(max_length=100, index=True)
+    target_type: Optional[str] = Field(default=None, max_length=100, index=True)
+    target_id: Optional[str] = Field(default=None, max_length=100, index=True)
+    before_json: Optional[dict] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    after_json: Optional[dict] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    ip_hash: Optional[str] = Field(default=None, max_length=64)
+    user_agent_hash: Optional[str] = Field(default=None, max_length=64)
+    request_id: Optional[str] = Field(default=None, max_length=64)
+    created_at: datetime = Field(
+        default=None,
+        sa_column=Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    )
+
+
+class FeatureFlag(SQLModel, table=True):
+    __tablename__ = "feature_flag"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(Integer, Identity(), primary_key=True))
+    key: str = Field(max_length=100, unique=True, index=True)
+    name: str = Field(max_length=200)
+    description: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    enabled: bool = Field(default=False)
+    rollout_percentage: int = Field(default=0)
+    target_roles: Optional[List[str]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    target_user_ids: Optional[List[int]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    target_platforms: Optional[List[str]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    target_app_versions: Optional[List[str]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    created_by: Optional[int] = Field(default=None)
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()))
+    updated_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()))
+
+
+class FlagTarget(SQLModel, table=True):
+    __tablename__ = "flag_target"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(Integer, Identity(), primary_key=True))
+    flag_id: int = Field(sa_column=Column(Integer, ForeignKey("core.feature_flag.id", ondelete="CASCADE"), nullable=False, index=True))
+    attribute: str = Field(max_length=50)
+    operator: str = Field(max_length=20)
+    values: List[str] = Field(default=[], sa_column=Column(postgresql.JSONB(astext_type=str)))
+
+
+class MaintenanceWindow(SQLModel, table=True):
+    __tablename__ = "maintenance_window"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(Integer, Identity(), primary_key=True))
+    name: str = Field(max_length=200)
+    description: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    enabled: bool = Field(default=False)
+    global_maintenance: bool = Field(default=False)
+    target_features: Optional[List[str]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    message: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    allow_list_user_ids: Optional[List[int]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    bypass_roles: Optional[List[str]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    scheduled_start: Optional[datetime] = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True)))
+    scheduled_end: Optional[datetime] = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True)))
+    created_by: Optional[int] = Field(default=None)
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()))
+    updated_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()))
+
+
+class RemoteConfig(SQLModel, table=True):
+    __tablename__ = "remote_config"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(Integer, Identity(), primary_key=True))
+    key: str = Field(max_length=100, unique=True, index=True)
+    value: Any = Field(sa_column=Column(postgresql.JSONB(astext_type=str)))
+    value_type: str = Field(max_length=20, default="json")
+    description: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    schema_json: Optional[dict] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    schema_version: int = Field(default=1)
+    is_public: bool = Field(default=False)
+    updated_by: Optional[int] = Field(default=None)
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()))
+    updated_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()))
+
+
+class RemoteConfigHistory(SQLModel, table=True):
+    __tablename__ = "remote_config_history"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(Integer, Identity(), primary_key=True))
+    config_key: str = Field(max_length=100, index=True)
+    value: Any = Field(sa_column=Column(postgresql.JSONB(astext_type=str)))
+    value_type: str = Field(max_length=20)
+    schema_version: int = Field(default=1)
+    changed_by: Optional[int] = Field(default=None)
+    change_reason: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()))
+
+
+class SystemSetting(SQLModel, table=True):
+    """Admin system settings as plain key/value rows.
+
+    The Settings tab reads and writes arbitrary keys (rate limits, timeouts,
+    store URLs...), so a dedicated column per setting would mean a migration
+    per UI field. Values are JSON so booleans, numbers and strings all fit.
+    Unknown keys are accepted rather than rejected: the UI owns the key list.
+    """
+
+    __tablename__ = "system_setting"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    key: str = Field(max_length=100, primary_key=True)
+    value: Any = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    updated_by: Optional[int] = Field(default=None)
+    updated_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()))
+class UserControlAction(SQLModel, table=True):
+    __tablename__ = "user_control_action"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, Identity(), primary_key=True))
+    admin_id: int = Field(sa_column=Column(Integer, ForeignKey("core.user.id"), nullable=False, index=True))
+    target_user_id: int = Field(sa_column=Column(Integer, ForeignKey("core.user.id"), nullable=False, index=True))
+    action: str = Field(max_length=50)
+    reason: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    expires_at: Optional[datetime] = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True)))
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+class Broadcast(SQLModel, table=True):
+    __tablename__ = "broadcast"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, Identity(), primary_key=True))
+    title: str = Field(max_length=200)
+    body: str = Field(sa_column=Column(postgresql.TEXT))
+    channel: str = Field(max_length=20)  # in_app, push, email
+    target_roles: Optional[List[str]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    target_user_ids: Optional[List[int]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    target_branches: Optional[List[str]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    target_semesters: Optional[List[int]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    target_segments: Optional[List[int]] = Field(default=None, sa_column=Column(postgresql.JSONB(astext_type=str)))
+    scheduled_at: Optional[datetime] = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True)))
+    sent_at: Optional[datetime] = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True)))
+    created_by: int = Field(sa_column=Column(Integer, ForeignKey("core.user.id"), nullable=False))
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+
+
+class BroadcastDelivery(SQLModel, table=True):
+    __tablename__ = "broadcast_delivery"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, Identity(), primary_key=True))
+    broadcast_id: int = Field(sa_column=Column(BigInteger, ForeignKey("core.broadcast.id", ondelete="CASCADE"), nullable=False, index=True))
+    user_id: int = Field(sa_column=Column(Integer, ForeignKey("core.user.id"), nullable=False, index=True))
+    channel: str = Field(max_length=20)
+    status: str = Field(max_length=20)  # pending, sent, failed, read
+    sent_at: Optional[datetime] = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True)))
+    read_at: Optional[datetime] = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True)))
+    error_message: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+class ForceUpdateRule(SQLModel, table=True):
+    __tablename__ = "force_update_rule"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, Identity(), primary_key=True))
+    platform: str = Field(max_length=20, index=True)  # ios, android, web
+    min_version: str = Field(max_length=20)  # minimum required version
+    recommended_version: str = Field(max_length=20)  # recommended version
+    store_url: str = Field(max_length=500)  # app store / play store URL
+    message: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    is_active: bool = Field(default=True)
+    created_by: Optional[int] = Field(default=None, sa_column=Column(Integer, ForeignKey("core.user.id")))
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+    updated_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+class SecurityEvent(SQLModel, table=True):
+    __tablename__ = "security_event"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, Identity(), primary_key=True))
+    event_type: str = Field(max_length=50, index=True)  # failed_login, brute_force, new_admin, role_change, unusual_ip, rate_limit
+    severity: str = Field(max_length=20)  # low, medium, high, critical
+    actor_email: Optional[str] = Field(default=None, max_length=255)
+    actor_id: Optional[int] = Field(default=None, sa_column=Column(Integer, ForeignKey("core.user.id"), index=True))
+    details: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    ip_hash: Optional[str] = Field(default=None, max_length=64)
+    user_agent_hash: Optional[str] = Field(default=None, max_length=64)
+    request_id: Optional[str] = Field(default=None, max_length=64)
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+
+
+class SecurityFeed(SQLModel, table=True):
+    __tablename__ = "security_feed"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, Identity(), primary_key=True))
+    event_type: str = Field(max_length=50, index=True)
+    severity: str = Field(max_length=20)
+    count: int = Field(default=1)
+    first_seen: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+    last_seen: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+    affected_users: List[str] = Field(default=[], sa_column=Column(postgresql.JSONB(astext_type=str)))
+    status: str = Field(default="new", max_length=20)  # new, investigating, resolved, ignored
+    description: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+    updated_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+class ModerationQueue(SQLModel, table=True):
+    __tablename__ = "moderation_queue"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, Identity(), primary_key=True))
+    content_type: str = Field(max_length=50, index=True)  # team, feedback, post, comment
+    content_id: int = Field(index=True)
+    reporter_id: Optional[int] = Field(default=None, sa_column=Column(Integer, ForeignKey("core.user.id")))
+    reason: str = Field(max_length=200)
+    details: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    status: str = Field(default="pending", max_length=20, index=True)  # pending, approved, removed, warned
+    reviewer_id: Optional[int] = Field(default=None, sa_column=Column(Integer, ForeignKey("core.user.id")))
+    reviewed_at: Optional[datetime] = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True)))
+    action_taken: Optional[str] = Field(default=None, max_length=50)
+    action_reason: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
+    created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+    updated_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))

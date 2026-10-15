@@ -62,6 +62,16 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up...")
     create_db_and_tables()
 
+    # Load feature flags and maintenance mode
+    from core.database import engine as _engine
+    from core.feature_flags import flag_engine
+    from core.maintenance import maintenance_mode
+    from sqlmodel import Session
+
+    with Session(_engine) as session:
+        flag_engine.load(session)
+        maintenance_mode.load(session)
+
     # Instruments DB_QUERY_DURATION / DB_QUERIES, which are otherwise declared
     # and never incremented, and which the health sampler reads.
     from features.monitoring.infrastructure import db_instrumentation
@@ -85,6 +95,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Maintenance mode middleware (must be early)
+from core.maintenance import MaintenanceMiddleware
+app.add_middleware(MaintenanceMiddleware)
+
+# Request monitoring middleware
+from core.monitoring import RequestMonitoringMiddleware
+app.add_middleware(RequestMonitoringMiddleware)
 
 
 @app.get("/health")
@@ -162,6 +180,19 @@ from features.auth import routes as auth
 from features.feedback import routes as feedback
 from features.monitoring.api.routes import collect_router, monitoring_router
 from features.admin import routes as admin_routes
+from features.audit import routes as audit_routes
+from features.flags import routes as flags_routes
+from features.maintenance import routes as maintenance_routes
+from features.remote_config import routes as remote_config_routes
+from features.errors import routes as errors_routes
+from features.alerts import routes as alerts_routes
+from features.health import routes as health_routes
+from features.analytics import routes as analytics_routes
+from features.user_control import routes as user_control_routes
+from features.broadcasts import routes as broadcasts_routes
+from features.force_update import routes as force_update_routes
+from features.security import routes as security_routes
+from features.moderation import routes as moderation_routes
 from ocr import routes as ocr_routes
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
@@ -174,6 +205,24 @@ app.include_router(exam.router, prefix="/exam", tags=["Exam"])
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
 app.include_router(ocr_routes.router, prefix="/ocr", tags=["OCR Extraction"])
 app.include_router(admin_routes.router, prefix="/admin", tags=["Admin"])
+# The feature routers below already declare their own "/admin/..." prefix
+# internally, so no prefix is passed here. Passing prefix="/admin" as well
+# concatenated to "/admin/admin/..." on every route, 404ing the entire new
+# admin surface while the paths looked right in both files. `health` was
+# already registered this way, which is why only it worked.
+app.include_router(audit_routes.router, tags=["Admin - Audit"])
+app.include_router(flags_routes.router, tags=["Admin - Feature Flags"])
+app.include_router(maintenance_routes.router, tags=["Admin - Maintenance"])
+app.include_router(remote_config_routes.router, tags=["Admin - Remote Config"])
+app.include_router(errors_routes.router, tags=["Admin - Errors"])
+app.include_router(alerts_routes.router, tags=["Admin - Alerts"])
+app.include_router(health_routes.router)
+app.include_router(analytics_routes.router, tags=["Admin - Analytics"])
+app.include_router(user_control_routes.router, tags=["Admin - User Control"])
+app.include_router(broadcasts_routes.router, tags=["Admin - Broadcasts"])
+app.include_router(force_update_routes.router, tags=["Admin - Force Update"])
+app.include_router(security_routes.router, tags=["Admin - Security"])
+app.include_router(moderation_routes.router, tags=["Admin - Moderation"])
 app.include_router(collect_router)
 app.include_router(monitoring_router)
 

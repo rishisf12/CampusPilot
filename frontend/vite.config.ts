@@ -51,13 +51,28 @@ const proxied = [
   '/health',
   '/ocr',
   '/feedback',
-  '/teams',
-  '/hackathons',
   '/monitoring',
   '/collect',
   '/metrics',
   '/reinforcement',
   '/admin',
+  // One entry per admin feature router. Vite matches by prefix at runtime so
+  // '/admin' alone would proxy them all, but test_proxy_coverage asserts exact
+  // set equality - and an explicit list is also what makes a missing router
+  // visible in review. `/teams` and `/hackathons` were removed with the Teams
+  // feature and must not linger here as dead config.
+  '/admin/alerts',
+  '/admin/analytics',
+  '/admin/audit',
+  '/admin/broadcasts',
+  '/admin/errors',
+  '/admin/flags',
+  '/admin/force-update',
+  '/admin/maintenance',
+  '/admin/moderation',
+  '/admin/remote-config',
+  '/admin/security',
+  '/admin/users',
 ];
 
 export default defineConfig({
