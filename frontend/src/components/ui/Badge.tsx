@@ -1,7 +1,7 @@
 ﻿import type { HTMLAttributes } from 'react';
 type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 const bg: Record<Tone, string> = {
-  primary: '#EEF2FF',
+  primary: 'color-mix(in srgb, var(--cp-primary) 12%, transparent)',
   success: '#D1FAE5',
   warning: '#FEF3C7',
   danger: '#FEE2E2',
@@ -9,7 +9,7 @@ const bg: Record<Tone, string> = {
   neutral: 'var(--cp-surface)',
 };
 const fg: Record<Tone, string> = {
-  primary: '#4338CA',
+  primary: 'var(--cp-primary)',
   success: '#047857',
   warning: '#92400E',
   danger: '#B91C1C',

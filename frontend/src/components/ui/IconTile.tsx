@@ -1,7 +1,9 @@
 ﻿import type { HTMLAttributes } from 'react';
 type Hue = 'indigo' | 'mint' | 'amber' | 'coral' | 'sky' | 'slate';
 const tile: Record<Hue, string> = {
-  indigo: '#EEF2FF',
+  // `indigo` key kept for the existing call sites. Soft teal via color-mix so
+  // it adapts to both themes automatically, like the other soft tints.
+  indigo: 'color-mix(in srgb, var(--cp-primary) 12%, transparent)',
   mint: '#D1FAE5',
   amber: '#FEF3C7',
   coral: '#FFE4E6',
@@ -9,7 +11,7 @@ const tile: Record<Hue, string> = {
   slate: 'var(--cp-surface)',
 };
 const ic: Record<Hue, string> = {
-  indigo: '#4338CA',
+  indigo: 'var(--cp-primary)',
   mint: '#047857',
   amber: '#92400E',
   coral: '#BE123C',

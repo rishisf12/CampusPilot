@@ -4,49 +4,67 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #1a3c5e;
-  --color-primary-600: #16324d;
-  --color-primary-700: #12283e;
-  --color-primary-800: #0d1e2f;
-  --color-primary-900: #08141f;
+  --color-primary-50: #effaf8;
+  --color-primary-100: #d7f0ec;
+  --color-primary-200: #b2e0d8;
+  --color-primary-300: #5eead4;
+  --color-primary-400: #2dd4bf;
+  --color-primary-500: #0f766e;
+  --color-primary-600: #0b5e56;
+  --color-primary-700: #0a4e47;
+  --color-primary-800: #0b3b36;
+  --color-primary-900: #082e2a;
   --color-success-500: #16a34a;
   --color-warning-500: #f59e0b;
   --color-danger-500: #dc2626;
 }
 
 :root {
-  --cp-bg: #f8fafc;
+  --cp-bg: #faf8f5;
   --cp-surface: #ffffff;
-  --cp-text: #0f172a;
-  --cp-muted: #64748b;
-  --cp-primary: #4f46e5;
-  --cp-success: #0e9f6e;
+  --cp-text: #1f2937;
+  --cp-muted: #6b7280;
+  --cp-primary: #0f766e;
+  --cp-on-primary: #ffffff;
+  --cp-accent: #f59e0b;
+  --cp-on-accent: #1f2937;
+  --cp-success: #15803d;
+  --cp-success-bg: #e7f6ec;
   --cp-warning: #b45309;
+  --cp-warning-bg: #fef3c2;
   --cp-danger: #dc2626;
+  --cp-danger-bg: #fdecec;
   --cp-info: #0284c7;
-  --cp-clay: 0 1px 2px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.1);
-  --cp-clay-pressed: inset 0 2px 4px rgba(15, 23, 42, 0.12);
-  --cp-neu-raised: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.1);
-  --cp-neu-raised-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --cp-neu-inset: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+  --cp-info-bg: #e0f2fe;
+  --cp-radius-card: 1rem;
+  --cp-radius-btn: 0.75rem;
+  --cp-clay: 0 1px 2px rgba(31, 41, 55, 0.06), 0 1px 3px rgba(31, 41, 55, 0.08);
+  --cp-clay-pressed: inset 0 2px 4px rgba(31, 41, 55, 0.1);
+  --cp-neu-raised: 0 1px 2px rgba(31, 41, 55, 0.05), 0 1px 3px rgba(31, 41, 55, 0.07);
+  --cp-neu-raised-sm: 0 1px 2px rgba(31, 41, 55, 0.05);
+  --cp-neu-inset: inset 0 1px 2px rgba(31, 41, 55, 0.05);
   color-scheme: light;
 }
 
 .dark {
-  --cp-bg: #0f172a;
-  --cp-surface: #1e293b;
-  --cp-text: #f1f5f9;
-  --cp-muted: #94a3b8;
-  --cp-primary: #a5b4fc;
-  --cp-success: #6ee7b7;
-  --cp-warning: #fcd34d;
-  --cp-danger: #fca5a5;
-  --cp-info: #7dd3fc;
+  --cp-bg: #14171c;
+  --cp-surface: #1d2229;
+  --cp-text: #e5e7eb;
+  --cp-muted: #9aa3b2;
+  --cp-primary: #2dd4bf;
+  --cp-on-primary: #14171c;
+  --cp-accent: #f59e0b;
+  --cp-on-accent: #14171c;
+  --cp-success: #4ade80;
+  --cp-success-bg: rgba(74, 222, 128, 0.12);
+  --cp-warning: #fbbf24;
+  --cp-warning-bg: rgba(251, 191, 36, 0.12);
+  --cp-danger: #f87171;
+  --cp-danger-bg: rgba(248, 113, 113, 0.12);
+  --cp-info: #38bdf8;
+  --cp-info-bg: rgba(56, 189, 248, 0.12);
+  --cp-radius-card: 1rem;
+  --cp-radius-btn: 0.75rem;
   --cp-clay: 0 1px 2px rgba(0, 0, 0, 0.4);
   --cp-clay-pressed: inset 0 2px 4px rgba(0, 0, 0, 0.4);
   --cp-neu-raised: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -131,10 +149,11 @@ body {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
+  min-height: 44px;
   background: var(--cp-primary);
-  color: #fff;
+  color: var(--cp-on-primary);
   font-weight: 500;
-  border-radius: 20px;
+  border-radius: var(--cp-radius-btn);
   border: 1px solid transparent;
   cursor: pointer;
   box-shadow: var(--cp-clay);
@@ -157,10 +176,11 @@ body {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
+  min-height: 44px;
   background: var(--cp-surface);
   color: var(--cp-text);
   font-weight: 500;
-  border-radius: 20px;
+  border-radius: var(--cp-radius-btn);
   border: 1px solid rgba(163, 177, 198, 0.3);
   cursor: pointer;
   box-shadow: var(--cp-neu-raised-sm);
@@ -178,10 +198,11 @@ body {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
+  min-height: 44px;
   background: var(--cp-danger);
   color: #fff;
   font-weight: 500;
-  border-radius: 20px;
+  border-radius: var(--cp-radius-btn);
   border: 1px solid transparent;
   cursor: pointer;
   box-shadow: var(--cp-clay);
@@ -229,7 +250,7 @@ body {
 .card {
   background: var(--cp-surface);
   border: 1px solid rgba(163, 177, 198, 0.25);
-  border-radius: 1rem;
+  border-radius: var(--cp-radius-card);
   box-shadow: var(--cp-neu-raised);
   padding: 1.5rem;
 }

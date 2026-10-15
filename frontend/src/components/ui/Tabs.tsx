@@ -6,7 +6,9 @@ export interface Tab {
   hue?: string;
 }
 const HUE: Record<string, string> = {
-  indigo: '#4338CA',
+  // Key kept as `indigo` so the dozen call sites passing hue="indigo" need
+  // no change; the value now follows the teal system palette.
+  indigo: 'var(--cp-primary)',
   mint: '#047857',
   amber: '#92400E',
   coral: '#BE123C',
@@ -42,15 +44,15 @@ export default function Tabs({
               on
                 ? {
                     borderRadius: 6,
-                    background: '#4F46E5',
-                    color: '#fff',
+                    background: 'var(--cp-primary)',
+                    color: 'var(--cp-on-primary)',
                     boxShadow: 'var(--cp-clay)',
                   }
                 : { borderRadius: 6, background: 'transparent', color: 'var(--cp-muted)' }
             }
           >
             {t.icon ? (
-              <span aria-hidden style={{ color: on ? '#fff' : hueColor, display: 'inline-flex' }}>
+              <span aria-hidden style={{ color: on ? 'var(--cp-on-primary)' : hueColor, display: 'inline-flex' }}>
                 {t.icon}
               </span>
             ) : null}

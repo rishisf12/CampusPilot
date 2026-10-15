@@ -34,8 +34,8 @@ export default function Sidebar({
                 on
                   ? {
                       borderRadius: 8,
-                      background: '#4F46E5',
-                      color: '#fff',
+                      background: 'var(--cp-primary)',
+                      color: 'var(--cp-on-primary)',
                       boxShadow: 'var(--cp-clay)',
                     }
                   : { borderRadius: 8, background: 'transparent', color: 'var(--cp-muted)' }

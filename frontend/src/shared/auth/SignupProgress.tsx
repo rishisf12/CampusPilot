@@ -59,9 +59,9 @@ function Step({ n, label, done, active, last }: StepProps) {
           className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold"
           style={
             done
-              ? { background: '#4F46E5', color: '#fff', boxShadow: 'var(--cp-clay)' }
+              ? { background: 'var(--cp-primary)', color: 'var(--cp-on-primary)', boxShadow: 'var(--cp-clay)' }
               : active
-                ? { background: '#4F46E5', color: '#fff', boxShadow: 'var(--cp-clay)' }
+                ? { background: 'var(--cp-primary)', color: 'var(--cp-on-primary)', boxShadow: 'var(--cp-clay)' }
                 : {
                     background: 'var(--cp-bg)',
                     color: 'var(--cp-muted)',

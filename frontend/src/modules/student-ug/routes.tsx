@@ -141,8 +141,8 @@ export function StudentUGRoutes() {
                   sidebarOpen
                     ? {
                         borderRadius: 16,
-                        background: '#4F46E5',
-                        color: '#fff',
+                        background: 'var(--cp-primary)',
+                        color: 'var(--cp-on-primary)',
                         boxShadow: 'var(--cp-clay)',
                       }
                     : {
@@ -222,8 +222,8 @@ export function StudentUGRoutes() {
                       isActive
                         ? {
                             borderRadius: 16,
-                            background: '#4F46E5',
-                            color: '#fff',
+                            background: 'var(--cp-primary)',
+                            color: 'var(--cp-on-primary)',
                             boxShadow: 'var(--cp-clay)',
                           }
                         : {

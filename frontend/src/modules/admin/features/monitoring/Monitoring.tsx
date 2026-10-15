@@ -244,8 +244,8 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
                   on
                     ? {
                         borderRadius: 16,
-                        background: '#4F46E5',
-                        color: '#fff',
+                        background: 'var(--cp-primary)',
+                        color: 'var(--cp-on-primary)',
                         boxShadow: 'var(--cp-clay)',
                       }
                     : { borderRadius: 16, background: 'transparent', color: 'var(--cp-muted)' }
@@ -340,8 +340,8 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
                         on
                           ? {
                               borderRadius: 12,
-                              background: '#4F46E5',
-                              color: '#fff',
+                              background: 'var(--cp-primary)',
+                              color: 'var(--cp-on-primary)',
                               boxShadow: 'var(--cp-clay)',
                               fontWeight: 600,
                             }
@@ -368,8 +368,8 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
                   selected === 'E_HISTORY'
                     ? {
                         borderRadius: 12,
-                        background: '#4F46E5',
-                        color: '#fff',
+                        background: 'var(--cp-primary)',
+                        color: 'var(--cp-on-primary)',
                         boxShadow: 'var(--cp-clay)',
                         fontWeight: 600,
                       }

@@ -12,7 +12,7 @@ const sizes: Record<Size, { pad: string; text: string; icon: number }> = {
 
 const fills: Record<Variant, string> = {
   primary:
-    'background:#4F46E5;color:#fff;border:1px solid #4F46E5;box-shadow:0 1px 2px rgba(15,23,42,.1);',
+    'background:var(--cp-primary);color:var(--cp-on-primary);border:1px solid var(--cp-primary);box-shadow:0 1px 2px rgba(15,23,42,.1);',
   success:
     'background:#16A34A;color:#fff;border:1px solid #16A34A;box-shadow:0 1px 2px rgba(15,23,42,.1);',
   danger:

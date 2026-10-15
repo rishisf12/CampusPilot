@@ -29,7 +29,7 @@
           style={{
             width: `${pct}%`,
             borderRadius: 6,
-            background: '#4F46E5',
+            background: 'var(--cp-primary)',
             boxShadow: 'inset 1px 1px 2px rgba(255,255,255,.4)',
           }}
         />

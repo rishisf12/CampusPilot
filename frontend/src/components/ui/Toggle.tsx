@@ -24,7 +24,7 @@ export default function Toggle({
           width: 20,
           height: 20,
           left: checked ? 28 : 4,
-          background: '#4F46E5',
+          background: 'var(--cp-primary)',
           boxShadow: 'var(--cp-neu-raised-sm)',
         }}
       />
