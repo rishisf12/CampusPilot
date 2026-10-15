@@ -337,7 +337,9 @@ export function StudentPGRoutes() {
 
           {section === 'classroom' && (
             <>
-              {activeTab === 'live' && <LiveSchedule onError={setConnectionError} />}
+              {activeTab === 'live' && (
+                <LiveSchedule onError={setConnectionError} onJumpTab={selectTab} />
+              )}
               {activeTab === 'exam' && <ExamSeating onError={setConnectionError} />}
             </>
           )}

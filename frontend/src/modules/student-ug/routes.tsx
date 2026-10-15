@@ -341,7 +341,9 @@ export function StudentUGRoutes() {
 
           {section === 'classroom' && (
             <>
-              {activeTab === 'live' && <LiveSchedule onError={setConnectionError} />}
+              {activeTab === 'live' && (
+                <LiveSchedule onError={setConnectionError} onJumpTab={selectTab} />
+              )}
               {activeTab === 'vacant' && <VacantRoomLookup onError={setConnectionError} />}
               {activeTab === 'attendance' && <Attendance onError={setConnectionError} />}
               {activeTab === 'exam' && <ExamSeating onError={setConnectionError} />}

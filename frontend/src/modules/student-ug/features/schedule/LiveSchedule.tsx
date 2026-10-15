@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Clock, RefreshCw, Trash2, Users } from 'lucide-react';
-import { Badge, Button, Card, Tabs } from '@/components/ui';
+import { RefreshCw, Trash2, Users } from 'lucide-react';
+import { Badge, Button, Card, Modal, Tabs } from '@/components/ui';
 import { scheduleApi, timetableApi } from '@/api';
-import { DAYS } from '@shared/constants';
+import { DAYS, GROUP_CLASSROOM_TABS, programmeGroupOf } from '@shared/constants';
 import { formatTime as formatClock, istNow, todayWeekday } from '@shared/lib/time';
 import { afterTimetableChange } from '@shared/lib/sync';
 import { isOpenElective, splitCourseCodes, toMinutes } from '@shared/lib/normalise';
@@ -14,6 +14,7 @@ import FileUpload from '@shared/components/FileUpload';
 import UploadPreview from '@shared/components/UploadPreview';
 import Spinner from '@shared/components/Spinner';
 import StatusCard from '@shared/components/StatusCard';
+import ScheduleHome from '@shared/features/schedule/ScheduleHome';
 import { useLiveDay } from '@shared/hooks/useLiveDay';
 import type { ScheduleClass, TimetableSlot } from '@shared/types/api';
 
@@ -53,6 +54,8 @@ function courseLabel(item: CourseLike): string {
 
 interface LiveScheduleProps {
   onError?: (message: string) => void;
+  /** Jump to a classroom-level tab (used by the home quick actions). */
+  onJumpTab?: (id: string) => void;
 }
 
 interface ScheduleNow {
@@ -65,14 +68,15 @@ interface ProfileCourseLike extends TimetableSlot {
   is_opted_in: boolean;
 }
 
-export default function LiveSchedule({ onError }: LiveScheduleProps) {
+export default function LiveSchedule({ onError, onJumpTab }: LiveScheduleProps) {
   const [subTab, setSubTab] = useState('schedule');
   const [schedule, setSchedule] = useState<ScheduleNow | null>(null);
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const profileVersion = useProfileVersion();
-  const { semester, optedInCodes } = useProfile();
+  const { semester, optedInCodes, programme } = useProfile();
+  const group = programmeGroupOf(programme);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -194,6 +198,7 @@ export default function LiveSchedule({ onError }: LiveScheduleProps) {
 
       {subTab === 'schedule' && (
         <ScheduleView
+          loading={loading}
           current={myCurrent}
           nextClass={schedule?.next_class}
           sameTimeSlot={sameTimeSlot}
@@ -201,6 +206,9 @@ export default function LiveSchedule({ onError }: LiveScheduleProps) {
           courseLabel={courseLabel}
           hasTimetable={slots.length > 0}
           myClasses={myClasses}
+          onJumpTab={onJumpTab}
+          showAttendanceAction={GROUP_CLASSROOM_TABS[group].includes('attendance')}
+          showVacantAction={GROUP_CLASSROOM_TABS[group].includes('vacant')}
         />
       )}
 
@@ -220,86 +228,6 @@ export default function LiveSchedule({ onError }: LiveScheduleProps) {
 /* Schedule                                                            */
 /* ------------------------------------------------------------------ */
 
-interface ClassCardProps {
-  title: string;
-  tone: string;
-  item: TimetableSlot | ProfileCourseLike | ScheduleClass | null;
-  emptyText: string;
-  formatTime: (time: string) => string;
-  courseLabel: (item: CourseLike) => string;
-}
-
-const TONE_DOT: Record<string, string> = {
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
-};
-
-function ClassCard({ title, tone, item, emptyText, formatTime, courseLabel }: ClassCardProps) {
-  const Icon = title === 'Current Class' ? Clock : CalendarDays;
-  return (
-    <Card>
-      <h3
-        className="text-sm font-semibold flex items-center gap-2 mb-3"
-        style={{ color: 'var(--cp-text)' }}
-      >
-        <span
-          className="w-2 h-2 rounded-full shrink-0"
-          style={{ background: TONE_DOT[tone] || TONE_DOT.success }}
-          aria-hidden
-        />
-        <Icon size={16} strokeWidth={2} aria-hidden style={{ color: 'currentColor' }} />
-        {title}
-      </h3>
-      {item ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Cell label="Course" value={courseLabel(item)} mono />
-          <Cell label="Room" value={item.room} mono />
-          <Cell
-            label="Time"
-            value={`${formatTime(item.start_time)} - ${formatTime(item.end_time)}`}
-            badge
-          />
-          <Cell label="Day" value={item.day} />
-        </div>
-      ) : (
-        <p className="text-sm py-3" style={{ color: 'var(--cp-muted)' }}>
-          {emptyText}
-        </p>
-      )}
-    </Card>
-  );
-}
-
-interface CellProps {
-  label: string;
-  value?: string | null;
-  mono?: boolean;
-  badge?: boolean;
-}
-
-function Cell({ label, value, mono, badge }: CellProps) {
-  return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--cp-muted)' }}>
-        {label}
-      </p>
-      {badge && value ? (
-        <Badge tone="info" className="mt-1 font-mono">
-          {value}
-        </Badge>
-      ) : (
-        <p
-          className={`text-sm font-medium ${mono ? 'font-mono' : ''}`}
-          style={{ color: 'var(--cp-text)' }}
-        >
-          {value || '—'}
-        </p>
-      )}
-    </div>
-  );
-}
-
 /**
  * The student's day at a glance, plus the next class.
  *
@@ -308,6 +236,7 @@ function Cell({ label, value, mono, badge }: CellProps) {
  * backend cannot know which electives the student opted into.
  */
 interface ScheduleViewProps {
+  loading: boolean;
   current: ProfileCourseLike | null;
   nextClass?: ScheduleClass | TimetableSlot | null;
   sameTimeSlot: ProfileCourseLike[];
@@ -315,9 +244,13 @@ interface ScheduleViewProps {
   courseLabel: (item: CourseLike) => string;
   hasTimetable: boolean;
   myClasses: ProfileCourseLike[];
+  onJumpTab?: (id: string) => void;
+  showAttendanceAction: boolean;
+  showVacantAction: boolean;
 }
 
 function ScheduleView({
+  loading,
   current,
   nextClass,
   sameTimeSlot,
@@ -325,6 +258,9 @@ function ScheduleView({
   courseLabel,
   hasTimetable,
   myClasses,
+  onJumpTab,
+  showAttendanceAction,
+  showVacantAction,
 }: ScheduleViewProps) {
   const today = todayWeekday();
 
@@ -347,45 +283,22 @@ function ScheduleView({
     return { todaySlots: todays, upcoming: next };
   }, [myClasses, today]);
 
+  // Classes later today that have not ended yet, for the timeline.
+  const nowMinutes = istNow().minutes;
+  const todayRemaining = todaySlots.filter(slot => toMinutes(slot.end_time) > nowMinutes);
+
   return (
     <div className="space-y-4">
-      {!hasTimetable && (
-        <div
-          className="p-3 rounded-lg border border-primary-200 text-sm"
-          style={{ background: 'var(--cp-surface)', color: 'var(--cp-text)' }}
-        >
-          No class timetable uploaded yet. Open the Timetable tab to add it.
-        </div>
-      )}
-
-      {todaySlots.length === 0 && hasTimetable && (
-        <div
-          className="p-3 rounded-lg border text-sm"
-          style={{
-            background: 'var(--cp-surface)',
-            borderColor: 'rgba(163,177,198,.3)',
-            color: 'var(--cp-muted)',
-          }}
-        >
-          No classes for you on {DAY_NAMES[today]}.
-        </div>
-      )}
-
-      <ClassCard
-        title="Current Class"
-        tone="success"
-        item={current}
-        emptyText="No class right now."
-        formatTime={formatTime}
+      <ScheduleHome
+        loading={loading}
+        hasTimetable={hasTimetable}
+        current={current}
+        nextClass={nextClass || upcoming}
+        todayRemaining={todayRemaining}
         courseLabel={courseLabel}
-      />
-      <ClassCard
-        title="Next Class"
-        tone="warning"
-        item={nextClass || upcoming}
-        emptyText="No upcoming classes."
-        formatTime={formatTime}
-        courseLabel={courseLabel}
+        onJumpTab={onJumpTab ?? (() => {})}
+        showAttendanceAction={showAttendanceAction}
+        showVacantAction={showVacantAction}
       />
 
       {sameTimeSlot.length > 0 && (
@@ -611,6 +524,30 @@ function DayFilter({ days, selected, onSelect, count }: DayFilterProps) {
 }
 
 /**
+ * Stable per-subject colour derived from the course code.
+ *
+ * One hue per subject is what makes a weekly timetable scannable; random or
+ * rotating colours would teach nothing. HSL with fixed saturation/lightness
+ * keeps every subject equally vivid, and the soft color-mix background adapts
+ * to both themes without a second palette.
+ */
+function subjectHue(courseCode: string): number {
+  let hash = 0;
+  for (let i = 0; i < courseCode.length; i++) {
+    hash = (hash * 31 + courseCode.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % 360;
+}
+
+function subjectTint(courseCode: string): { bg: string; edge: string } {
+  const hue = subjectHue(courseCode || '?');
+  return {
+    bg: `color-mix(in srgb, hsl(${hue} 70% 50%) 10%, transparent)`,
+    edge: `hsl(${hue} 65% 45%)`,
+  };
+}
+
+/**
  * The student's timetable, one card per weekday.
  *
  * Grouping by day is what makes a weekly timetable readable: the source PDF is a
@@ -624,6 +561,8 @@ interface TimetableByDayProps {
 }
 
 function TimetableByDay({ slots, hidden = 0 }: TimetableByDayProps) {
+  const today = todayWeekday();
+  const [selected, setSelected] = useState<ProfileCourseLike | null>(null);
   const byDay = useMemo(() => {
     const groups: Record<string, ProfileCourseLike[]> = {};
     slots.forEach(slot => {
@@ -658,49 +597,98 @@ function TimetableByDay({ slots, hidden = 0 }: TimetableByDayProps) {
         )}
       </div>
 
-      {byDay.map(({ day, slots: daySlots }) => (
-        <Card key={day}>
-          <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--cp-text)' }}>
-            {DAY_NAMES[day] || day}
-          </h4>
-
-          <div className="space-y-2">
-            {daySlots.map(slot => (
-              <div
-                key={slot.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2"
-                style={{
-                  background: 'var(--cp-bg)',
-                  boxShadow: 'var(--cp-neu-inset)',
-                }}
-              >
-                <span
-                  className="font-mono text-sm font-semibold w-24 shrink-0"
-                  style={{ color: 'var(--cp-text)' }}
-                >
-                  {slot.course_code}
-                </span>
-
-                <span className="text-xs w-20 shrink-0" style={{ color: 'var(--cp-muted)' }}>
-                  {slot.instructor || '—'}
-                </span>
-
-                <Badge tone="neutral" className="font-mono shrink-0">
-                  {slot.room || 'TBA'}
+      {byDay.map(({ day, slots: daySlots }) => {
+        const isToday = day === today;
+        return (
+          <Card
+            key={day}
+            style={
+              isToday
+                ? { boxShadow: 'var(--cp-neu-raised), 0 0 0 2px var(--cp-primary)' }
+                : undefined
+            }
+          >
+            <h4
+              className="text-sm font-semibold mb-3 flex items-center gap-2"
+              style={{ color: 'var(--cp-text)' }}
+            >
+              {DAY_NAMES[day] || day}
+              {isToday && (
+                <Badge tone="primary" className="ml-1">
+                  Today
                 </Badge>
+              )}
+            </h4>
 
-                <Badge tone="info" className="whitespace-nowrap">
-                  {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-                </Badge>
+            <div className="space-y-2">
+              {daySlots.map(slot => {
+                const tint = subjectTint(slot.course_code);
+                return (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    onClick={() => setSelected(slot)}
+                    aria-label={`${slot.course_code}, ${formatTime(slot.start_time)} to ${formatTime(slot.end_time)}, Room ${slot.room || 'TBA'}. Show details.`}
+                    className="w-full text-left flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 transition-transform duration-150 active:scale-[0.98] hover:-translate-y-px"
+                    style={{
+                      background: tint.bg,
+                      boxShadow: 'var(--cp-neu-inset)',
+                      borderLeft: `4px solid ${tint.edge}`,
+                    }}
+                  >
+                    <span
+                      className="font-mono text-sm font-semibold w-24 shrink-0"
+                      style={{ color: 'var(--cp-text)' }}
+                    >
+                      {slot.course_code}
+                    </span>
 
-                <span className="text-xs truncate" style={{ color: 'var(--cp-muted)' }}>
-                  {slot.branch_or_program}
-                </span>
+                    <span className="text-xs w-20 shrink-0" style={{ color: 'var(--cp-muted)' }}>
+                      {slot.instructor || '—'}
+                    </span>
+
+                    <Badge tone="neutral" className="font-mono shrink-0">
+                      {slot.room || 'TBA'}
+                    </Badge>
+
+                    <Badge tone="info" className="whitespace-nowrap">
+                      {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                    </Badge>
+
+                    <span className="text-xs truncate" style={{ color: 'var(--cp-muted)' }}>
+                      {slot.branch_or_program}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })}
+
+      {selected && (
+        <Modal sheet title={courseLabel(selected)} onClose={() => setSelected(null)}>
+          <dl className="space-y-2 text-sm">
+            {(
+              [
+                ['Course', courseLabel(selected)],
+                ['Faculty', selected.instructor || '—'],
+                ['Room', selected.room || 'TBA'],
+                ['Day', DAY_NAMES[selected.day] || selected.day],
+                ['Time', `${formatTime(selected.start_time)} - ${formatTime(selected.end_time)}`],
+                ['Branch', selected.branch_or_program],
+              ] as Array<[string, string]>
+            ).map(([term, value]) => (
+              <div key={term} className="flex items-center justify-between gap-3">
+                <dt style={{ color: 'var(--cp-muted)' }}>{term}</dt>
+                <dd className="font-medium text-right" style={{ color: 'var(--cp-text)' }}>
+                  {value}
+                </dd>
               </div>
             ))}
-          </div>
-        </Card>
-      ))}
+          </dl>
+        </Modal>
+      )}
     </div>
   );
 }

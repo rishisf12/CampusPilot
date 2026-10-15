@@ -4,10 +4,16 @@ export default function Modal({
   title,
   onClose,
   children,
+  sheet = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  /**
+   * Bottom-sheet on phones, centered dialog on sm+ screens. Opt-in so the
+   * existing centered usages (passkeys, attendance) are untouched.
+   */
+  sheet?: boolean;
 }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -16,7 +22,7 @@ export default function Modal({
   }, [onClose]);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className={`fixed inset-0 z-50 flex p-4 ${sheet ? 'items-end justify-center p-0 sm:items-center sm:justify-center sm:p-4' : 'items-center justify-center'}`}
       style={{ background: 'rgba(27,31,42,.45)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}
     >
@@ -24,7 +30,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="neu-raised w-full max-w-lg p-6"
+        className={`neu-raised w-full p-6 ${sheet ? 'max-w-lg rounded-b-none animate-slide-down sm:rounded-[1rem]' : 'max-w-lg'}`}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">

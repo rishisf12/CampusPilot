@@ -307,3 +307,19 @@ body {
 .animate-slide-down {
   animation: slideDown 0.2s ease-out;
 }
+
+/**
+ * Bottom-sheet variant for Modal (opt-in via the `sheet` prop).
+ * Full-width sheet pinned to the bottom on phones, regular centered
+ * card on sm+ screens. Comes after .neu-raised so its radius wins.
+ */
+.modal-sheet {
+  border-radius: 1rem 1rem 0 0;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+@media (min-width: 640px) {
+  .modal-sheet {
+    border-radius: 1rem;
+  }
+}
