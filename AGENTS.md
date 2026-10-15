@@ -52,7 +52,7 @@ CampusPilot/
 | Layer | Stack |
 |-------|-------|
 | **Backend** | FastAPI, SQLModel, PostgreSQL (prod) / SQLite (dev), Alembic, Uvicorn |
-| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS (Play CDN), React Router |
+| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS v4 (PostCSS), React Router |
 | **Auth** | JWT + WebAuthn (passkeys), HttpOnly cookies |
 | **Monitoring** | Prometheus + Grafana, custom scan agent |
 | **Container** | Docker Compose (backend, frontend, postgres, prometheus, grafana) |
@@ -257,6 +257,12 @@ VITE_DEV_BACKEND=http://127.0.0.1:8000   # Must use 127.0.0.1, not localhost (Wi
 ### Vite Config Trap
 - Keep only **one** `vite.config` file — Vite resolves `vite.config.js` before `vite.config.ts`
 - A stale `.js` silently wins and your `.ts` edits do nothing
+
+### Tailwind Is A Build Dependency
+- Tailwind v4 builds through `postcss.config.js` → `@tailwindcss/postcss`. There is no CDN script in `index.html`
+- All four packages must stay declared in `package.json`: `tailwindcss`, `@tailwindcss/postcss`, `postcss`, `autoprefixer`
+- **This fails silently.** With the PostCSS plugin present but `tailwindcss` missing, `@import "tailwindcss"` resolves to nothing and the build *succeeds* while emitting ~3 kB of CSS — an unstyled app with a green tick. It only surfaced when a stray `npm install` pruned the undeclared packages
+- Sanity check after any dependency change: the built CSS should be tens of kB, not single digits. `dist/assets/main-*.css` size is the tell
 
 ---
 

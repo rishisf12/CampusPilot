@@ -51,9 +51,27 @@ def engine_kwargs() -> dict:
         }
 
 
-def create_engine_with_retry(url: str, max_retries: int = 30, base_delay: float = 1.0):
-    """Create an engine, retrying transient connection failures."""
+def create_engine_with_retry(
+    url: str,
+    max_retries: int = 30,
+    base_delay: float = 1.0,
+    max_wait_seconds: float = 120.0,
+):
+    """Create an engine, retrying transient connection failures.
+
+    The retry exists because `docker compose up` starts the API before Postgres
+    is healthy, so giving up on the first refusal would break a normal startup.
+    It is bounded by wall-clock rather than only by attempt count: with a 30s
+    ceiling on the backoff, 30 attempts stretched to roughly thirteen minutes,
+    during which the API answered nothing and said only that it was retrying.
+
+    On giving up, the message names the likely cause. "Connection refused" on a
+    project with a committed compose file is almost never a wrong URL - it is
+    the database not running yet, and the useful next step is starting it.
+    """
     import time
+
+    started = time.monotonic()
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -67,10 +85,22 @@ def create_engine_with_retry(url: str, max_retries: int = 30, base_delay: float 
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
         except Exception as exc:
-            if attempt == max_retries:
-                logger.exception("Failed to connect to database after %d attempts", max_retries)
+            elapsed = time.monotonic() - started
+            if attempt == max_retries or elapsed >= max_wait_seconds:
+                logger.error(
+                    "Giving up on the database after %d attempt(s) over %.0fs: %s",
+                    attempt,
+                    elapsed,
+                    exc,
+                )
+                logger.error(
+                    "Is Postgres running? `docker compose up -d postgres` "
+                    "or `docker ps` to check. The API cannot start without it."
+                )
                 raise
             delay = min(base_delay * (2 ** (attempt - 1)), 30.0)
+            # Never sleep past the budget, or the last attempt would overshoot it.
+            delay = min(delay, max(0.0, max_wait_seconds - elapsed))
             logger.warning(
                 "Database connection attempt %d/%d failed: %s. Retrying in %.1fs...",
                 attempt,
