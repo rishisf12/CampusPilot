@@ -33,10 +33,15 @@ from models import AttendanceStatus, AttendanceRecord, Course, User
 def test_sqlmodel_enum_labels_match_postgres_type(using_postgres):
     """The stored value must be a label the Postgres enum type actually accepts.
 
-    SQLAlchemy persists the enum member *name* ("PRESENT"), not its *value*
-    ("Present"). If that ever changed, every attendance insert would fail on
-    Postgres with a label-missing error while continuing to work on SQLite -
-    exactly the kind of divergence these tests exist to catch.
+    models.py stores this column with ``values_callable=[e.value ...]``, so what
+    the ORM sends is the enum *value* ("Present"), not its *name* ("PRESENT").
+    The Postgres type must therefore be labelled with the values, or every
+    attendance insert fails with "invalid input value for enum
+    attendancestatus" while continuing to work on SQLite - exactly the kind of
+    divergence these tests exist to catch.
+
+    This test previously asserted the *names*, which is what pinned the bug in
+    place: it passed while attendance was completely broken.
     """
     if not using_postgres:
         pytest.skip("needs PostgreSQL")
@@ -51,14 +56,14 @@ def test_sqlmodel_enum_labels_match_postgres_type(using_postgres):
                 "WHERE t.typname = 'attendancestatus' GROUP BY t.typname"
             )
         ).scalar()
-    stored = {m.name for m in AttendanceStatus}
+    stored = {m.value for m in AttendanceStatus}
     assert set(labels.split(",")) == stored
 
 
 def test_attendance_round_trip(require_postgres):
     """Write one of each status and read them back through the ORM."""
     from core.database import engine
-    from datetime import date
+    from datetime import date, timedelta
 
     with Session(engine) as s:
         # Start perfectly clean: wipe all attendance records for this course
@@ -114,11 +119,17 @@ def test_attendance_round_trip(require_postgres):
         for r in remaining:
             s.delete(r)
         s.commit()
-        for status in AttendanceStatus:
+        # One date per status. uq_attendance_user_course_date forbids two rows
+        # for the same user, course and date, so writing all three statuses on
+        # one date is a constraint violation, not a round trip. This only ever
+        # showed up on Postgres: SQLite does not enforce it by default, so the
+        # test passed there while failing everywhere that mattered.
+        base = date.fromisoformat("2026-01-05")
+        for offset, status in enumerate(AttendanceStatus):
             s.add(
                 AttendanceRecord(
                     user_id=anchor.id,
-                    course_id=course.id, date=date.fromisoformat("2026-01-05"), status=status,
+                    course_id=course.id, date=base + timedelta(days=offset), status=status,
                 )
             )
         s.commit()
