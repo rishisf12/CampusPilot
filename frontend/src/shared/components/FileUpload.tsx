@@ -85,7 +85,10 @@ export default function FileUpload({
   };
 
   return (
-    <Card className="!p-4">
+    // Padding is tight on purpose. This card is one of a side-by-side pair, so
+    // its height sets the height of both, and every px here is a px the user
+    // scrolls past before reaching the page they actually came for.
+    <Card className="!p-3">
       <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
         {label}
       </h3>
@@ -95,9 +98,9 @@ export default function FileUpload({
         </p>
       )}
 
-      <form onSubmit={submit} className="mt-3 space-y-3">
+      <form onSubmit={submit} className="mt-2.5 space-y-2.5">
         <div
-          className="neu-inset rounded-xl px-4 py-5 text-center transition-all duration-200"
+          className="neu-inset rounded-xl px-3 py-3 text-center transition-all duration-200"
           style={{
             border: `2px dashed ${dragActive ? 'var(--cp-primary)' : 'rgba(163,177,198,.5)'}`,
             background: dragActive ? 'rgba(99,102,241,.06)' : 'var(--cp-bg)',

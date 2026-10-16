@@ -405,7 +405,7 @@ function TimetableView({ slots, onChanged, totalSlots, hiddenElectives = [] }: T
       )}
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         <FileUpload
           label="Upload class timetable"
           accept=".pdf,.csv"
@@ -426,7 +426,7 @@ function TimetableView({ slots, onChanged, totalSlots, hiddenElectives = [] }: T
           />
         </FileUpload>
 
-        <Card className="space-y-3">
+        <Card className="space-y-2">
           <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
             Uploaded timetable
           </h3>
