@@ -1,5 +1,6 @@
 import { useProfile } from '../../hooks/useProfile';
 import { profileApi, scheduleApi } from '../../../api';
+import { bumpProfileVersion } from '../../lib/storage';
 import {
   BRANCH_OPTIONS,
   GROUP_PROGRAMMES,
@@ -112,6 +113,9 @@ export default function Profile() {
         branch: branchState,
         attendance_target: Number(target),
       });
+      // Bump the profile version so the timetable, attendance, rooms and
+      // exam views all refetch with the new branch / semester / electives.
+      bumpProfileVersion();
       // Update local state to match saved values
       setProgramme(programme);
       setSemester(Number(semester));
@@ -135,6 +139,7 @@ export default function Profile() {
         setMessage(result.message);
         setBranchTo('');
         setNoBranchChange(true);
+        bumpProfileVersion();
       } else {
         if (!branchTo) {
           setLocalError('Select the branch you want to move to');
@@ -148,6 +153,7 @@ export default function Profile() {
         setBranchTo('');
         setBranchFrom(branchTo);
         setNoBranchChange(true);
+        bumpProfileVersion();
         await refresh();
       }
     } catch (err) {
@@ -170,6 +176,7 @@ export default function Profile() {
       setExtraCoursesList(prev => [...prev, created]);
       setExtraCode('');
       setExtraInstructor('');
+      bumpProfileVersion();
       await refresh();
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'Failed to add course');
@@ -180,6 +187,7 @@ export default function Profile() {
     try {
       await scheduleApi.removeExtra(code);
       setExtraCoursesList(prev => prev.filter(c => c.code !== code));
+      bumpProfileVersion();
       await refresh();
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'Failed to remove course');
