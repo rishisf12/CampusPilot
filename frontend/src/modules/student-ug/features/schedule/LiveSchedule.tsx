@@ -188,6 +188,7 @@ export default function LiveSchedule({ onError, onJumpTab }: LiveScheduleProps) 
           tabs={SUB_TABS.map(item => ({ id: item.id, label: item.label }))}
           active={subTab}
           onChange={setSubTab}
+          variant="underline"
         />
         <Button
           type="button"
