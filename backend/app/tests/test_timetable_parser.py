@@ -5,6 +5,7 @@ from features.timetable.parser import (
     parse_time_str,
     parse_time_range,
     normalize_room,
+    _tokenize_cell,
 )
 
 
@@ -59,6 +60,40 @@ class TestNormalizeRoom:
     def test_empty(self):
         assert normalize_room("") == ""
         assert normalize_room(None) == ""
+
+
+class TestTokenizeCellSlashHandling:
+    """Slash handling in _tokenize_cell: join two real course codes,
+    split course/instructor/room, and keep leading group digits with a course."""
+
+    def test_two_course_codes_joined_by_slash_stay_together(self):
+        # "OE3M27/ME5D02" is two real course codes - the slash keeps them as one token
+        assert _tokenize_cell("OE3M27/ME5D02") == ["OE3M27/ME5D02"]
+
+    def test_course_instructor_room_split_on_slash(self):
+        # "ME3001/SKC/CR-208" is course + instructor + room - the slashes split
+        assert _tokenize_cell("ME3001/SKC/CR-208") == ["ME3001", "SKC", "CR-208"]
+
+    def test_leading_group_digit_with_course_code_stays_together(self):
+        # "27/ME5D02" - the "27" is a group digit prefix, not a separate field
+        assert _tokenize_cell("27/ME5D02") == ["27/ME5D02"]
+
+    def test_three_fields_course_instructor_room(self):
+        assert _tokenize_cell("CS5031/VKG/L-202") == ["CS5031", "VKG", "L-202"]
+
+    def test_collaborated_faculty_split_on_slash(self):
+        # "CS5031/VKG/SKJ/CR-208" - course + two instructors + room
+        assert _tokenize_cell("CS5031/VKG/SKJ/CR-208") == ["CS5031", "VKG", "SKJ", "CR-208"]
+
+    def test_course_instructor_room_with_dash_separator(self):
+        # Mixed separators: dash splits course from instructor, slash splits instructor from room
+        assert _tokenize_cell("ME3001-SKC/CR-208") == ["ME3001", "SKC", "CR-208"]
+
+    def test_bug_me3001_skc_cr208_not_merged(self):
+        # Regression test: "ME3001/SKC/CR-208" must not be kept as one token.
+        # The old single-character alnum check wrongly joined course/instructor/room.
+        assert _tokenize_cell("ME3001/SKC/CR-208") != ["ME3001/SKC/CR-208"]
+        assert _tokenize_cell("ME3001/SKC/CR-208") == ["ME3001", "SKC", "CR-208"]
 
 
 if __name__ == "__main__":

@@ -44,6 +44,9 @@ import type {
   ExamLookupResult,
   ExamClashesResponse,
   ExamStatus,
+  ExamOptions,
+  ExamSlotResponse,
+  ExamSlotEdit,
   VacantRoomResponse,
   FeedbackSubmit,
   FeedbackResponse,
@@ -328,6 +331,16 @@ export const examApi = {
     request<ExamClashesResponse>(`/exam/clashes${roll ? `?roll=${encodeURIComponent(roll)}` : ''}`),
   clearTimetable: () => request<{ message: string }>('/exam/timetable', { method: 'DELETE' }),
   clearSeating: () => request<{ message: string }>('/exam/seating', { method: 'DELETE' }),
+
+  /** Branch / semester / course options discovered in the uploaded exam data. */
+  options: () => request<ExamOptions>('/exam/options'),
+
+  /** List all exam timetable slots (ungrouped, for editing). */
+  listSlots: () => request<ExamSlotResponse[]>('/exam/slots'),
+
+  /** Edit a single exam timetable slot. */
+  editSlot: (slot_id: number, data: ExamSlotEdit) =>
+    request<ExamSlotResponse>(`/exam/slot/${slot_id}`, { method: 'PUT', body: data }),
 
   /** Metadata for the newest file uploaded to a section, or `{ available: false }`. */
   latestUpload: (kind: 'timetable' | 'seating') =>

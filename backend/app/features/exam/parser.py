@@ -1240,10 +1240,14 @@ def _parse_csv_rows(csv_path: Path, columns: Iterable[str]) -> List[Dict[str, st
 
 def parse_seating_index_file(file_path: Path, is_csv: bool = False) -> Dict[str, Any]:
     """
-    Parse a seating-index PDF/CSV into ``ExamSeating``-ready row dicts.
+    Parse a seating-index PDF/CSV/Excel into ``ExamSeating``-ready row dicts.
 
     Each emitted row uses the ``seating_date`` field name to match the model.
     """
+    suffix = file_path.suffix.lower()
+    if suffix == ".xlsx":
+        return _parse_excel_seating_file(file_path)
+
     if is_csv:
         rows: List[Dict[str, Any]] = []
         for _index, raw in enumerate(_parse_csv_rows(file_path, SEATING_CSV_COLUMNS), 1):
@@ -1275,7 +1279,11 @@ def parse_seating_index_file(file_path: Path, is_csv: bool = False) -> Dict[str,
 
 
 def parse_mid_sem_file(file_path: Path, is_csv: bool = False) -> Dict[str, Any]:
-    """Parse a mid-sem timetable PDF/CSV into ``MidSemSchedule``-ready row dicts."""
+    """Parse a mid-sem timetable PDF/CSV/Excel into ``MidSemSchedule``-ready row dicts."""
+    suffix = file_path.suffix.lower()
+    if suffix == ".xlsx":
+        return _parse_excel_mid_sem_file(file_path)
+
     if is_csv:
         rows: List[Dict[str, Any]] = []
         for raw in _parse_csv_rows(file_path, TIMETABLE_CSV_COLUMNS):
@@ -1297,3 +1305,192 @@ def parse_mid_sem_file(file_path: Path, is_csv: bool = False) -> Dict[str, Any]:
     tables = extract_tables_from_pdf(file_path)
     rows = parse_mid_sem_tables(tables)
     return {"rows": rows, "stats": {"rows_parsed": len(rows), "tables": len(tables)}}
+
+
+def _parse_excel_seating_file(xlsx_path: Path) -> Dict[str, Any]:
+    """Parse a seating-index Excel file.
+
+    Expected columns: roll_range, room, date, time, course_code, branch, semester
+    """
+    import openpyxl
+
+    warnings: List[str] = []
+    rows: List[Dict[str, Any]] = []
+
+    try:
+        wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+    except (openpyxl.utils.exceptions.InvalidFileException, OSError) as e:
+        return {
+            "rows": [],
+            "stats": {"rows_parsed": 0, "warnings_count": 1},
+            "warnings": [f"Failed to open Excel file: {e}"],
+        }
+
+    sheet_name = wb.sheetnames[0]
+    ws = wb[sheet_name]
+
+    # Find header row
+    header_row = None
+    col_map: Dict[str, int] = {}
+    for row_idx, row_vals in enumerate(ws.iter_rows(values_only=True), 1):
+        if not row_vals or not any(v for v in row_vals if v is not None):
+            continue
+        values = [str(v).strip().lower() if v else "" for v in row_vals]
+        if any(h in values for h in SEATING_CSV_COLUMNS):
+            header_row = row_idx
+            for col_idx, val in enumerate(values):
+                if val in SEATING_CSV_COLUMNS:
+                    col_map[val] = col_idx
+            break
+
+    if header_row is None:
+        return {
+            "rows": [],
+            "stats": {"rows_parsed": 0, "warnings_count": 1},
+            "warnings": [f"Could not find header row in sheet '{sheet_name}'"],
+        }
+
+    required_cols = {"roll_range", "room", "date", "time", "course_code"}
+    missing = required_cols - set(col_map.keys())
+    if missing:
+        return {
+            "rows": [],
+            "stats": {"rows_parsed": 0, "warnings_count": 1},
+            "warnings": [f"Missing required columns: {missing}. Found: {list(col_map.keys())}"],
+        }
+
+    def get_col(key: str) -> str:
+        idx = col_map.get(key)
+        if idx is not None and idx < len(row_data) and row_data[idx] is not None:
+            return str(row_data[idx]).strip()
+        return ""
+
+    for row_idx, row_data in enumerate(ws.iter_rows(min_row=header_row + 1, values_only=True), header_row + 1):
+        if not row_data or not any(v for v in row_data if v is not None):
+            continue
+
+        roll_range = get_col("roll_range")
+        room = get_col("room")
+        date_str = get_col("date")
+        time_str = get_col("time")
+        course_code = get_col("course_code")
+
+        if not roll_range or not room:
+            continue
+
+        roll_tokens = extract_roll_tokens(roll_range)
+        if not roll_tokens:
+            continue
+
+        start_time, end_time = parse_slot_range(time_str)
+        course_codes = split_course_codes(course_code) or ["UNKNOWN"]
+        for cc in course_codes:
+            for prefix, start_num, end_num in roll_tokens_to_ranges(roll_tokens):
+                rows.append({
+                    "roll_start_prefix": prefix,
+                    "roll_start_num": start_num,
+                    "roll_end_num": end_num,
+                    "room": normalize_room(room),
+                    "seating_date": parse_human_date(date_str),
+                    "start_time": start_time or time(9, 0),
+                    "end_time": end_time or time(12, 0),
+                    "course_code": cc,
+                    "branch": normalize_branch(get_col("branch")),
+                    "semester": int(get_col("semester")) if get_col("semester").isdigit() else None,
+                    "is_extra": is_open_elective(cc),
+                })
+
+    wb.close()
+    return {"rows": attach_branch_metadata(rows), "stats": {"rows_parsed": len(rows), "warnings_count": len(warnings)}, "warnings": warnings}
+
+
+def _parse_excel_mid_sem_file(xlsx_path: Path) -> Dict[str, Any]:
+    """Parse a mid-sem exam timetable Excel file.
+
+    Expected columns: date, time, course_code, semester, branch
+    """
+    import openpyxl
+
+    warnings: List[str] = []
+    rows: List[Dict[str, Any]] = []
+
+    try:
+        wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+    except (openpyxl.utils.exceptions.InvalidFileException, OSError) as e:
+        return {
+            "rows": [],
+            "stats": {"rows_parsed": 0, "warnings_count": 1},
+            "warnings": [f"Failed to open Excel file: {e}"],
+        }
+
+    sheet_name = wb.sheetnames[0]
+    ws = wb[sheet_name]
+
+    header_row = None
+    col_map: Dict[str, int] = {}
+    for row_idx, row_vals in enumerate(ws.iter_rows(values_only=True), 1):
+        if not row_vals or not any(v for v in row_vals if v is not None):
+            continue
+        values = [str(v).strip().lower() if v else "" for v in row_vals]
+        if any(h in values for h in TIMETABLE_CSV_COLUMNS):
+            header_row = row_idx
+            for col_idx, val in enumerate(values):
+                if val in TIMETABLE_CSV_COLUMNS:
+                    col_map[val] = col_idx
+            break
+
+    if header_row is None:
+        return {
+            "rows": [],
+            "stats": {"rows_parsed": 0, "warnings_count": 1},
+            "warnings": [f"Could not find header row in sheet '{sheet_name}'"],
+        }
+
+    # Map every header column (not just the required ones) so optional
+    # columns such as "room" are available to get_col().
+    col_map = {}
+    for col_idx, val in enumerate(values):
+        col_map[val] = col_idx
+
+    required_cols = {"date", "time", "course_code"}
+    missing = required_cols - set(col_map.keys())
+    if missing:
+        return {
+            "rows": [],
+            "stats": {"rows_parsed": 0, "warnings_count": 1},
+            "warnings": [f"Missing required columns: {missing}. Found: {list(col_map.keys())}"],
+        }
+
+    def get_col(key: str) -> str:
+        idx = col_map.get(key)
+        if idx is not None and idx < len(row_data) and row_data[idx] is not None:
+            return str(row_data[idx]).strip()
+        return ""
+
+    for row_idx, row_data in enumerate(ws.iter_rows(min_row=header_row + 1, values_only=True), header_row + 1):
+        if not row_data or not any(v for v in row_data if v is not None):
+            continue
+
+        date_str = get_col("date")
+        time_str = get_col("time")
+        course_code = get_col("course_code")
+
+        if not course_code:
+            continue
+
+        start_time, end_time = parse_slot_range(time_str)
+        course_codes = split_course_codes(course_code) or ["UNKNOWN"]
+        for cc in course_codes:
+            rows.append({
+                "schedule_date": parse_human_date(date_str),
+                "start_time": start_time or time(10, 30),
+                "end_time": end_time or time(12, 30),
+                "course_code": cc,
+                "room": normalize_room(get_col("room")) if "room" in col_map else "",
+                "branch": normalize_branch(get_col("branch")) if "branch" in col_map else infer_branch_from_course(cc),
+                "semester": parse_semester_label(get_col("semester")) if "semester" in col_map else None,
+                "is_extra": is_open_elective(cc),
+            })
+
+    wb.close()
+    return {"rows": rows, "stats": {"rows_parsed": len(rows), "warnings_count": len(warnings)}, "warnings": warnings}

@@ -6,13 +6,15 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlmodel import Session, delete, select
 
 from core.database import get_session
 from models import ExamSeating, ExamUpload, MidSemSchedule, User
 from core.deps import get_current_admin, get_current_user
+from core.files import UPLOAD_DIR, save_upload, validate_upload
 from features.exam.clash import (
     clash_summary,
     collect_student_exams,
@@ -26,7 +28,6 @@ from features.exam.parser import (
 )
 from features.exam.pdf import generate_exam_pdf
 from features.profile.service import elective_codes, get_profile_for_user, profile_to_filter
-from core.files import UPLOAD_DIR, save_upload, validate_upload
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,16 @@ router = APIRouter(tags=["Exam"])
 
 
 def _upload_meta(file: UploadFile) -> tuple[Path, bool]:
-    """Validate and persist an upload; returns ``(saved_path, is_csv)``."""
-    validate_upload(file, "exam PDF/CSV")
+    """
+    Validate and persist an upload; returns ``(saved_path, is_csv)``.
+
+    Accepts PDF, CSV, and Excel (.xlsx).  Excel is treated like CSV: parsed
+    row-by-row rather than as table images.
+    """
+    validate_upload(file, "exam PDF/CSV/Excel")
     saved_path = save_upload(file, "exam")
-    return saved_path, saved_path.suffix.lower() == ".csv"
+    is_csv = saved_path.suffix.lower() == ".csv"
+    return saved_path, is_csv
 
 
 def _record_upload(session: Session, kind: str, saved_path: Path, original_name: Optional[str]) -> None:
@@ -173,6 +180,49 @@ def _group_by_day(rows: List[Dict[str, Any]], date_key: str) -> "OrderedDict[str
             key=lambda r: (r.get("start_time") or "", r.get("course_code") or ""),
         )
     return ordered
+
+
+@router.get("/options")
+def exam_options(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),
+):
+    """
+    Branch / semester / course options discovered in the uploaded exam data.
+
+    Aggregates from both the mid-sem timetable (``MidSemSchedule``) and the
+    seating index (``ExamSeating``), so profile dropdowns reflect the real
+    exam data no matter which section was uploaded.
+    """
+    from features.exam.parser import normalize_branch
+
+    slots = session.exec(select(MidSemSchedule)).all()
+    seatings = session.exec(select(ExamSeating)).all()
+
+    branches: "OrderedDict[str, int]" = OrderedDict()
+    for item in list(slots) + list(seatings):
+        branch = normalize_branch(getattr(item, "branch", None) or "")
+        if branch:
+            branches[branch] = branches.get(branch, 0) + 1
+
+    semesters = sorted(
+        {item.semester for item in list(slots) + list(seatings) if item.semester}
+    )
+    courses = sorted(
+        {
+            (item.course_code or "").upper()
+            for item in list(slots) + list(seatings)
+            if item.course_code
+        }
+    )
+
+    return {
+        "branches": list(branches),
+        "branch_counts": branches,
+        "semesters": semesters,
+        "courses": courses,
+        "total_rows": len(slots) + len(seatings),
+    }
 
 
 @router.get("/timetable")
@@ -311,6 +361,106 @@ def list_exam_seating(
             for key, exams in grouped.items()
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# Exam slot listing and editing (mirrors /timetable/slots)
+# ---------------------------------------------------------------------------
+
+class ExamSlotEdit(BaseModel):
+    schedule_date: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    room: str | None = None
+    course_code: str | None = None
+    branch: str | None = None
+    semester: int | None = None
+
+
+class ExamSlotResponse(BaseModel):
+    id: int
+    schedule_date: str | None = None
+    day: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    room: str | None = None
+    course_code: str | None = None
+    branch: str | None = None
+    semester: int | None = None
+    is_extra: bool
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/slots", response_model=List[ExamSlotResponse])
+def list_exam_slots(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),
+):
+    """List all exam timetable slots (ungrouped, for debugging and editing)."""
+    slots = session.exec(select(MidSemSchedule)).all()
+    return [
+        ExamSlotResponse(
+            id=slot.id,
+            schedule_date=slot.schedule_date.isoformat() if slot.schedule_date else None,
+            day=slot.schedule_date.strftime("%A") if slot.schedule_date else None,
+            start_time=slot.start_time.strftime("%H:%M") if slot.start_time else None,
+            end_time=slot.end_time.strftime("%H:%M") if slot.end_time else None,
+            room=slot.room,
+            course_code=slot.course_code,
+            branch=slot.branch,
+            semester=slot.semester,
+            is_extra=bool(slot.group and str(slot.group).upper().startswith("OE")),
+        )
+        for slot in slots
+    ]
+
+
+@router.put("/slot/{slot_id}", response_model=ExamSlotResponse)
+def edit_exam_slot(
+    slot_id: int,
+    payload: ExamSlotEdit,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+):
+    """Edit a single exam timetable slot."""
+    slot = session.get(MidSemSchedule, slot_id)
+    if not slot:
+        raise HTTPException(status_code=404, detail="Exam slot not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        if key in ("start_time", "end_time") and value:
+            from features.exam.parser import parse_meridiem_time
+            parsed = parse_meridiem_time(value)
+            if not parsed:
+                raise HTTPException(status_code=400, detail=f"Invalid time format: {value}")
+            setattr(slot, key, parsed)
+        elif key == "schedule_date" and value:
+            from features.exam.parser import parse_human_date
+            parsed = parse_human_date(value)
+            if not parsed:
+                raise HTTPException(status_code=400, detail=f"Invalid date format: {value}")
+            setattr(slot, key, parsed)
+        else:
+            setattr(slot, key, value)
+
+    session.add(slot)
+    session.commit()
+    session.refresh(slot)
+    return ExamSlotResponse(
+        id=slot.id,
+        schedule_date=slot.schedule_date.isoformat() if slot.schedule_date else None,
+        day=slot.schedule_date.strftime("%A") if slot.schedule_date else None,
+        start_time=slot.start_time.strftime("%H:%M") if slot.start_time else None,
+        end_time=slot.end_time.strftime("%H:%M") if slot.end_time else None,
+        room=slot.room,
+        course_code=slot.course_code,
+        branch=slot.branch,
+        semester=slot.semester,
+        is_extra=bool(slot.group and str(slot.group).upper().startswith("OE")),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -550,23 +700,50 @@ def clear_exam_seating(
 @router.post("/debug/parse-exam")
 async def debug_parse_exam(
     file: UploadFile = File(...),
+    kind: str = Query("timetable", description="`timetable` or `seating`"),
     _: User = Depends(get_current_admin),
 ):
     """Return the raw extraction alongside the parse result, for troubleshooting."""
-    validate_upload(file, "exam PDF/CSV")
+    if kind not in ("timetable", "seating"):
+        raise HTTPException(status_code=400, detail="kind must be 'timetable' or 'seating'")
+    validate_upload(file, "exam PDF/CSV/Excel")
     saved_path = save_upload(file, "debug_exam")
-    is_csv = saved_path.suffix.lower() == ".csv"
+    suffix = saved_path.suffix.lower()
 
-    if is_csv:
+    if suffix == ".csv":
         import csv
 
         with saved_path.open(newline="", encoding="utf-8") as handle:
-            return {
-                "file_type": "csv",
-                "raw_rows": list(csv.DictReader(handle)),
-                "parsed_result": parse_seating_index_file(saved_path, is_csv=True),
-            }
+            raw_rows = list(csv.DictReader(handle))
+        parser = parse_mid_sem_file if kind == "timetable" else parse_seating_index_file
+        return {
+            "file_type": "csv",
+            "kind": kind,
+            "raw_rows": raw_rows,
+            "parsed_result": parser(saved_path, is_csv=True),
+        }
 
+    if suffix == ".xlsx":
+        import openpyxl
+
+        wb = openpyxl.load_workbook(saved_path, read_only=True)
+        sheets_info = {}
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                rows.append([str(v) if v is not None else "" for v in row])
+            sheets_info[sheet_name] = {"rows": rows[:50], "total_rows": ws.max_row}
+        wb.close()
+        parser = parse_mid_sem_file if kind == "timetable" else parse_seating_index_file
+        return {
+            "file_type": "excel",
+            "kind": kind,
+            "sheets": sheets_info,
+            "parsed_result": parser(saved_path),
+        }
+
+    # PDF: return raw tables AND raw text
     import pdfplumber
 
     tables, texts = [], []
@@ -577,9 +754,11 @@ async def debug_parse_exam(
                 tables.append({"page": index + 1, "table": cleaned})
             texts.append({"page": index + 1, "text": page.extract_text() or ""})
 
+    parser = parse_mid_sem_file if kind == "timetable" else parse_seating_index_file
     return {
         "file_type": "pdf",
+        "kind": kind,
         "raw_tables": tables,
         "raw_texts": texts,
-        "parsed_result": parse_seating_index_file(saved_path, is_csv=False),
+        "parsed_result": parser(saved_path, is_csv=False),
     }

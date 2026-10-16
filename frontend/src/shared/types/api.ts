@@ -365,6 +365,40 @@ export interface ExamStatus {
   has_seating?: boolean;
 }
 
+/** `GET /exam/options`: branch / semester / course options from uploaded exam data. */
+export interface ExamOptions {
+  branches: string[];
+  branch_counts: Record<string, number>;
+  semesters: number[];
+  courses: string[];
+  total_rows: number;
+}
+
+/** One exam timetable slot (ungrouped) from `GET /exam/slots` or `PUT /exam/slot/{id}`. */
+export interface ExamSlotResponse {
+  id: number;
+  schedule_date: string | null;
+  day: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  room: string | null;
+  course_code: string | null;
+  branch: string | null;
+  semester: number | null;
+  is_extra: boolean;
+}
+
+/** Fields editable on `PUT /exam/slot/{id}`. */
+export interface ExamSlotEdit {
+  schedule_date?: string;
+  start_time?: string;
+  end_time?: string;
+  room?: string;
+  course_code?: string;
+  branch?: string;
+  semester?: number;
+}
+
 /** Rooms types */
 export interface VacantRoomResponse {
   mode: 'live' | 'manual';
