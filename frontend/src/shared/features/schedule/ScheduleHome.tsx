@@ -85,7 +85,7 @@ export default function ScheduleHome({
   showAttendanceAction,
   showVacantAction,
 }: ScheduleHomeProps) {
-  useNow();
+  useNow(1000);
 
   if (loading) {
     return (

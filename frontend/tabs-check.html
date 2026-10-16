@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>tabs-check (TEMP - delete after verification)</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom": "https://esm.sh/react-dom@18.2.0",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client"
+        }
+      }
+    </script>
+    <script type="module">
+      import React, { useState } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import '/src/index.css';
+      import Tabs from '/src/components/ui/Tabs.tsx';
+      function App() {
+        const [active, setActive] = useState('live');
+        window.__setActive = setActive;
+        return React.createElement(Tabs, {
+          active,
+          onChange: id => {
+            window.__lastChange = id;
+            setActive(id);
+          },
+          tabs: [
+            { id: 'live', label: 'Schedule' },
+            { id: 'attendance', label: 'Attendance' },
+            { id: 'vacant', label: 'Free Rooms' },
+            { id: 'exam', label: 'Exams' },
+          ],
+        });
+      }
+      createRoot(document.getElementById('root')).render(React.createElement(App));
+    </script>
+  </body>
+</html>

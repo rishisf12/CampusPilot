@@ -14,7 +14,7 @@ import FileUpload from '@shared/components/FileUpload';
 import UploadPreview from '@shared/components/UploadPreview';
 import Spinner from '@shared/components/Spinner';
 import StatusCard from '@shared/components/StatusCard';
-import ScheduleHome from '@shared/features/schedule/ScheduleHome';
+import ScheduleHome, { type HomeClass } from '@shared/features/schedule/ScheduleHome';
 import { useLiveDay } from '@shared/hooks/useLiveDay';
 import type { ScheduleClass, TimetableSlot } from '@shared/types/api';
 
@@ -292,9 +292,9 @@ function ScheduleView({
       <ScheduleHome
         loading={loading}
         hasTimetable={hasTimetable}
-        current={current}
-        nextClass={nextClass || upcoming}
-        todayRemaining={todayRemaining}
+        current={current as HomeClass | null}
+        nextClass={nextClass ? (nextClass as HomeClass) : (upcoming as HomeClass | null)}
+        todayRemaining={todayRemaining as HomeClass[]}
         courseLabel={courseLabel}
         onJumpTab={onJumpTab ?? (() => {})}
         showAttendanceAction={showAttendanceAction}

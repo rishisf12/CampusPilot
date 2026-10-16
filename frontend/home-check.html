@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>home-check (TEMP)</title>
+  </head>
+  <body>
+    <div id="root" style="max-width: 480px; margin: 0 auto"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom": "https://esm.sh/react-dom@18.2.0",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+          "lucide-react": "https://esm.sh/lucide-react@0.454.0?external=react"
+        }
+      }
+    </script>
+    <script type="module">
+      import React from 'react';
+      import { createRoot } from 'react-dom/client';
+      import '/src/index.css';
+      import ScheduleHome from '/src/shared/features/schedule/ScheduleHome.tsx';
+      const jumpCalls = [];
+      window.__jumpCalls = jumpCalls;
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const t = (h, m) => `${pad(h)}:${pad(m)}`;
+      // Synthetic day: current class spans now-20..now+30, next starts now+60.
+      const cm = now.getHours() * 60 + now.getMinutes();
+      const cur = {
+        course_code: 'CS201',
+        course_name: 'Data Structures',
+        instructor: 'Dr Rao',
+        room: '204',
+        start_time: t(0, 0),
+        end_time: t(0, 0),
+        day: 'Mon',
+      };
+      const s = new Date(now.getTime() - 20 * 60000),
+        e = new Date(now.getTime() + 30 * 60000);
+      cur.start_time = `${pad(s.getHours())}:${pad(s.getMinutes())}`;
+      cur.end_time = `${pad(e.getHours())}:${pad(e.getMinutes())}`;
+      const n2 = new Date(now.getTime() + 60 * 60000),
+        n2e = new Date(now.getTime() + 110 * 60000);
+      const nxt = {
+        course_code: 'MA202',
+        course_name: 'Linear Algebra',
+        instructor: 'Dr Iyer',
+        room: '105',
+        start_time: `${pad(n2.getHours())}:${pad(n2.getMinutes())}`,
+        end_time: `${pad(n2e.getHours())}:${pad(n2e.getMinutes())}`,
+        day: 'Mon',
+      };
+      const later = {
+        course_code: 'PH203',
+        course_name: 'Physics',
+        instructor: null,
+        room: 'Lab 2',
+        start_time: `${pad(n2e.getHours())}:${pad(n2e.getMinutes())}`,
+        end_time: '23:59',
+        day: 'Mon',
+      };
+      function App() {
+        const [loading, setLoading] = React.useState(true);
+        window.__setLoading = setLoading;
+        return React.createElement(ScheduleHome, {
+          loading,
+          hasTimetable: true,
+          current: cur,
+          nextClass: nxt,
+          todayRemaining: [nxt, later],
+          courseLabel: c => `${c.course_name} (${c.course_code})`,
+          onJumpTab: id => jumpCalls.push(id),
+          showAttendanceAction: true,
+          showVacantAction: true,
+        });
+      }
+      createRoot(document.getElementById('root')).render(React.createElement(App));
+    </script>
+  </body>
+</html>

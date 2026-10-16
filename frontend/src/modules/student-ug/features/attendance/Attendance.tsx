@@ -101,10 +101,62 @@ function hasRecords(subject: AttendanceSubject): boolean {
 function advice(subject: AttendanceSubject): string {
   if (!hasRecords(subject)) return 'No classes recorded yet.';
   if (subject.status === 'Critical' || subject.must_attend > 0) {
-    return `Attend next ${subject.must_attend} to recover.`;
+    return `Attend the next ${subject.must_attend} to get back on track.`;
   }
-  if (subject.can_miss > 0) return `Can miss ${subject.can_miss} more.`;
+  if (subject.can_miss > 0) return `You can still skip ${subject.can_miss} more.`;
   return 'At the edge - do not miss any.';
+}
+
+/** Progress ring around the percentage. Decorative; the number carries the meaning. */
+function ProgressRing({
+  percentage,
+  tone,
+}: {
+  percentage: number;
+  tone: 'success' | 'warning' | 'danger' | 'neutral';
+}) {
+  const radius = 26;
+  const circumference = 2 * Math.PI * radius;
+  const stroke =
+    tone === 'success'
+      ? 'var(--cp-success)'
+      : tone === 'warning'
+        ? 'var(--cp-warning)'
+        : tone === 'danger'
+          ? 'var(--cp-danger)'
+          : 'var(--cp-muted)';
+  return (
+    <div className="relative w-[72px] h-[72px] shrink-0" aria-hidden>
+      <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90">
+        <circle
+          cx="36"
+          cy="36"
+          r={radius}
+          fill="none"
+          strokeWidth="7"
+          stroke="rgba(127,127,127,.2)"
+        />
+        <circle
+          cx="36"
+          cy="36"
+          r={radius}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - Math.min(100, Math.max(0, percentage)) / 100)}
+          className="transition-all duration-500"
+        />
+      </svg>
+      <span
+        className="absolute inset-0 flex items-center justify-center text-lg font-bold"
+        style={{ color: 'var(--cp-text)' }}
+      >
+        {percentage}%
+      </span>
+    </div>
+  );
 }
 
 interface AttendanceProps {
@@ -637,24 +689,28 @@ function SubjectCard({
         </Badge>
       </div>
 
-      <div>
+      <div className="flex items-center gap-3">
         {/* Nothing recorded is shown as a dash, not as a number the backend
             invented. A 0/0 subject is not 100% attended. */}
         {recorded ? (
           <>
-            <p className="text-3xl font-bold leading-none" style={{ color: 'var(--cp-text)' }}>
-              {subject.percentage}%
-            </p>
-            <p className="text-[11px] mt-1" style={{ color: 'var(--cp-muted)' }}>
-              {subject.present}/{subject.total_held} attended
-            </p>
+            <ProgressRing percentage={subject.percentage} tone={tone} />
+            <div className="min-w-0">
+              <p className="text-[11px]" style={{ color: 'var(--cp-muted)' }}>
+                {subject.present}/{subject.total_held} attended
+              </p>
+            </div>
           </>
         ) : (
           <>
-            <p className="text-3xl font-bold leading-none" style={{ color: 'var(--cp-muted)' }}>
+            <div
+              className="w-[72px] h-[72px] shrink-0 rounded-full flex items-center justify-center text-2xl font-bold"
+              style={{ color: 'var(--cp-muted)', border: '7px solid rgba(127,127,127,.2)' }}
+              aria-hidden
+            >
               &mdash;
-            </p>
-            <p className="text-[11px] mt-1" style={{ color: 'var(--cp-muted)' }}>
+            </div>
+            <p className="text-[11px]" style={{ color: 'var(--cp-muted)' }}>
               No classes recorded
             </p>
           </>
