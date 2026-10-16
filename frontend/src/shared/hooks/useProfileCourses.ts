@@ -133,8 +133,11 @@ export default function useProfileCourses(
           const slotFamily = branchFamily(slotBranch);
           branchOk = slotFamily === branchFamily(studentBranch);
         } else {
-          // Neither has specific section - fall back to course family match
-          branchOk = courseMatchesFamily;
+          // Neither names a section, so the row's own branch decides. Semester-1
+          // papers carry other departments' prefixes (NS/ES/HS/DS/IT), so the
+          // course code is not a branch signal here - only the row's branch
+          // label is. Fall back to the code solely when the row names no branch.
+          branchOk = branchFamilies.includes(studentFamily) || (!slotBranch && courseMatchesFamily);
         }
       } else {
         // No student family (shouldn't happen for signed-up users): fall back to slot branch
