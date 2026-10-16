@@ -38,6 +38,11 @@ export default tseslint.config(
             'useSettings',
             'SECTION_ICONS',
             'SECTION_LABELS',
+            // Timetable row helpers, shared by the UG and PG schedules.
+            'subjectHue',
+            'subjectTint',
+            'rowsForDay',
+            'formatDuration',
             'num',
             'money',
             'pctChange',

@@ -3,7 +3,12 @@ import { RefreshCw, Trash2, Users } from 'lucide-react';
 import { Badge, Button, Card, Modal, Tabs } from '@/components/ui';
 import { scheduleApi, timetableApi } from '@/api';
 import { DAYS, GROUP_CLASSROOM_TABS, programmeGroupOf } from '@shared/constants';
-import { formatTime as formatClock, istNow, todayWeekday } from '@shared/lib/time';
+import {
+  formatTime as formatClock,
+  istNow,
+  todayWeekday,
+  weekOrderStartingOn,
+} from '@shared/lib/time';
 import { afterTimetableChange } from '@shared/lib/sync';
 import { isOpenElective, splitCourseCodes, toMinutes } from '@shared/lib/normalise';
 import useProfile from '@shared/hooks/useProfile';
@@ -15,6 +20,8 @@ import UploadPreview from '@shared/components/UploadPreview';
 import Spinner from '@shared/components/Spinner';
 import StatusCard from '@shared/components/StatusCard';
 import ScheduleHome, { type HomeClass } from '@shared/features/schedule/ScheduleHome';
+import { SlotRow, formatDuration, rowsForDay } from '@shared/features/schedule/TimetableRows';
+import { useSettings } from '@shared/features/settings/SettingsProvider';
 import { useLiveDay } from '@shared/hooks/useLiveDay';
 import type { ScheduleClass, TimetableSlot } from '@shared/types/api';
 
@@ -528,30 +535,6 @@ function DayFilter({ days, selected, onSelect, count }: DayFilterProps) {
 }
 
 /**
- * Stable per-subject colour derived from the course code.
- *
- * One hue per subject is what makes a weekly timetable scannable; random or
- * rotating colours would teach nothing. HSL with fixed saturation/lightness
- * keeps every subject equally vivid, and the soft color-mix background adapts
- * to both themes without a second palette.
- */
-function subjectHue(courseCode: string): number {
-  let hash = 0;
-  for (let i = 0; i < courseCode.length; i++) {
-    hash = (hash * 31 + courseCode.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash) % 360;
-}
-
-function subjectTint(courseCode: string): { bg: string; edge: string } {
-  const hue = subjectHue(courseCode || '?');
-  return {
-    bg: `color-mix(in srgb, hsl(${hue} 70% 50%) 10%, transparent)`,
-    edge: `hsl(${hue} 65% 45%)`,
-  };
-}
-
-/**
  * The student's timetable, one card per weekday.
  *
  * Grouping by day is what makes a weekly timetable readable: the source PDF is a
@@ -567,6 +550,14 @@ interface TimetableByDayProps {
 function TimetableByDay({ slots, hidden = 0 }: TimetableByDayProps) {
   const today = todayWeekday();
   const [selected, setSelected] = useState<ProfileCourseLike | null>(null);
+  const settings = useSettings();
+  // Settings > Schedule. The day order is the week the student says they live in;
+  // free periods are opt-in, because a day of three classes reads better as three
+  // cards than as six rows with three of them empty.
+  const weekStart = settings.get('week_start');
+  const dayOrder = useMemo(() => weekOrderStartingOn(String(weekStart)), [weekStart]);
+  const showFreePeriods = settings.get('show_empty_slots') === true;
+
   const byDay = useMemo(() => {
     const groups: Record<string, ProfileCourseLike[]> = {};
     slots.forEach(slot => {
@@ -575,11 +566,13 @@ function TimetableByDay({ slots, hidden = 0 }: TimetableByDayProps) {
       groups[key].push(slot);
     });
 
-    return WEEKDAY_ORDER.filter(day => groups[day]?.length).map(day => ({
-      day,
-      slots: groups[day].sort((a, b) => a.sort_key - b.sort_key),
-    }));
-  }, [slots]);
+    return dayOrder
+      .filter(day => groups[day]?.length)
+      .map(day => ({
+        day,
+        slots: groups[day].sort((a, b) => a.sort_key - b.sort_key),
+      }));
+  }, [slots, dayOrder]);
 
   const total = byDay.reduce((sum, group) => sum + group.slots.length, 0);
 
@@ -625,46 +618,27 @@ function TimetableByDay({ slots, hidden = 0 }: TimetableByDayProps) {
             </h4>
 
             <div className="space-y-2">
-              {daySlots.map(slot => {
-                const tint = subjectTint(slot.course_code);
-                return (
-                  <button
-                    key={slot.id}
-                    type="button"
-                    onClick={() => setSelected(slot)}
-                    aria-label={`${slot.course_code}, ${formatTime(slot.start_time)} to ${formatTime(slot.end_time)}, Room ${slot.room || 'TBA'}. Show details.`}
-                    className="w-full text-left flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 transition-transform duration-150 active:scale-[0.98] hover:-translate-y-px"
-                    style={{
-                      background: tint.bg,
-                      boxShadow: 'var(--cp-neu-inset)',
-                      borderLeft: `4px solid ${tint.edge}`,
-                    }}
+              {rowsForDay(daySlots, showFreePeriods).map((row, index) =>
+                row.kind === 'free' ? (
+                  <div
+                    key={`free-${row.from}-${row.to}`}
+                    className="flex items-center gap-3 px-3 py-1.5 text-xs"
+                    style={{ color: 'var(--cp-muted)' }}
                   >
-                    <span
-                      className="font-mono text-sm font-semibold w-24 shrink-0"
-                      style={{ color: 'var(--cp-text)' }}
-                    >
-                      {slot.course_code}
+                    <span className="w-24 shrink-0" aria-hidden />
+                    <span className="shrink-0">
+                      {formatTime(row.from)} - {formatTime(row.to)}
                     </span>
-
-                    <span className="text-xs w-20 shrink-0" style={{ color: 'var(--cp-muted)' }}>
-                      {slot.instructor || '—'}
-                    </span>
-
-                    <Badge tone="neutral" className="font-mono shrink-0">
-                      {slot.room || 'TBA'}
-                    </Badge>
-
-                    <Badge tone="info" className="whitespace-nowrap">
-                      {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-                    </Badge>
-
-                    <span className="text-xs truncate" style={{ color: 'var(--cp-muted)' }}>
-                      {slot.branch_or_program}
-                    </span>
-                  </button>
-                );
-              })}
+                    <span className="truncate">Free ({formatDuration(row.minutes)})</span>
+                  </div>
+                ) : (
+                  <SlotRow
+                    key={`slot-${row.slot.id}-${index}`}
+                    slot={row.slot}
+                    onOpen={setSelected}
+                  />
+                )
+              )}
             </div>
           </Card>
         );

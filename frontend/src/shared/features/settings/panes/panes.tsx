@@ -9,5 +9,6 @@ export const PANES: Record<SettingsSectionId, Pane> = {
   appearance: { kind: 'registry' },
   notifications: { kind: 'registry' },
   schedule: { kind: 'registry' },
+  privacy: { kind: 'registry' },
   account: { kind: 'custom', render: props => <AccountSection {...props} /> },
 };

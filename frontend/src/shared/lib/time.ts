@@ -36,6 +36,22 @@ export function daysUntilWeekday(target: string, now = new Date()): number {
   return (idx - today + 7) % 7;
 }
 
+/**
+ * The seven weekdays ordered from `startDay`.
+ *
+ * Settings > Schedule > "Week starts on" exists because a college running
+ * Saturday classes does not think in Monday-first weeks, and the timetable has
+ * to follow the student rather than the other way round.
+ *
+ * An unrecognised start falls back to Monday instead of returning nothing, so a
+ * bad stored value cannot empty the timetable.
+ */
+export function weekOrderStartingOn(startDay: string | undefined | null): string[] {
+  const start = WEEKDAY_ORDER.indexOf(String(startDay || ''));
+  if (start < 0) return [...WEEKDAY_ORDER];
+  return [...WEEKDAY_ORDER.slice(start), ...WEEKDAY_ORDER.slice(0, start)];
+}
+
 export interface IstNowResult {
   date: string;
   time: string;

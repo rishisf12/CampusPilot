@@ -6,6 +6,7 @@ import { BRANCH_OPTIONS } from '@shared/constants';
 import { formatDate, formatTime, todayIso } from '@shared/lib/time';
 import { normaliseRoom, splitCourseCodes } from '@shared/lib/normalise';
 import { readQuickLookup, writeQuickLookup } from '@shared/lib/storage';
+import { useSettings } from '@shared/features/settings/SettingsProvider';
 import { bumpProfileVersion } from '@shared/lib/storage';
 import useProfile from '@shared/hooks/useProfile';
 import useProfileVersion from '@shared/hooks/useProfileVersion';
@@ -115,6 +116,10 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
 
   const { branch: profileBranch, semester: profileSemester, electiveCodes } = useProfile();
   const profileVersion = useProfileVersion();
+  // Privacy & Data > "Remember my exam lookup". Read through the settings store
+  // rather than the storage module, so the switch in Settings is the one thing
+  // that decides whether a roll number is kept on this device.
+  const rememberLookup = useSettings().get('remember_exam_lookup') !== false;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -271,7 +276,8 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
       };
       setLookup(result);
       // Cached so a refresh can restore it; the server remains the source.
-      writeQuickLookup(result);
+      // Skipped when the student has turned the cache off in Privacy & Data.
+      if (rememberLookup) writeQuickLookup(result);
     } catch (err) {
       setLookupError(err instanceof Error ? err.message : 'Lookup failed');
       setLookup(null);
@@ -415,6 +421,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
           onUpload={async file => {
             const result = await examApi.uploadTimetable(file);
             await load();
+            bumpProfileVersion();
             return result;
           }}
           onRemove={() => removeData('timetable')}
@@ -427,6 +434,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
           onUpload={async file => {
             const result = await examApi.uploadSeating(file);
             await load();
+            bumpProfileVersion();
             if (subTab === 'seating') setSeating(null);
             return result;
           }}

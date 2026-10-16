@@ -92,6 +92,14 @@ export default function Settings({ onOpenProfile }: SettingsProps) {
         <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
           {section.blurb}
         </p>
+        {section.note && (
+          <p
+            className="text-xs px-3 py-2 rounded-2xl"
+            style={{ background: 'var(--cp-bg)', color: 'var(--cp-muted)' }}
+          >
+            {section.note}
+          </p>
+        )}
         <SettingsPane
           pane={PANES[section.id]}
           sectionId={section.id}

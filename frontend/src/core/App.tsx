@@ -4,6 +4,8 @@ import { programmeGroupOf } from '@shared/constants';
 import { ProfileProvider } from '@shared/hooks/useProfile';
 import { SettingsProvider } from '@shared/features/settings/SettingsProvider';
 import { useApplyTheme } from '@shared/features/settings/useTheme';
+import { useDisplayPrefs } from '@shared/features/settings/useDisplayPrefs';
+import { useCachedLookupPolicy } from '@shared/features/settings/usePrivacyPrefs';
 
 /** Lazy-loaded module entry points */
 const StudentUGModule = lazy(() => import('@modules/student-ug/main'));
@@ -39,14 +41,22 @@ export default function App() {
 }
 
 /**
- * Keeps <html class="dark"> in step with the theme setting.
+ * Applies the settings that change how the app behaves, not just how the
+ * Settings page looks.
  *
- * A component rather than a bare hook call so it sits *inside* SettingsProvider -
- * the effect reads the store, and calling it above the provider would throw.
- * Renders nothing.
+ * Theme, density and motion become attributes on the document element, so one
+ * component owns them all and plain CSS can respond without a value threaded
+ * through every screen. The cached-lookup policy clears stored data when the
+ * student switches it off.
+ *
+ * A component rather than bare hook calls so they sit *inside* SettingsProvider -
+ * each reads the store, and calling one above the provider would throw. Renders
+ * nothing.
  */
-function ThemeSync() {
+function SettingsEffects() {
   useApplyTheme();
+  useDisplayPrefs();
+  useCachedLookupPolicy();
   return null;
 }
 
@@ -54,7 +64,7 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ProfileProvider>
       <SettingsProvider>
-        <ThemeSync />
+        <SettingsEffects />
         {children}
       </SettingsProvider>
     </ProfileProvider>

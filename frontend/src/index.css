@@ -323,3 +323,49 @@ body {
     border-radius: 1rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Settings: layout density and reduced motion.
+
+   Both are applied as attributes on <html> by the Settings bundle, so a single
+   rule set here covers every screen instead of each component having to ask
+   which density it is rendering at.
+
+   `data-motion="reduced"` is also set when the OS asks for reduced motion, which
+   is why this is keyed on the attribute rather than on the stored setting alone.
+--------------------------------------------------------------------------- */
+
+/**
+ * Compact layout: less breathing room, so more of the timetable fits on a phone.
+ *
+ * Deliberately a small set of spacing overrides rather than a second set of
+ * component styles - anything not listed keeps its normal spacing, which is the
+ * safe direction to be wrong in.
+ */
+[data-density='compact'] .card-pad {
+  padding: 0.875rem;
+}
+[data-density='compact'] .row-pad {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/**
+ * Reduced motion.
+ *
+ * Keyed on the attribute alone: the Settings bundle sets it when *either* the
+ * stored setting or the OS asks for less motion, so there is one rule set here
+ * rather than two that can drift.
+ *
+ * Shortens durations rather than setting `animation: none`, because snapping
+ * every transition to zero is its own problem for some users - they asked for
+ * less movement, not for none.
+ */
+[data-motion='reduced'] *,
+[data-motion='reduced'] *::before,
+[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

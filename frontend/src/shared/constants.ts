@@ -104,12 +104,20 @@ export const ALLOWED_EMAIL_DOMAIN = '@iiitdmj.ac.in';
  * here would break Fast Refresh.
  */
 
-export type SettingsSectionId = 'appearance' | 'notifications' | 'schedule' | 'account';
+export type SettingsSectionId = 'appearance' | 'notifications' | 'schedule' | 'privacy' | 'account';
 
 export interface SettingsSection {
   id: SettingsSectionId;
   label: string;
   blurb: string;
+  /**
+   * A caveat worth stating on the pane itself.
+   *
+   * Used where a section stores preferences that nothing consumes yet: saying so
+   * is the difference between a preference and a promise. Silently implying a
+   * feature works is how a settings page loses trust.
+   */
+  note?: string;
 }
 
 export type SettingsValue = string | number | boolean;
@@ -145,11 +153,17 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     id: 'notifications',
     label: 'Notifications',
     blurb: 'What the app is allowed to interrupt you for.',
+    note: 'Nothing is being sent yet - the app has no alerts channel. These are saved on your account now and will start applying when alerts arrive, so you can set them once.',
   },
   {
     id: 'schedule',
     label: 'Schedule & Attendance',
     blurb: 'How your week and your attendance targets behave.',
+  },
+  {
+    id: 'privacy',
+    label: 'Privacy & Data',
+    blurb: 'What this device keeps, and what the app is allowed to remember.',
   },
   { id: 'account', label: 'Account', blurb: 'Your programme, branch, security and sign-in.' },
 ];
@@ -239,6 +253,28 @@ export const SETTINGS_REGISTRY: readonly SettingsEntry[] = [
     section: 'schedule',
     label: 'Show free periods',
     help: 'Keep gaps in the timetable visible instead of collapsing them.',
+    type: 'boolean',
+    default: false,
+    store: 'server',
+    order: 2,
+  },
+
+  // -------------------------------------------------------------- privacy
+  {
+    key: 'remember_exam_lookup',
+    section: 'privacy',
+    label: 'Remember my exam lookup',
+    help: 'Keep the last roll-number lookup on this device so a refresh does not ask again.',
+    type: 'boolean',
+    default: true,
+    store: 'server',
+    order: 1,
+  },
+  {
+    key: 'reduce_motion',
+    section: 'privacy',
+    label: 'Reduce motion',
+    help: 'Turn off the progress and slide animations. Also respected from your system setting.',
     type: 'boolean',
     default: false,
     store: 'server',
