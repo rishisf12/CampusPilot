@@ -110,90 +110,120 @@ def get_subjects(
     """
     Courses the student can mark attendance for, filtered by their profile.
 
-    Only courses that actually appear in the student's timetable are included.
-    Electives the student explicitly opted into (profile.elective_codes)
-    are included. Other electives are hidden unless they also match branch and
-    semester (which open electives usually don't).
-    
-    Uses the new normalized schema: course_offering, timetable_slot_branch, branch.
+    Includes:
+      - Core courses whose timetable slot matches the profile's branch + semester
+      - Open electives the student opted into (profile.elective_codes)
+      - Extra courses (Course.is_extra=True)
+
+    Excludes:
+      - Courses from other branches or semesters
+      - Postgraduate courses for undergraduate profiles
+
+    The result always tracks the profile: change branch/semester/electives and
+    the subject list changes with it. TimetableSlot (not CourseOffering) is used
+    because the upload flow populates TimetableSlot but never creates
+    CourseOffering rows, so the old normalized-schema path returned an empty
+    course set and the fallback path leaked every branch's courses.
     """
     from sqlmodel import select
-    from models import Course, TimetableSlot, CourseOffering, Branch, TimetableSlotBranch
+    from models import Course, TimetableSlot
+    from features.exam.parser import (
+        branch_family,
+        infer_branch_from_course_code,
+        is_open_elective,
+        is_postgrad_course,
+        normalize_branch,
+    )
 
     user_id = profile.get("user_id") if profile else None
 
-    if profile:
-        branch = profile.get("branch")
-        semester = profile.get("semester")
-        elective_codes = {
-            code.strip().upper()
-            for code in (profile or {}).get("elective_codes", [])
-            if code and code.strip()
-        }
-
-        # Find the branch record for this student
-        branch_record = None
-        if branch:
-            branch_record = session.exec(
-                select(Branch).where(Branch.code == branch)
-            ).first()
-
-        if branch_record:
-            # Use the new normalized schema: find course_offerings for this branch + semester
-            offering_ids = session.exec(
-                select(CourseOffering.id).where(
-                    CourseOffering.branch_id == branch_record.id,
-                    CourseOffering.semester == semester
-                )
-            ).all()
-            
-            # Get course codes from these offerings
-            slot_codes = set()
-            if offering_ids:
-                offerings = session.exec(
-                    select(CourseOffering).where(CourseOffering.id.in_(offering_ids))
-                ).all()
-                slot_codes = {o.course_id for o in offerings}  # course_ids
-                # Get actual course codes
-                course_ids = list(slot_codes)
-                courses_map = {c.id: c.code.upper() for c in session.exec(
-                    select(Course).where(Course.id.in_(course_ids))
-                ).all()}
-                slot_codes = set(courses_map.values())
-        else:
-            # Fallback: use timetable_slot.offering_id (populated for single-branch courses)
-            # This replaces the old regex on branch_or_program with the normalized FK
-            slot_codes = set()
-            slot_query = select(TimetableSlot).where(TimetableSlot.semester == semester)
-            slot_results = session.exec(slot_query).all()
-            slot_codes = {
-                (slot.course_code or "").upper()
-                for slot in slot_results
-                if slot.course_code
-            }
-
-        # Now query courses that are either in the timetable or are elected electives
-        result: List[dict] = []
-        for course in session.exec(select(Course)).all():
-            code = (course.code or "").upper()
-            is_profile_elective = code in elective_codes
-            in_timetable = code in slot_codes
-
-            if not (is_profile_elective or in_timetable):
-                continue
-
+    if not profile:
+        # No profile: return all courses (admin fallback)
+        courses = session.exec(select(Course)).all()
+        result = []
+        for course in courses:
             summary = get_course_summary(session, course.id, user_id)
             if summary:
                 result.append(summary)
         return result
 
-    # No profile: return all courses (fallback for admin)
-    courses = session.exec(select(Course)).all()
-    result = []
-    for course in courses:
-        summary = get_course_summary(session, course.id, user_id)
-        if summary:
-            result.append(summary)
+    branch = profile.get("branch")
+    semester = profile.get("semester")
+    elective_codes = {
+        code.strip().upper()
+        for code in (profile or {}).get("elective_codes", [])
+        if code and code.strip()
+    }
+    programme = (profile.get("programme") or "").upper()
+    is_postgrad_profile = programme in ("MTECH", "ME", "MDES", "PHD")
+    profile_branch_norm = normalize_branch(branch) if branch else None
+    profile_family = branch_family(branch)
+
+    # ---- 1. Collect relevant course codes from timetable slots ----
+    relevant_codes: set[str] = set()
+
+    slots = session.exec(
+        select(TimetableSlot).where(TimetableSlot.semester == semester)
+    ).all()
+
+    for slot in slots:
+        code = (slot.course_code or "").strip().upper()
+        if not code:
+            continue
+
+        # Skip postgraduate courses for undergraduate profiles
+        if is_postgrad_course(code) and not is_postgrad_profile:
+            continue
+
+        # Open electives: branch-agnostic, only if the student opted in
+        if is_open_elective(code):
+            if code in elective_codes:
+                relevant_codes.add(code)
+            continue
+
+        # Core course: match by branch family (consistent with the frontend
+        # useProfileCourses filter). A CSE A student sees CSE B papers too.
+        slot_branch = slot.branch_or_program
+        matched = False
+        slot_family = branch_family(slot_branch) if slot_branch else None
+        if slot_family and profile_family:
+            matched = slot_family == profile_family
+        if not matched and profile_family:
+            # Fallback: derive branch from the course code prefix itself
+            course_branch = infer_branch_from_course_code(code)
+            if course_branch and course_branch == profile_family:
+                matched = True
+        if not matched:
+            # Last resort: exact normalized branch match (e.g. shared cells
+            # where slot_branch names the precise section). Only when both
+            # sides resolve to a real branch - otherwise an unrecognized
+            # branch would falsely match another unrecognized one.
+            if slot_branch and profile_branch_norm:
+                slot_branch_norm = normalize_branch(slot_branch)
+                if slot_branch_norm == profile_branch_norm:
+                    matched = True
+
+        if matched:
+            relevant_codes.add(code)
+
+    # ---- 2. Extra courses (is_extra=True) always appear for this user ----
+    for course in session.exec(select(Course).where(Course.is_extra == True)).all():
+        code = (course.code or "").strip().upper()
+        if code:
+            relevant_codes.add(code)
+
+    # ---- 3. Elected electives always appear ----
+    for code in elective_codes:
+        relevant_codes.add(code)
+
+    # ---- 4. Build summaries for the relevant courses ----
+    result: List[dict] = []
+    for code in sorted(relevant_codes):
+        course = session.exec(select(Course).where(Course.code == code)).first()
+        if course:
+            summary = get_course_summary(session, course.id, user_id)
+            if summary:
+                result.append(summary)
     return result
 
 
@@ -270,6 +300,7 @@ def get_overall_summary(session: Session, profile: Optional[dict] = None) -> dic
     When a profile is supplied the totals cover only that student's subjects, so
     a shared database does not mix in other branches' courses.
     """
+    user_id = profile.get("user_id") if profile else None
     if profile:
         course_summaries = get_subjects(session, profile)
     else:
