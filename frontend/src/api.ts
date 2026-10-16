@@ -17,6 +17,7 @@ import {
   setToken,
   bumpProfileVersion,
 } from './shared/lib/storage';
+import type { SettingsValue } from './shared/constants';
 
 import type {
   UserResponse,
@@ -249,6 +250,25 @@ export const profileApi = {
     request<{ message: string }>('/profile/branch-change', { method: 'POST', body: data }),
   clearBranchChange: () =>
     request<{ message: string }>('/profile/branch-change', { method: 'DELETE' }),
+};
+
+// ------------------------------------------------------------ settings
+//
+// The Settings page's own endpoints. The key names and their types live in the
+// settings registry, not here: the server stores the document it is given, so
+// this client passes values through without knowing what any of them mean.
+export const settingsApi = {
+  get: () =>
+    request<{ settings: Record<string, SettingsValue> }>('/settings').then(r => r.settings),
+  update: (patch: Record<string, SettingsValue | null>) =>
+    request<{ settings: Record<string, SettingsValue> }>('/settings', {
+      method: 'PATCH',
+      body: { settings: patch },
+    }).then(r => r.settings),
+  clear: () =>
+    request<{ settings: Record<string, SettingsValue> }>('/settings', { method: 'DELETE' }).then(
+      r => r.settings
+    ),
 };
 
 // ------------------------------------------------------------ schedule

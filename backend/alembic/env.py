@@ -70,6 +70,7 @@ from features.maintenance import models as _maintenance_models  # noqa: E402,F40
 from features.moderation import models as _moderation_models  # noqa: E402,F401
 from features.remote_config import models as _remote_config_models  # noqa: E402,F401
 from features.security import models as _security_models  # noqa: E402,F401
+from features.settings import models as _settings_models  # noqa: E402,F401
 from features.user_control import models as _user_control_models  # noqa: E402,F401
 
 from core.config import settings  # noqa: E402

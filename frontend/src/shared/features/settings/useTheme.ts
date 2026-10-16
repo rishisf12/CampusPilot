@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { readValue } from '@shared/lib/storage';
+import { bootValue } from './useSettings';
 import { useSettings } from './SettingsProvider';
 
 /**
@@ -89,15 +89,12 @@ export function useThemeToggle(): {
 /**
  * Apply the stored theme before React mounts.
  *
- * Reads storage directly rather than going through the store: the first paint
- * has to be right, and waiting for a hook means a white flash on every reload
- * for a dark-mode user.
- *
- * Tolerant of an older build's value - anything that is not 'dark' is treated as
- * light, which is what the previous toggle assumed too.
+ * Reads the device copy rather than waiting on the store or the server: the first
+ * paint has to be right, or a dark-mode user gets a white flash on every reload.
+ * The server document replaces this a moment later and wins if the two differ.
  */
 export function bootstrapTheme(): void {
-  const stored = readValue('cp-theme');
-  const dark = stored === 'dark' || (stored === null && systemPrefersDark());
+  const stored = bootValue('theme');
+  const dark = stored === 'dark' || (stored === 'system' && systemPrefersDark());
   document.documentElement.classList.toggle('dark', dark);
 }

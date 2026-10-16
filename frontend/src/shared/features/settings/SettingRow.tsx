@@ -1,6 +1,7 @@
 import Toggle from '@/components/ui/Toggle';
 import type { SettingsEntry, SettingsValue } from '@shared/constants';
 import { useSettings } from './SettingsProvider';
+import { serverSettingsLoaded } from './useSettings';
 
 /**
  * One setting, rendered from its registry entry.
@@ -18,7 +19,10 @@ interface SettingRowProps {
 export default function SettingRow({ entry }: SettingRowProps) {
   const settings = useSettings();
   const value = settings.get(entry.key);
-  const pending = entry.store === 'server';
+  // Only shown while the server document is still in flight: once it has
+  // arrived the value on screen is the saved one, and a permanent "not saved
+  // yet" badge would read as "this does not work".
+  const waiting = entry.store === 'server' && !serverSettingsLoaded();
 
   return (
     <div
@@ -32,12 +36,12 @@ export default function SettingRow({ entry }: SettingRowProps) {
         <p className="text-xs mt-0.5" style={{ color: 'var(--cp-muted)' }}>
           {entry.help}
         </p>
-        {pending && (
+        {waiting && (
           <p
             className="text-[11px] mt-1 inline-block px-2 py-0.5 rounded-full"
             style={{ background: 'var(--cp-bg)', color: 'var(--cp-muted)' }}
           >
-            Saved to your account in the next update
+            Loading from your account…
           </p>
         )}
       </div>

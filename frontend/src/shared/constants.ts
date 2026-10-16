@@ -126,6 +126,14 @@ export interface SettingsEntry {
   choices?: { value: string; label: string }[];
   /** Where the value lives. See the note above. */
   store: 'local' | 'server';
+  /**
+   * Also keep a device-local copy under the settings key.
+   *
+   * Only for server-backed settings the app must know before the first render -
+   * the theme, or the app paints light and then flips. The server document still
+   * wins once it arrives; the copy just makes the first frame correct.
+   */
+  mirror?: boolean;
   /** Lower sorts first within a section. */
   order?: number;
 }
@@ -161,7 +169,10 @@ export const SETTINGS_REGISTRY: readonly SettingsEntry[] = [
       { value: 'light', label: 'Light' },
       { value: 'dark', label: 'Dark' },
     ],
-    store: 'local',
+    store: 'server',
+    // The theme has to be right on the first painted frame, which is before any
+    // fetch has resolved.
+    mirror: true,
     order: 1,
   },
   {
@@ -171,7 +182,7 @@ export const SETTINGS_REGISTRY: readonly SettingsEntry[] = [
     help: 'Tighter rows and padding, to fit more on one screen.',
     type: 'boolean',
     default: false,
-    store: 'local',
+    store: 'server',
     order: 2,
   },
 

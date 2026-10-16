@@ -212,6 +212,10 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
       /* the client-side token removal is what actually ends the session */
     }
     clearSession();
+    // The settings store holds the signed-in user's server document. Without
+    // this the next person to sign in on this device would briefly see the
+    // previous one's settings, theme included.
+    window.dispatchEvent(new CustomEvent('cp:signed-out'));
     setUser(null);
     setStatus('anonymous');
     setScreen('login');

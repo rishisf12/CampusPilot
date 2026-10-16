@@ -20,14 +20,6 @@ const KEYS = {
   pendingVerification: 'pending_verification_email',
   /** Flag that makes the sign-in page show "Email verified, please sign in". */
   emailJustVerified: 'email_just_verified',
-  /**
-   * Colour scheme: "light", "dark" or "system".
-   *
-   * Owned by the Settings bundle (`shared/features/settings`), which is the one
-   * place allowed to write it - the header toggle and the Appearance pane must
-   * never disagree about which theme is active.
-   */
-  theme: 'cp-theme',
 };
 
 /** Keys this app owns. Anything else in localStorage is left untouched. */
@@ -134,6 +126,10 @@ const OBSOLETE_KEYS = [
   'timetable_file', // upload picks are no longer cached
   'exam_timetable_file',
   'exam_seating_file',
+  // The theme was a bare localStorage key written by the header toggle. It is a
+  // setting now, mirrored under `cp-setting:theme` so the first paint can read
+  // it, and stored on the server so it follows the student between devices.
+  'cp-theme',
 ];
 
 /** Drop every obsolete key. Safe to call repeatedly. */

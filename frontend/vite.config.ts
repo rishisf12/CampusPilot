@@ -43,6 +43,9 @@ const BACKEND = process.env.VITE_DEV_BACKEND || 'http://127.0.0.1:8001';
 const proxied = [
   '/auth',
   '/profile',
+  // The Settings page. Without this entry the endpoint works in Docker and 404s
+  // under `npm run dev`, which test_proxy_coverage exists to catch.
+  '/settings',
   '/schedule',
   '/timetable',
   '/rooms',
