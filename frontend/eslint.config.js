@@ -35,6 +35,7 @@ export default tseslint.config(
             'useAuth',
             'readPendingEmail',
             'useProfile',
+            'useSettings',
             'SECTION_ICONS',
             'SECTION_LABELS',
             'num',

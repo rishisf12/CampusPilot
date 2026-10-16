@@ -11,6 +11,7 @@ import { Sidebar } from '@shared/components/Sidebar';
 const AdminPanel = lazy(() => import('./features/admin/AdminPanel'));
 const Monitoring = lazy(() => import('./features/monitoring/Monitoring'));
 const Profile = lazy(() => import('@shared/features/profile/Profile'));
+const Settings = lazy(() => import('@shared/features/settings/Settings'));
 
 function ModuleLoading() {
   return (
@@ -209,6 +210,7 @@ export function AdminRoutes() {
               <Monitoring platformGroup="Android App Monitoring" />
             )}
             {adminTab === 'profile' && <Profile />}
+            {adminTab === 'settings' && <Settings onOpenProfile={() => setAdminTab('profile')} />}
           </Suspense>
         </ModuleErrorBoundary>
       </main>

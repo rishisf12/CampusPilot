@@ -25,7 +25,12 @@ export function Sidebar({ onClose, isOpen, onSectionChange }: SidebarProps) {
     logout();
     onClose();
   };
+  const handleSettingsNavigate = () => {
+    if (onSectionChange) onSectionChange('settings');
+    onClose();
+  };
   const ProfileIcon = SECTION_ICONS.profile;
+  const SettingsIcon = SECTION_ICONS.settings;
 
   return (
     <>
@@ -96,6 +101,15 @@ export function Sidebar({ onClose, isOpen, onSectionChange }: SidebarProps) {
           >
             <ProfileIcon className="w-5 h-5" />
             <span>Profile</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSettingsNavigate}
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-2xl transition-all duration-200"
+            style={{ color: 'var(--cp-text)' }}
+          >
+            <SettingsIcon className="w-5 h-5" />
+            <span>Settings</span>
           </button>
         </nav>
         <div className="p-4" style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}>

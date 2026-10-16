@@ -90,6 +90,194 @@ export function semesterLabel(value: number): string {
 
 export const ALLOWED_EMAIL_DOMAIN = '@iiitdmj.ac.in';
 
+/**
+ * The Settings bundle's registry: what a user can change, and where each
+ * change is kept.
+ *
+ * This is the file a new setting is added to. Each entry carries its own
+ * persistence target rather than sharing one, because the feature is delivered
+ * in phases: `local` entries are readable today, `server` entries light up when
+ * the persistence phase lands. A registry with one hard-coded mechanism would
+ * have forced a migration for every setting the day persistence arrived.
+ *
+ * Kept as data on purpose - the renderer imports it, so exporting a component
+ * here would break Fast Refresh.
+ */
+
+export type SettingsSectionId = 'appearance' | 'notifications' | 'schedule' | 'account';
+
+export interface SettingsSection {
+  id: SettingsSectionId;
+  label: string;
+  blurb: string;
+}
+
+export type SettingsValue = string | number | boolean;
+
+export interface SettingsEntry {
+  key: string;
+  section: SettingsSectionId;
+  label: string;
+  /** One line under the label saying what the setting does. */
+  help: string;
+  type: 'boolean' | 'string' | 'number' | 'choice';
+  default: SettingsValue;
+  /** For `choice`: the allowed values and their labels. */
+  choices?: { value: string; label: string }[];
+  /** Where the value lives. See the note above. */
+  store: 'local' | 'server';
+  /** Lower sorts first within a section. */
+  order?: number;
+}
+
+/** The tabs of the Settings page, in order. */
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
+  { id: 'appearance', label: 'Appearance', blurb: 'How the app looks on this device.' },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    blurb: 'What the app is allowed to interrupt you for.',
+  },
+  {
+    id: 'schedule',
+    label: 'Schedule & Attendance',
+    blurb: 'How your week and your attendance targets behave.',
+  },
+  { id: 'account', label: 'Account', blurb: 'Your programme, branch, security and sign-in.' },
+];
+
+/** Every user-facing setting, and the value it falls back to. */
+export const SETTINGS_REGISTRY: readonly SettingsEntry[] = [
+  // ---------------------------------------------------------- appearance
+  {
+    key: 'theme',
+    section: 'appearance',
+    label: 'Theme',
+    help: 'Match your system, or pin the app light or dark.',
+    type: 'choice',
+    default: 'system',
+    choices: [
+      { value: 'system', label: 'System' },
+      { value: 'light', label: 'Light' },
+      { value: 'dark', label: 'Dark' },
+    ],
+    store: 'local',
+    order: 1,
+  },
+  {
+    key: 'density',
+    section: 'appearance',
+    label: 'Compact layout',
+    help: 'Tighter rows and padding, to fit more on one screen.',
+    type: 'boolean',
+    default: false,
+    store: 'local',
+    order: 2,
+  },
+
+  // ------------------------------------------------------- notifications
+  {
+    key: 'notify_class_changes',
+    section: 'notifications',
+    label: 'Timetable changes',
+    help: 'Tell me when a class is moved, added or removed.',
+    type: 'boolean',
+    default: true,
+    store: 'server',
+    order: 1,
+  },
+  {
+    key: 'notify_exam_reminders',
+    section: 'notifications',
+    label: 'Exam reminders',
+    help: 'Remind me the day before an exam.',
+    type: 'boolean',
+    default: true,
+    store: 'server',
+    order: 2,
+  },
+  {
+    key: 'notify_attendance_drops',
+    section: 'notifications',
+    label: 'Attendance warnings',
+    help: 'Warn me when a subject falls below my target.',
+    type: 'boolean',
+    default: true,
+    store: 'server',
+    order: 3,
+  },
+
+  // ----------------------------------------------------------- schedule
+  {
+    key: 'week_start',
+    section: 'schedule',
+    label: 'Week starts on',
+    help: 'The day your timetable week is counted from.',
+    type: 'choice',
+    default: 'Mon',
+    choices: [
+      { value: 'Mon', label: 'Monday' },
+      { value: 'Sat', label: 'Saturday' },
+      { value: 'Sun', label: 'Sunday' },
+    ],
+    store: 'server',
+    order: 1,
+  },
+  {
+    key: 'show_empty_slots',
+    section: 'schedule',
+    label: 'Show free periods',
+    help: 'Keep gaps in the timetable visible instead of collapsing them.',
+    type: 'boolean',
+    default: false,
+    store: 'server',
+    order: 2,
+  },
+];
+
+/** The default value of every setting, keyed by setting key. */
+export const SETTINGS_DEFAULTS: Record<string, SettingsValue> = SETTINGS_REGISTRY.reduce(
+  (acc, entry) => {
+    acc[entry.key] = entry.default;
+    return acc;
+  },
+  {} as Record<string, SettingsValue>
+);
+
+/** The settings belonging to one section, in display order. */
+export function settingsForSection(sectionId: SettingsSectionId): readonly SettingsEntry[] {
+  return SETTINGS_REGISTRY.filter(entry => entry.section === sectionId).sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0)
+  );
+}
+
+/**
+ * Coerce a stored value back to its declared type.
+ *
+ * Storage is shared with older builds and can be hand-edited, so a boolean
+ * setting may arrive as the string "false" - which is truthy and would silently
+ * invert the switch. Every read goes through here instead of trusting a cast.
+ */
+export function coerceSetting(entry: SettingsEntry, raw: unknown): SettingsValue {
+  switch (entry.type) {
+    case 'boolean':
+      if (typeof raw === 'boolean') return raw;
+      if (raw === 'true') return true;
+      if (raw === 'false') return false;
+      return entry.default;
+    case 'number': {
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : entry.default;
+    }
+    case 'choice': {
+      const allowed = entry.choices?.map(choice => choice.value) ?? [];
+      return typeof raw === 'string' && allowed.includes(raw) ? raw : entry.default;
+    }
+    default:
+      return typeof raw === 'string' && raw ? raw : entry.default;
+  }
+}
+
 /** Top-level navigation tabs rendered inside the single header. */
 export const NAV_TABS = [
   { id: 'live', label: 'Live Schedule', short: 'Schedule' },

@@ -17,6 +17,7 @@ const LiveSchedule = lazy(() => import('./features/schedule/LiveSchedule'));
 const ExamSeating = lazy(() => import('./features/exams/ExamSeating'));
 const Feedback = lazy(() => import('./features/feedback/Feedback'));
 const Profile = lazy(() => import('@shared/features/profile/Profile'));
+const Settings = lazy(() => import('@shared/features/settings/Settings'));
 
 /** Poll the backend so the header dot reflects real connectivity. */
 function useBackendStatus() {
@@ -69,7 +70,7 @@ export function StudentPGRoutes() {
   const { online, lastSync } = useBackendStatus();
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [section, setSection] = useState<
-    'classroom' | 'my-team' | 'important' | 'feedback' | 'profile'
+    'classroom' | 'my-team' | 'important' | 'feedback' | 'profile' | 'settings'
   >('classroom');
   // Tracks whether the Classroom sub-nav is expanded. Only relevant when section === 'classroom'.
   const [classroomExpanded, setClassroomExpanded] = useState(true);
@@ -310,7 +311,9 @@ export function StudentPGRoutes() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onSectionChange={s =>
-          setSection(s as 'classroom' | 'my-team' | 'important' | 'feedback' | 'profile')
+          setSection(
+            s as 'classroom' | 'my-team' | 'important' | 'feedback' | 'profile' | 'settings'
+          )
         }
       />
 
@@ -361,6 +364,8 @@ export function StudentPGRoutes() {
           {section === 'feedback' && <Feedback />}
 
           {section === 'profile' && <Profile />}
+
+          {section === 'settings' && <Settings onOpenProfile={() => setSection('profile')} />}
         </ModuleErrorBoundary>
       </main>
 

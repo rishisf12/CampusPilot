@@ -2,6 +2,8 @@
 import AuthWrapper, { useAuth } from '@shared/auth/AuthWrapper';
 import { programmeGroupOf } from '@shared/constants';
 import { ProfileProvider } from '@shared/hooks/useProfile';
+import { SettingsProvider } from '@shared/features/settings/SettingsProvider';
+import { useApplyTheme } from '@shared/features/settings/useTheme';
 
 /** Lazy-loaded module entry points */
 const StudentUGModule = lazy(() => import('@modules/student-ug/main'));
@@ -36,28 +38,51 @@ export default function App() {
   );
 }
 
+/**
+ * Keeps <html class="dark"> in step with the theme setting.
+ *
+ * A component rather than a bare hook call so it sits *inside* SettingsProvider -
+ * the effect reads the store, and calling it above the provider would throw.
+ * Renders nothing.
+ */
+function ThemeSync() {
+  useApplyTheme();
+  return null;
+}
+
+function AppProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <ProfileProvider>
+      <SettingsProvider>
+        <ThemeSync />
+        {children}
+      </SettingsProvider>
+    </ProfileProvider>
+  );
+}
+
 function AppRouter() {
   const { user } = useAuth();
 
   // Admin sees the admin module regardless of programme
   if ((user?.role || 'student') === 'admin') {
     return (
-      <ProfileProvider>
+      <AppProviders>
         <Suspense fallback={<ModuleLoading />}>
           <AdminModule />
         </Suspense>
-      </ProfileProvider>
+      </AppProviders>
     );
   }
 
   // Faculty (future)
   if ((user?.role || 'student') === 'faculty') {
     return (
-      <ProfileProvider>
+      <AppProviders>
         <Suspense fallback={<ModuleLoading />}>
           <FacultyModule />
         </Suspense>
-      </ProfileProvider>
+      </AppProviders>
     );
   }
 
@@ -66,20 +91,20 @@ function AppRouter() {
 
   if (group === 'UG') {
     return (
-      <ProfileProvider>
+      <AppProviders>
         <Suspense fallback={<ModuleLoading />}>
           <StudentUGModule />
         </Suspense>
-      </ProfileProvider>
+      </AppProviders>
     );
   }
 
   // PG + PHD both use the student-pg module
   return (
-    <ProfileProvider>
+    <AppProviders>
       <Suspense fallback={<ModuleLoading />}>
         <StudentPGModule />
       </Suspense>
-    </ProfileProvider>
+    </AppProviders>
   );
 }

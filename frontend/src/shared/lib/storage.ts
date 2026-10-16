@@ -20,10 +20,31 @@ const KEYS = {
   pendingVerification: 'pending_verification_email',
   /** Flag that makes the sign-in page show "Email verified, please sign in". */
   emailJustVerified: 'email_just_verified',
+  /**
+   * Colour scheme: "light", "dark" or "system".
+   *
+   * Owned by the Settings bundle (`shared/features/settings`), which is the one
+   * place allowed to write it - the header toggle and the Appearance pane must
+   * never disagree about which theme is active.
+   */
+  theme: 'cp-theme',
 };
 
 /** Keys this app owns. Anything else in localStorage is left untouched. */
 export const STORAGE_KEYS = Object.values(KEYS);
+
+/**
+ * Namespace for per-setting keys owned by the Settings bundle.
+ *
+ * A setting is written under `cp-setting:<key>` rather than as a bare key so it
+ * can never collide with a session key, and so a whole user preference record
+ * can be found (and later dropped) by prefix when settings move to the server.
+ */
+export const SETTING_PREFIX = 'cp-setting:';
+
+export function settingStorageKey(key: string): string {
+  return `${SETTING_PREFIX}${key}`;
+}
 
 /**
  * Read a key, tolerating storage being unavailable (private browsing, or a

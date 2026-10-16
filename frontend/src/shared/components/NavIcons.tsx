@@ -1,4 +1,12 @@
-﻿import { Activity, AlertCircle, CalendarDays, MessageSquare, UserCog, Users } from 'lucide-react';
+﻿import {
+  Activity,
+  AlertCircle,
+  CalendarDays,
+  MessageSquare,
+  Settings as SettingsIcon,
+  UserCog,
+  Users,
+} from 'lucide-react';
 
 export const SECTION_ICONS = {
   classroom: ({ className = 'w-5 h-5' }: { className?: string }) => (
@@ -19,6 +27,9 @@ export const SECTION_ICONS = {
   important: ({ className = 'w-5 h-5' }: { className?: string }) => (
     <AlertCircle className={className} strokeWidth={2} aria-hidden />
   ),
+  settings: ({ className = 'w-5 h-5' }: { className?: string }) => (
+    <SettingsIcon className={className} strokeWidth={2} aria-hidden />
+  ),
 };
 
 export const SECTION_LABELS: Record<string, string> = {
@@ -27,4 +38,5 @@ export const SECTION_LABELS: Record<string, string> = {
   important: 'Important',
   feedback: 'Feedback',
   profile: 'Profile',
+  settings: 'Settings',
 };
