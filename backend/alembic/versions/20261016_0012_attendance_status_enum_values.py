@@ -125,7 +125,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Put the uppercase names back, so downgrade is a real round trip."""
+    """Deliberately a no-op on a correctly-labelled database.
+
+    The obvious inverse of this migration is to relabel the values back to the
+    uppercase names. That would be a downgrade that knowingly reintroduces the
+    bug: the initial migration has been corrected to create the value labels,
+    so a database at revision 011 is expected to hold them, and writing the
+    names back would put it into the broken state this migration exists to fix.
+
+    So the downgrade returns early whenever the labels are already correct and
+    leaves them alone. The name-restore below only runs when the type holds
+    labels that are neither form - a torn-down database - where leaving them
+    unrecognised would make the next upgrade fail on the CASE.
+    """
     bind = op.get_bind()
     if bind.dialect.name != 'postgresql':
         return
