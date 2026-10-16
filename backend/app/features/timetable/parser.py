@@ -375,20 +375,23 @@ def _tokenize_cell(cell: str) -> List[str]:
             # Check if "/" is between two course-like codes (e.g., OE3M27/ME5D02)
             # Don't split if it joins two course-like codes
             if char == "/":
-                left = buffer[-1] if buffer else ""
-                right = text[index + 1] if index + 1 < length else ""
-                # Don't split if both sides look like course code characters
-                if left.isalnum() and right.isalnum():
+                # Compare whole tokens, not single characters: "ME3001/SKC/CR-208"
+                # is three fields, and its slash sits between alnum characters on
+                # both sides too. Only a pair of real course codes joined by a
+                # slash ("OE3M27/ME5D02") belongs together.
+                right = text[index + 1:] if index + 1 < length else ""
+                right_match = re.match(r"[A-Za-z0-9]+", right)
+                right_word = right_match.group(0) if right_match else ""
+                left_word = buffer.strip()
+                if _is_course(left_word) and _is_course(right_word):
                     buffer += char
                     index += 1
                     continue
-                # Also don't split if left is digits and right starts a course code (e.g., "27/ME5D02")
-                if left.isdigit() and right.isalpha():
-                    # Check if right side starts a course code pattern
-                    if index + 1 < length and re.match(r"^[A-Z]{2}\d", text[index+1:], re.IGNORECASE):
-                        buffer += char
-                        index += 1
-                        continue
+                # A leading group digit: "27/ME5D02" - digits then a course code.
+                if left_word.isdigit() and _is_course(right_word):
+                    buffer += char
+                    index += 1
+                    continue
 
             if buffer.strip():
                 tokens.append(buffer.strip())
