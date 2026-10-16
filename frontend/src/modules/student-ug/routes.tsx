@@ -282,7 +282,7 @@ export function StudentUGRoutes() {
           {/* Third row: Classroom sub-tabs (only when Classroom is active AND expanded) */}
           {section === 'classroom' && classroomExpanded && (
             <div
-              className="flex items-center justify-center gap-1 py-1 overflow-x-auto"
+              className="flex items-center justify-center gap-1 overflow-x-auto"
               style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
             >
               <Tabs tabs={CLASSROOM_TABS} active={activeTab} onChange={selectTab} />
@@ -322,10 +322,7 @@ export function StudentUGRoutes() {
       />
 
       {/* Content, centred */}
-      <main
-        role="tabpanel"
-        className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-10"
-      >
+      <main role="tabpanel" className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-1">
         <ModuleErrorBoundary moduleName="student-ug">
           {offline && !online && (
             <ErrorBanner

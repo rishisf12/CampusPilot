@@ -183,8 +183,8 @@ export default function LiveSchedule({ onError, onJumpTab }: LiveScheduleProps) 
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2">
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 py-0.5">
         <Tabs
           tabs={SUB_TABS.map(item => ({ id: item.id, label: item.label }))}
           active={subTab}

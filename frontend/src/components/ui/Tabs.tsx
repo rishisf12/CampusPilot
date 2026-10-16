@@ -103,7 +103,7 @@ export default function Tabs({
       ref={listRef}
       role="tablist"
       onKeyDown={onKeyDown}
-      className={`relative flex gap-1 overflow-x-auto scrollbar-thin ${underline ? 'px-1' : 'p-1'}`}
+      className={`relative flex gap-1 overflow-x-auto scrollbar-thin ${underline ? 'px-0.5' : 'p-0.5'}`}
       style={
         underline
           ? { borderBottom: '1px solid rgba(163,177,198,.3)' }
@@ -149,7 +149,7 @@ export default function Tabs({
               // is horizontal, where a slightly shorter target costs less than a
               // permanently half-hidden header. The underline variant carries no
               // pill to hit, so it can go shorter still.
-              minHeight: underline ? 32 : 36,
+              minHeight: underline ? 20 : 24,
               borderRadius: 6,
               color: underline
                 ? on
