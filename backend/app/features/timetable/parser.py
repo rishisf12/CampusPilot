@@ -345,11 +345,27 @@ def _tokenize_cell(cell: str) -> List[str]:
                 index += 1
                 continue
 
-            # Lab batch suffix: buffer ends with 'L' and right is a single letter (e.g., ME3011L-A).
-            if buffer.upper().endswith("L") and right.isalpha() and len(right) == 1:
-                buffer += char
-                index += 1
-                continue
+            # Lab batch suffix: buffer ends with 'L' and the *whole run* after the
+            # dash is a single letter, e.g. "ME3011L-A".
+            #
+            # The run has to be measured, not the next character. `right` is one
+            # character by construction (text[index + 1]), so a `len(right) == 1`
+            # guard is vacuously true and fires for any letter at all. That welded
+            # the teacher into the code for the most common cell shape in the
+            # timetable - "CS3010L-AG", "IT2002L-JKT", "ME3010L-MZA" all became one
+            # token, and since a welded token is not a course shape, both the
+            # course code and the instructor came back empty.
+            #
+            # Two or three letters after the dash are initials, not a batch
+            # marker, so those split as normal.
+            if buffer.upper().endswith("L") and right.isalpha():
+                run_end = index + 1
+                while run_end < length and text[run_end].isalpha():
+                    run_end += 1
+                if run_end - (index + 1) == 1:
+                    buffer += char
+                    index += 1
+                    continue
 
             # Em dash (—) used as "no instructor" marker - preserve as separate token.
             if char == "—":
@@ -648,13 +664,18 @@ def split_slot_cell(cell: str) -> tuple[str, str, str]:
         if compact in consumed:
             continue
         if not course_code and _is_course(compact):
-            # Keep lab suffix (trailing 'L') - it identifies the lab component.
-            # Only strip a single trailing letter if it's NOT 'L' (for cases like ME3010A).
-            if re.match(r"^[A-Z]{2,4}\d{3,4}L$", compact, re.IGNORECASE):
-                course_code = compact  # Keep ME3010L, CS3010L, etc.
-            else:
-                # Strip trailing single letter (e.g., ME3010A -> ME3010)
-                course_code = re.sub(r'^([A-Z]{2,4}\d{3,4})[A-Z]$', r'\1', compact)
+            # The code is kept exactly as written, trailing letter included.
+            #
+            # A trailing letter is a section marker, not noise: EC204A and
+            # EC204B are two different papers sharing one cell, and the slot has
+            # to keep whichever one this row is. Stripping the letter used to
+            # collapse both to "EC204", which merges two courses into one and
+            # loses the distinction the timetable is making.
+            #
+            # Genuinely glued-on text (ME8016HSN, EC5C01_MDB) is separated much
+            # earlier, by _split_welded_code, so there is nothing left to strip
+            # here. Tutorial suffixes ("NS1001T") are unwound in _repair_course_code.
+            course_code = compact
             consumed.add(compact)
 
     # Pass 2: what is left over is the instructor, unless there is no course.
@@ -806,20 +827,23 @@ def _split_welded_code(tokens: List[str]) -> List[str]:
             continue
         final.append(token)
 
-    # Fourth pass: detect "Batch" + letter and append to nearest course code
-    # Tokens like ["ME3010L", "MZA", "Batch", "A", "CPPS", "Lab"]
-    # -> append "A" to "ME3010L" -> "ME3010L-A"
+    # Fourth pass: drop "Batch" and its letter.
+    #
+    # The batch letter used to be appended to the course code, turning
+    # "ME3010L" into "ME3010L-A". That is not what a batch marker is: it says
+    # which group the class is for, not which paper it is, so welding it onto
+    # the code creates a paper that does not exist and breaks the join back to
+    # the real course. It is dropped, like "Lab" and "Workshop" beside it.
+    #
+    # Tokens like ["ME3010L", "MZA", "Batch", "A", "CPPS", "Lab"] -> the batch
+    # pair is removed and "ME3010L" is left alone.
+    batch_letter = ""
     if "Batch" in final:
         batch_idx = final.index("Batch")
         if batch_idx + 1 < len(final):
-            letter = final[batch_idx + 1].strip().upper()
-            if re.fullmatch(r"[A-Z]", letter):
-                batch_letter = letter
-                # Find the course code token (first one that looks like a course)
-                for i, t in enumerate(final):
-                    if _is_course(t.upper().replace(" ", "")):
-                        final[i] = f"{t}-{letter}"
-                        break
+            candidate = final[batch_idx + 1].strip().upper()
+            if re.fullmatch(r"[A-Z]", candidate):
+                batch_letter = candidate
 
     # Remove "Batch" and its letter from the token list
     if batch_letter:

@@ -56,7 +56,12 @@ class TestDaySections:
     def test_reads_every_slot(self):
         slots, warnings = parse_day_section_timetable([DAY_SECTION_TABLE])
         assert warnings == []
-        assert len(slots) == 13
+        # 14, not 13. The "CS3010L-AG-CC-3F" cell used to be dropped entirely,
+        # because a lab code and the teacher's initials were welded into one
+        # token that matched no course shape. The row was real all along, so the
+        # old count of 13 recorded the parser's blind spot rather than the
+        # number of classes in the table.
+        assert len(slots) == 14
 
     def test_days_come_from_the_section_markers(self):
         slots, _ = parse_day_section_timetable([DAY_SECTION_TABLE])
@@ -98,9 +103,31 @@ class TestPackedCells:
     def test_spaced_course_code(self):
         """The grid writes "HS 1001 -MA- L106" with spaces."""
         slots, _ = parse_day_section_timetable([DAY_SECTION_TABLE])
-        entry = next(s for s in slots if s["course_code"].startswith("HS1001"))
+        # Selected by room, not by course code: the table runs two separate
+        # HS1001 classes ("JAMF" in L-102 and "MA" in L-106), so picking the
+        # first match by course_code silently tested whichever one the parser
+        # happened to emit first rather than the row this is about.
+        entry = next(s for s in slots if s["room"] == "L-106" and s["course_code"].startswith("HS1001"))
         assert entry["instructor"] == "MA"
-        assert entry["room"] == "L-106"
+
+    def test_a_half_and_half_paper_keeps_both_halves(self):
+        """HS1001 is taught by two people, so it appears twice - on purpose.
+
+        The paper is split half-and-half between JAMF and MA, each in a
+        different slot on the same day. That is two rows, not one row with two
+        names, because the two halves meet at different times and in different
+        rooms, and a student has to be told when and where to turn up.
+
+        Worth stating explicitly: nothing downstream should collapse these on
+        course code. Two slots sharing a course code is correct here, and
+        de-duplicating them would silently delete half of a student's week.
+        """
+        slots, _ = parse_day_section_timetable([DAY_SECTION_TABLE])
+        halves = [s for s in slots if s["course_code"] == "HS1001"]
+        assert {(s["instructor"], s["room"]) for s in halves} == {
+            ("JAMF", "L-102"),
+            ("MA", "L-106"),
+        }
 
     def test_lab_course_code_keeps_its_trailing_letter(self):
         """'CS3010L' is a lab paper, not a room that swallowed the code."""
