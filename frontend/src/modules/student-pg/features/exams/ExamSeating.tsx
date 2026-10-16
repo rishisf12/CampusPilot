@@ -409,8 +409,8 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
       )}
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      {/* Upload cards, side by side whether or not they hold data */}
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* Upload cards, always on a single horizontal row */}
+      <div className="flex flex-nowrap gap-4 overflow-x-auto">
         <ExamUploadCard
           title="Exam Timetable"
           kind="timetable"
@@ -650,37 +650,39 @@ function ExamUploadCard({ title, kind, count, onUpload, onRemove }: ExamUploadCa
   const loadObjectUrl = useCallback(() => examApi.previewObjectUrl(kind), [kind]);
 
   return (
-    <FileUpload label={title} accept=".pdf,.csv" onUpload={onUpload}>
-      {count > 0 && (
-        <div
-          className="mt-3 pt-3 border-t space-y-2"
-          style={{ borderColor: 'rgba(163,177,198,.3)' }}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium" style={{ color: 'var(--cp-text)' }}>
-              Uploaded ({count} entries)
-            </span>
-            <Button
-              type="button"
-              onClick={onRemove}
-              variant="ghost"
-              size="sm"
-              icon={<Trash2 size={14} strokeWidth={2} />}
-            >
-              Remove
-            </Button>
-          </div>
+    <div className="max-w-[calc(50%-0.5rem)] shrink-0">
+      <FileUpload label={title} accept=".pdf,.csv" onUpload={onUpload}>
+        {count > 0 && (
+          <div
+            className="mt-3 pt-3 border-t space-y-2"
+            style={{ borderColor: 'rgba(163,177,198,.3)' }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium" style={{ color: 'var(--cp-text)' }}>
+                Uploaded ({count} entries)
+              </span>
+              <Button
+                type="button"
+                onClick={onRemove}
+                variant="ghost"
+                size="sm"
+                icon={<Trash2 size={14} strokeWidth={2} />}
+              >
+                Remove
+              </Button>
+            </div>
 
-          <UploadPreview
-            refreshKey={count}
-            fetchLatest={fetchLatest}
-            loadObjectUrl={loadObjectUrl}
-            rowClassName="flex items-center justify-between gap-2"
-            emptyHint="No preview available - upload the file again to preview it."
-          />
-        </div>
-      )}
-    </FileUpload>
+            <UploadPreview
+              refreshKey={count}
+              fetchLatest={fetchLatest}
+              loadObjectUrl={loadObjectUrl}
+              rowClassName="flex items-center justify-between gap-2"
+              emptyHint="No preview available - upload the file again to preview it."
+            />
+          </div>
+        )}
+      </FileUpload>
+    </div>
   );
 }
 
