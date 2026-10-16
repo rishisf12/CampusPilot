@@ -84,13 +84,13 @@ export default function Tabs({
       ref={listRef}
       role="tablist"
       onKeyDown={onKeyDown}
-      className="relative flex gap-1 p-1.5 overflow-x-auto scrollbar-thin"
+      className="relative flex gap-1 p-1 overflow-x-auto scrollbar-thin"
       style={{ borderRadius: 8, background: 'var(--cp-bg)', boxShadow: 'var(--cp-neu-inset)' }}
     >
       {/* Sliding active indicator. Killed by the global reduced-motion rule. */}
       <span
         aria-hidden
-        className="absolute top-1.5 bottom-1.5 transition-all duration-200"
+        className="absolute top-1 bottom-1 transition-all duration-200"
         style={{
           left: indicator.left,
           width: indicator.width,
@@ -116,7 +116,12 @@ export default function Tabs({
             onClick={() => onChange(t.id)}
             className="relative inline-flex items-center justify-center gap-2 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-200"
             style={{
-              minHeight: 44,
+              // 36px, not the 44px the platform guidelines suggest: this strip
+              // stacks under two more rows and the page reads as a wall of
+              // chrome. Still comfortably above the 24px minimum, and the row
+              // is horizontal, where a slightly shorter target costs less than a
+              // permanently half-hidden header.
+              minHeight: 36,
               borderRadius: 6,
               color: on ? 'var(--cp-on-primary)' : 'var(--cp-muted)',
             }}

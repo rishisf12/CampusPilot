@@ -282,7 +282,7 @@ export function StudentUGRoutes() {
           {/* Third row: Classroom sub-tabs (only when Classroom is active AND expanded) */}
           {section === 'classroom' && classroomExpanded && (
             <div
-              className="flex items-center justify-center gap-1 py-2 overflow-x-auto"
+              className="flex items-center justify-center gap-1 py-1 overflow-x-auto"
               style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
             >
               <Tabs tabs={CLASSROOM_TABS} active={activeTab} onChange={selectTab} />
