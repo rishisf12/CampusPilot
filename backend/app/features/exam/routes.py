@@ -23,8 +23,10 @@ from features.exam.clash import (
 from features.exam.lookup import fill_rooms_from_seating, lookup_roll
 from features.exam.parser import (
     exam_row_visible,
+    is_open_elective,
     parse_mid_sem_file,
     parse_seating_index_file,
+    roll_in_range,
 )
 from features.exam.pdf import generate_exam_pdf
 from features.profile.service import elective_codes, get_profile_for_user, profile_to_filter
@@ -319,14 +321,31 @@ def list_exam_clashes(
 
 @router.get("/seating")
 def list_exam_seating(
+    roll: Optional[str] = Query(
+        None,
+        description="Roll number; defaults to the signed-in student's own roll number",
+    ),
     limit: int = Query(200, ge=1, le=2000),
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    """Seating-index rows for the signed-in student, grouped by day."""
+    """
+    Seating-index rows for the signed-in student, grouped by day.
+
+    Two-layer filtering:
+
+    1. **Profile sync filter** - rows are filtered against the student's branch,
+       semester and elective codes so only papers that are theirs appear.
+    2. **Roll number range match** - each row's roll range is checked against the
+       target roll (the ``roll`` query parameter, or the student's own roll
+       number from their profile). Only rows whose range contains the roll pass.
+    """
     profile = get_profile_for_user(session, user)
     profile_filter = profile_to_filter(profile, session)
     extras = elective_codes(profile)
+
+    # Layer 2 target roll: query parameter wins, then the profile's own roll.
+    target_roll = (roll or (user.roll_number or "")).strip().upper() or None
 
     stored = session.exec(select(ExamSeating)).all()
     rows: List[Dict[str, Any]] = []
@@ -345,13 +364,33 @@ def list_exam_seating(
             "semester": item.semester,
             "is_extra": bool(item.is_extra),
         }
-        if exam_row_visible(row, profile_filter, extras):
-            rows.append(row)
+
+        # Layer 1: profile sync (branch / semester / electives).
+        if not exam_row_visible(row, profile_filter, extras):
+            continue
+
+        # Layer 2: roll number range match. Only applies when we have a roll
+        # to match against; without one, every profile-visible row is shown.
+        if target_roll:
+            try:
+                if not roll_in_range(
+                    target_roll,
+                    row["roll_start_prefix"],
+                    row["roll_start_num"],
+                    row["roll_end_num"],
+                ):
+                    continue
+            except ValueError:
+                # Malformed roll in the stored row - skip it.
+                continue
+
+        rows.append(row)
 
     grouped = _group_by_day(rows, "seating_date")
     return {
         "total": len(rows),
         "profile": {"branch": profile_filter["branch"], "semester": profile_filter["semester"]},
+        "roll": target_roll,
         "days": [
             {
                 "date": key,
