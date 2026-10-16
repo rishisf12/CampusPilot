@@ -266,13 +266,17 @@ function ScheduleView({
       .sort((a, b) => a.sort_key - b.sort_key);
 
     let next: ProfileCourseLike | null = null;
-    WEEKDAY_ORDER.forEach((day, offset) => {
-      if (next) return;
+    // Walk forward from today, wrapping. The "already started" cut applies only
+    // to today: WEEKDAY_ORDER[0] is Monday, so a plain forEach would wrongly
+    // skip Monday's morning classes and leap to Tuesday.
+    const todayIndex = WEEKDAY_ORDER.indexOf(today);
+    for (let step = 0; step < WEEKDAY_ORDER.length && !next; step++) {
+      const day = WEEKDAY_ORDER[(todayIndex + step) % WEEKDAY_ORDER.length];
       const candidates = myClasses
-        .filter(slot => slot.day === day && (offset > 0 || toMinutes(slot.start_time) > now))
+        .filter(slot => slot.day === day && (step > 0 || toMinutes(slot.start_time) > now))
         .sort((a, b) => a.sort_key - b.sort_key);
       if (candidates.length) next = candidates[0];
-    });
+    }
 
     return { todaySlots: todays, upcoming: next };
   }, [myClasses, today]);

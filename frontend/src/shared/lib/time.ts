@@ -20,6 +20,22 @@ export function todayWeekday(now = new Date()): string {
   return long.slice(0, 3);
 }
 
+/** Weekday order used across the timetable, starting Monday. */
+export const WEEKDAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/**
+ * Days from today until `target` (0 = today), wrapping forward.
+ *
+ * A class on Monday is "3 days away" on Friday, not "4 days ago": without the
+ * wrap the countdown would read "starting now" for something days out.
+ */
+export function daysUntilWeekday(target: string, now = new Date()): number {
+  const today = WEEKDAY_ORDER.indexOf(todayWeekday(now));
+  const idx = WEEKDAY_ORDER.indexOf(target);
+  if (idx < 0 || today < 0) return 0;
+  return (idx - today + 7) % 7;
+}
+
 export interface IstNowResult {
   date: string;
   time: string;

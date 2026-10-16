@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock, DoorOpen, FileText } from 'lucide-react';
 import { Badge, Button, Card } from '@/components/ui';
-import { formatTime as formatClock, istNow } from '@shared/lib/time';
+import { formatTime as formatClock, daysUntilWeekday, istNow } from '@shared/lib/time';
 import { toMinutes } from '@shared/lib/normalise';
 
 export interface HomeClass {
@@ -46,7 +46,12 @@ function minutesUntil(startTime: string, nowMinutes: number): number {
   return Math.max(0, toMinutes(startTime) - nowMinutes);
 }
 
-function formatCountdown(totalMins: number): string {
+function formatCountdown(totalMins: number, dayOffset = 0): string {
+  // A class later in the week is never "starting now"; say which day instead.
+  if (dayOffset > 0) {
+    if (dayOffset === 1) return 'tomorrow';
+    return `in ${dayOffset} days`;
+  }
   if (totalMins < 1) return 'starting now';
   if (totalMins < 60) return `in ${totalMins} min`;
   const h = Math.floor(totalMins / 60);
@@ -98,9 +103,16 @@ export default function ScheduleHome({
 
   const nowMinutes = istNow().minutes;
   const next = nextClass;
+  // The next class can fall on a later weekday once today is over, so ask the
+  // day-aware helper instead of assuming it is today.
+  const nextOffset = next ? daysUntilWeekday(next.day) : 0;
   // Friendly empty states name the next class when there is one.
   const nextHint = next
-    ? `Next one starts at ${formatClock(next.start_time)} in Room ${next.room || 'TBA'}.`
+    ? nextOffset > 0
+      ? `Next class is ${nextOffset === 1 ? 'tomorrow' : next.day} at ${formatClock(
+          next.start_time
+        )} in Room ${next.room || 'TBA'}.`
+      : `Next one starts at ${formatClock(next.start_time)} in Room ${next.room || 'TBA'}.`
     : null;
 
   return (
@@ -198,14 +210,14 @@ export default function ScheduleHome({
               style={{ color: 'var(--cp-warning)' }}
               aria-live="off"
             >
-              {formatCountdown(minutesUntil(next.start_time, nowMinutes))}
+              {formatCountdown(minutesUntil(next.start_time, nowMinutes), nextOffset)}
             </span>
           </div>
           <p className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
             {courseLabel(next)}
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
-            Room {next.room || 'TBA'}
+            {nextOffset > 0 ? `${next.day} · ` : ''}Room {next.room || 'TBA'}
             {next.instructor ? ` · ${next.instructor}` : ''}
             {' · '}
             {formatClock(next.start_time)} - {formatClock(next.end_time)}
