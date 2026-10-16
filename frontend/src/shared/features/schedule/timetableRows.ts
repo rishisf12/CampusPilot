@@ -1,14 +1,12 @@
-import { Badge } from '@/components/ui';
 import type { TimetableSlot } from '@shared/types/api';
-import { formatTime } from '@shared/lib/time';
 import { toMinutes } from '@shared/lib/normalise';
 
 /**
- * The rows of one day in the timetable.
+ * Pure helpers for the by-day timetable.
  *
- * Shared by the undergraduate and postgraduate schedules, which render the same
- * grid. It was duplicated between the two modules before; the copy is what let
- * one of them gain a setting and the other quietly not have it.
+ * Kept apart from `TimetableRows.tsx` so they can be unit-tested without pulling
+ * React and the component barrel into a Node test run. Nothing here touches the
+ * DOM or the settings store.
  */
 
 /**
@@ -35,59 +33,6 @@ export function subjectTint(courseCode: string): { bg: string; edge: string } {
   };
 }
 
-/**
- * A class row in the by-day timetable.
- *
- * Generic over the slot so each module's richer slot type flows through to its
- * `onOpen` handler - the row only needs the fields below, but the caller knows
- * the whole object.
- */
-export function SlotRow<T extends TimetableSlot>({
-  slot,
-  onOpen,
-}: {
-  slot: T;
-  onOpen: (slot: T) => void;
-}) {
-  const tint = subjectTint(slot.course_code);
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(slot)}
-      aria-label={`${slot.course_code}, ${formatTime(slot.start_time)} to ${formatTime(slot.end_time)}, Room ${slot.room || 'TBA'}. Show details.`}
-      className="w-full text-left flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 row-pad transition-transform duration-150 active:scale-[0.98] hover:-translate-y-px"
-      style={{
-        background: tint.bg,
-        boxShadow: 'var(--cp-neu-inset)',
-        borderLeft: `4px solid ${tint.edge}`,
-      }}
-    >
-      <span
-        className="font-mono text-sm font-semibold w-24 shrink-0"
-        style={{ color: 'var(--cp-text)' }}
-      >
-        {slot.course_code}
-      </span>
-
-      <span className="text-xs w-20 shrink-0" style={{ color: 'var(--cp-muted)' }}>
-        {slot.instructor || '—'}
-      </span>
-
-      <Badge tone="neutral" className="font-mono shrink-0">
-        {slot.room || 'TBA'}
-      </Badge>
-
-      <Badge tone="info" className="whitespace-nowrap">
-        {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-      </Badge>
-
-      <span className="text-xs truncate" style={{ color: 'var(--cp-muted)' }}>
-        {slot.branch_or_program}
-      </span>
-    </button>
-  );
-}
-
 /** A gap shorter than this is breathing room, not a free period worth naming. */
 export const FREE_PERIOD_MINUTES = 45;
 
@@ -97,7 +42,7 @@ export type TimetableDayRow<T extends TimetableSlot = TimetableSlot> =
 /**
  * One day's classes, with a free-period marker in each long enough gap.
  *
- * Only gaps between consecutive classes are marked. The gap before the first
+ * Only gaps *between consecutive classes* are marked. The run before the first
  * class is just the morning, and a row for it would put "Free 7:00 - 9:00" above
  * every day including the ones that start at 9:00.
  */

@@ -306,6 +306,12 @@ export function settingsForSection(sectionId: SettingsSectionId): readonly Setti
  * invert the switch. Every read goes through here instead of trusting a cast.
  */
 export function coerceSetting(entry: SettingsEntry, raw: unknown): SettingsValue {
+  // Checked before the per-type branches because they each treat it differently,
+  // and one of them was actively wrong: `Number(null)` is 0, so a null in the
+  // document would have read an unset number as 0 rather than as unset - an
+  // attendance target of 0% rather than 75%.
+  if (raw === null || raw === undefined || raw === '') return entry.default;
+
   switch (entry.type) {
     case 'boolean':
       if (typeof raw === 'boolean') return raw;

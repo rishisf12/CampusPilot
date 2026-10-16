@@ -2,6 +2,7 @@ import type { SettingsEntry, SettingsSectionId } from '@shared/constants';
 import { settingsForSection } from '@shared/constants';
 import SettingRow from '../SettingRow';
 import { useSettings } from '../SettingsProvider';
+import { serverSettingsLoaded } from '../useSettings';
 import type { AccountPaneProps } from '../sections/AccountSection';
 import type { Pane } from './panes';
 
@@ -29,6 +30,7 @@ export default function SettingsPane({ pane, sectionId, accountProps }: Settings
 
   const entries: readonly SettingsEntry[] = settingsForSection(sectionId);
   const modified = settings.isSectionModified(sectionId);
+  const waitingForServer = entries.some(e => e.store === 'server') && !serverSettingsLoaded();
 
   return (
     <div className="rounded-3xl p-5" style={{ background: 'var(--cp-surface)' }}>
@@ -51,7 +53,9 @@ export default function SettingsPane({ pane, sectionId, accountProps }: Settings
         </button>
       </div>
       <p className="text-xs mb-2" style={{ color: 'var(--cp-muted)' }}>
-        Changes save as you make them - there is no save button.
+        {waitingForServer
+          ? 'Loading your saved settings…'
+          : 'Changes save as you make them - there is no save button.'}
       </p>
       <div>
         {entries.map(entry => (

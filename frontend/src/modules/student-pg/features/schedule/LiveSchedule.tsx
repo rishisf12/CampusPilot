@@ -57,7 +57,8 @@ function courseLabel(item: CourseLike): string {
 }
 
 import ScheduleHome from '@shared/features/schedule/ScheduleHome';
-import { SlotRow, formatDuration, rowsForDay } from '@shared/features/schedule/TimetableRows';
+import { SlotRow } from '@shared/features/schedule/TimetableSlotRow';
+import { formatDuration, rowsForDay } from '@shared/features/schedule/timetableRows';
 import { useSettings } from '@shared/features/settings/SettingsProvider';
 
 interface LiveScheduleProps {

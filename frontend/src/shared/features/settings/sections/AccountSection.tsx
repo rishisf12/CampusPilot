@@ -1,8 +1,9 @@
-import { ExternalLink, Trash2 } from 'lucide-react';
+import { ExternalLink, RotateCcw, Trash2 } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import ManagePasskeys from '@shared/auth/ManagePasskeys';
 import { readQuickLookup, writeQuickLookup } from '@shared/lib/storage';
 import { useState } from 'react';
+import { resetAllSettings } from '../useSettings';
 
 /**
  * Account pane.
@@ -24,6 +25,7 @@ export interface AccountPaneProps {
 
 export default function AccountSection({ onOpenProfile }: AccountPaneProps) {
   const [cleared, setCleared] = useState(false);
+  const [reset, setReset] = useState(false);
 
   const clearCachedLookups = () => {
     writeQuickLookup(null);
@@ -97,6 +99,38 @@ export default function AccountSection({ onOpenProfile }: AccountPaneProps) {
             A cached lookup is stored on this device.
           </p>
         )}
+      </Card>
+
+      <Card className="space-y-3">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Reset settings
+        </h3>
+        <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
+          Puts every setting on this account back to its default, including the ones saved on your
+          other devices. Your profile, timetable and passkeys are not affected.
+        </p>
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            icon={<RotateCcw size={16} strokeWidth={2} aria-hidden />}
+            onClick={() => {
+              // Destructive and hard to undo from the settings page itself, so it
+              // asks first - unlike the per-section resets, which are one tab away.
+              if (!window.confirm('Reset every setting on your account?')) return;
+              resetAllSettings();
+              setReset(true);
+            }}
+          >
+            Reset all settings
+          </Button>
+          {reset && (
+            <span className="text-xs" style={{ color: 'var(--cp-success)' }}>
+              Everything is back to default.
+            </span>
+          )}
+        </div>
       </Card>
     </div>
   );

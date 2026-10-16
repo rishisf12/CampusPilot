@@ -218,6 +218,27 @@ export function clearSettingsCache(): void {
   invalidate();
 }
 
+/**
+ * Put every setting back to its default, everywhere at once.
+ *
+ * Local keys are removed and the server document is cleared in one call rather
+ * than patched key by key: a partial reset that left one stray key behind is
+ * exactly what "reset everything" must not do.
+ */
+export function resetAllSettings(): void {
+  for (const entry of SETTINGS_REGISTRY) {
+    if (entry.store === 'local' || entry.mirror) {
+      writeValue(settingStorageKey(entry.key), null);
+    }
+  }
+  serverValues = {};
+  serverLoaded = true;
+  invalidate();
+  settingsApi.clear().catch(() => {
+    /* offline: the local reset still stands and the next load reconciles */
+  });
+}
+
 export interface SettingsStore {
   /** Current value of a setting, coerced. Server entries report the default until loaded. */
   get(key: string): SettingsValue;
