@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, delete, select
 
 from core.database import get_session
-from models import ExamSeating, ExamUpload, MidSemSchedule, TimetableSlot, User
+from models import ExamSeating, ExamUpload, MidSemSchedule, User
 from core.deps import get_current_admin, get_current_user
 from core.files import UPLOAD_DIR, save_upload, validate_upload
 from features.exam.clash import (
@@ -30,6 +30,7 @@ from features.exam.parser import (
     split_course_codes,
 )
 from features.exam.pdf import generate_exam_pdf
+from features.attendance.service import get_subjects, sync_courses_from_timetable
 from features.profile.service import elective_codes, get_profile_for_user, profile_to_filter
 
 logger = logging.getLogger(__name__)
@@ -236,15 +237,13 @@ def list_exam_timetable(
     """
     Mid-sem timetable for the signed-in student, grouped by day.
 
-    Two filters: rule 1 of the lookup (profile branch, semester and elective
-    codes), then an intersection with the student's own class timetable - a
-    paper shows only for a course whose code sits in their timetable, joined to
-    its instructor so the list reads like the class timetable does.
+    The profile decides: papers show only for courses the student's subjects
+    list gives them - the synced course_code + instructor set the Profile
+    screen shows - with the instructor carried onto each row.
     """
     profile = get_profile_for_user(session, user)
     profile_filter = profile_to_filter(profile, session)
-    extras = elective_codes(profile)
-    study = _student_course_map(session, profile_filter, extras)
+    study = _student_course_map(session, profile_filter)
 
     stored = session.exec(select(MidSemSchedule)).all()
     rows: List[Dict[str, Any]] = []
@@ -262,18 +261,17 @@ def list_exam_timetable(
             "is_extra": bool(item.group and str(item.group).upper().startswith("OE")),
             "instructor": None,
         }
-        if not exam_row_visible(row, profile_filter, extras):
+        # The profile decides: a paper lists only when its course is one the
+        # student's subjects list gives them - instructor attached. The old
+        # branch/semester gate is intentionally gone: the exam index records
+        # the batch year where the timetable records the semester number, so
+        # the semester comparison hid genuine papers (ME3010 sits at sem 3 on
+        # the index and sem 5 on the profile).
+        codes = split_course_codes(item.course_code or "")
+        mine = next((c for c in codes if c.upper() in study), None)
+        if mine is None:
             continue
-        # A paper is only the student's when it is a paper of a course they
-        # attend: the course code must come from their own timetable, and the
-        # instructor shown is the one who teaches them that course. A cell can
-        # name two codes; the row survives if any of them is theirs.
-        if study is not None:
-            codes = split_course_codes(item.course_code or "")
-            mine = next((c for c in codes if c.upper() in study), None)
-            if mine is None:
-                continue
-            row["instructor"] = study[mine.upper()]
+        row["instructor"] = study[mine.upper()]
         rows.append(row)
 
     # The timetable PDF has no hall column; borrow rooms from the seating index.
@@ -293,44 +291,29 @@ def list_exam_timetable(
 def _student_course_map(
     session: Session,
     profile_filter: Dict[str, Any],
-    extras: List[str],
-) -> Optional[Dict[str, str]]:
+) -> Dict[str, str]:
     """
-    The courses the student actually attends, as ``code -> joined instructors``.
+    The courses the student's profile section lists, as ``code -> instructor``.
 
-    Built from the master class timetable - branch and semester for the section
-    courses, plus every slot of an opted-in elective regardless of which branch
-    teaches it. ``None`` when the timetable holds nothing for the student at
-    all: there is then nothing to intersect with, so the profile-only filter
-    stands rather than wiping the exam list.
+    The Profile/Subjects screen builds its list with
+    ``sync_courses_from_timetable`` plus ``get_subjects`` - branch family and
+    semester matching for core courses, opted-in open electives, extra courses
+    and a resolved instructor. The exam timetable intersects against that very
+    list so all three views agree on what the student attends; a profile with
+    no subjects therefore yields an empty exam list rather than the old
+    branch-wide one.
     """
-    branch = profile_filter or {}
-    section_slots = session.exec(
-        select(TimetableSlot).where(TimetableSlot.semester == branch.get("semester"))
-        .where(TimetableSlot.branch_or_program == branch.get("branch"))
-    ).all()
-    if extras:
-        extra_slots = session.exec(
-            select(TimetableSlot).where(
-                TimetableSlot.course_code.in_([c.upper() for c in extras])
-            )
-        ).all()
-    else:
-        extra_slots = []
-
-    if not section_slots and not extra_slots:
-        return None
-
-    by_code: Dict[str, List[str]] = {}
-    for slot in section_slots + extra_slots:
-        code = (slot.course_code or "").upper()
+    sync_courses_from_timetable(session)
+    subjects = get_subjects(session, profile_filter)
+    by_code: Dict[str, str] = {}
+    for subject in subjects:
+        code = (subject.get("course_code") or "").strip().upper()
         if not code:
             continue
-        names = by_code.setdefault(code, [])
-        instructor = (slot.instructor or "").strip()
-        if instructor and instructor.upper() not in {n.upper() for n in names}:
-            names.append(instructor)
-    return {code: " / ".join(sorted(names)) for code, names in by_code.items()}
+        instructor = (subject.get("instructor") or "").strip()
+        if code not in by_code:
+            by_code[code] = instructor
+    return by_code
 
 
 def _weekday(iso_date: str) -> Optional[str]:
