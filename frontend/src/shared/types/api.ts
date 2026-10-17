@@ -195,6 +195,7 @@ export interface AttendanceSubject {
   course_id: number;
   course_code: string;
   course_name: string;
+  instructor?: string;
   present: number;
   absent: number;
   cancelled: number;

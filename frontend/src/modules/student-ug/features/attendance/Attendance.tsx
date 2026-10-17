@@ -45,6 +45,7 @@ interface AttendanceSubject {
   course_id: number;
   course_code: string;
   course_name?: string;
+  instructor?: string;
   present: number;
   absent: number;
   cancelled: number;
@@ -112,7 +113,7 @@ function ProgressRing({
   percentage,
   tone,
 }: {
-  percentage: number;
+  percentage: number | null;
   tone: 'success' | 'warning' | 'danger' | 'neutral';
 }) {
   const radius = 26;
@@ -125,6 +126,7 @@ function ProgressRing({
         : tone === 'danger'
           ? 'var(--cp-danger)'
           : 'var(--cp-muted)';
+  const pct = percentage ?? 0;
   return (
     <div className="relative w-[72px] h-[72px] shrink-0" aria-hidden>
       <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90">
@@ -145,7 +147,7 @@ function ProgressRing({
           strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={circumference * (1 - Math.min(100, Math.max(0, percentage)) / 100)}
+          strokeDashoffset={circumference * (1 - Math.min(100, Math.max(0, pct)) / 100)}
           className="transition-all duration-500"
         />
       </svg>
@@ -153,7 +155,7 @@ function ProgressRing({
         className="absolute inset-0 flex items-center justify-center text-lg font-bold"
         style={{ color: 'var(--cp-text)' }}
       >
-        {percentage}%
+        {percentage === null ? '—' : `${percentage}%`}
       </span>
     </div>
   );
@@ -653,7 +655,9 @@ function SubjectCard({
   onDetails,
 }: SubjectCardProps) {
   const recorded = hasRecords(subject);
-  const instructor = instructorFor(subject.course_code, slots);
+  // Prefer the instructor name sent by the backend (looked up from the
+  // timetable slot), falling back to scanning the timetable slots directly.
+  const instructor = subject.instructor || instructorFor(subject.course_code, slots);
   const tone = recorded ? toneFor(subject.percentage, target) : 'neutral';
 
   return (

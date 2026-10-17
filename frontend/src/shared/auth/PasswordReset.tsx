@@ -3,6 +3,7 @@ import { Send, Save } from 'lucide-react';
 import { Button, Card, Input } from '@/components/ui';
 import { authApi } from '../../api';
 import ErrorBanner from '../components/ErrorBanner';
+import Logo3D from '../../components/layout/Logo3D';
 
 /**
  * Password reset by emailed code - the fallback when the passkey route does not
@@ -91,7 +92,7 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
     >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
+          <Logo3D size={24} />
           <h1 className="mt-3 text-2xl font-bold text-primary-500">essential</h1>
           <p className="text-xs tracking-widest text-primary-400 font-medium">
             YOUR CAMPUS ASSISTANT

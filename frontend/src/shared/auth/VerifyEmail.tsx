@@ -5,6 +5,7 @@ import { authApi } from '../../api';
 import { RESEND_COOLDOWN_SECONDS } from '../constants';
 import { readPendingVerification, writePendingVerification } from '../lib/storage';
 import ErrorBanner from '../components/ErrorBanner';
+import Logo3D from '../../components/layout/Logo3D';
 
 // AuthWrapper starts this clock when a signup completes, so the two must agree.
 const COOLDOWN_SECONDS = RESEND_COOLDOWN_SECONDS;
@@ -105,7 +106,7 @@ export default function VerifyEmail({ onVerified, onStartOver }: VerifyEmailProp
     >
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <img src="/logo-icon.svg" alt="Essential" className="w-14 h-14 mx-auto" />
+          <Logo3D size={24} />
           <h1 className="mt-2 text-2xl font-bold text-primary-500">Verify your email</h1>
           <p className="text-xs tracking-widest text-primary-400 font-medium">
             YOUR CAMPUS ASSISTANT

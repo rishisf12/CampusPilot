@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { GraduationCap, ShieldCheck, ArrowRight } from 'lucide-react';
 import { Badge, Button } from '@/components/ui';
 
@@ -61,6 +62,122 @@ const ROLES: Role[] = [
   },
 ];
 
+/** The first line the intro types out, one letter at a time. */
+const WELCOME = 'Welcome to the';
+
+/** One pass of the landing intro, in ms from the top. It runs once - no loop. */
+const INTRO = {
+  /** Hand pops in and starts waving. */
+  hand: 1900,
+  /** "Hi" pops. */
+  hi: 3400,
+  /** "Hi" fades away. */
+  hiOut: 4650,
+  /** "Welcome to the" starts typing. */
+  typeStart: 5000,
+  /** Gap between letters while typing. */
+  typeStep: 75,
+  /** The wordmark appears. */
+  wordmark: 6600,
+  /** The sign-in card rises in - this marks completion. */
+  card: 7400,
+} as const;
+
+/** True when the visitor has asked for less motion, in which case the intro
+ *  shows its end state once and never loops. */
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduced(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return reduced;
+}
+
+interface LandingLockupProps {
+  /** When true the intro shows its end state once and never loops. */
+  reduced: boolean;
+  /** Called as the wordmark lands, to bring the sign-in card in after it. */
+  onReveal: () => void;
+}
+
+/**
+ * The landing lockup, played as a single intro:
+ *
+ *   1. the face settles (the logo's own draw-in)
+ *   2. the hand pops in and waves
+ *   3. "Hi" pops, then fades
+ *   4. "Welcome to the" is typed out
+ *   5. the wordmark appears
+ *   6. the card rises in - this marks completion, and "Welcome to the"
+ *      disappears so the wordmark and card have the stage to themselves
+ *
+ * It runs once and never restarts. `onReveal` fires when the card rises in,
+ * and the card then stays put.
+ *
+ * Deliberately local to this screen - no other page asks for it, and the logo
+ * only shows the hand while this runs.
+ */
+function LandingLockup({ reduced, onReveal }: LandingLockupProps) {
+  const [stage, setStage] = useState(0);
+  const [typed, setTyped] = useState(0);
+
+  useEffect(() => {
+    if (reduced) return;
+
+    const timers: number[] = [];
+    const at = (ms: number, run: () => void) => timers.push(window.setTimeout(run, ms));
+
+    at(INTRO.hand, () => setStage(1));
+    at(INTRO.hi, () => setStage(2));
+    at(INTRO.hiOut, () => setStage(3));
+    at(INTRO.typeStart, () => setStage(4));
+    for (let i = 1; i <= WELCOME.length; i += 1) {
+      at(INTRO.typeStart + i * INTRO.typeStep, () => setTyped(i));
+    }
+    at(INTRO.wordmark, () => setStage(5));
+    at(INTRO.card, () => {
+      onReveal();
+      // Completion: the card has risen in, so "Welcome to the" steps aside.
+      setStage(6);
+    });
+
+    return () => timers.forEach(clearTimeout);
+  }, [reduced, onReveal]);
+
+  const showHand = !reduced && stage >= 1;
+  const showHi = !reduced && (stage === 2 || stage === 3);
+  // "Welcome to the" shows while typing and alongside the wordmark, then
+  // disappears once the card rises in (stage 6 = intro complete).
+  const typing = !reduced && stage >= 4 && stage < 6;
+  const showWordmark = reduced || stage >= 5;
+
+  return (
+    <div className="cp-lockup text-center mb-8">
+      <AnimatedLogo size={72} hand={showHand} />
+      <div className="mt-3">
+        <div className="cp-intro-slot">
+          {showHi && <span className={`cp-hi${stage === 3 ? ' cp-hi--out' : ''}`}>Hi</span>}
+          {typing && (
+            <p className="cp-welcome">
+              {WELCOME.slice(0, typed)}
+              {typed < WELCOME.length && <span className="cp-caret" />}
+            </p>
+          )}
+        </div>
+        <div className="cp-wordmark-slot">{showWordmark && <AnimatedTitle />}</div>
+      </div>
+    </div>
+  );
+}
+
 interface StartScreenProps {
   onChooseStudent?: () => void;
   onChooseAdmin?: () => void;
@@ -73,6 +190,16 @@ export default function StartScreen({
   onChooseAdmin,
   onSignIn,
 }: StartScreenProps) {
+  const reduced = usePrefersReducedMotion();
+  // The card is held back until the intro is ready for it, then stays. It is
+  // deliberately not tied to the loop, so it does not blink out on a restart.
+  const [cardVisible, setCardVisible] = useState(reduced);
+  const revealCard = useCallback(() => setCardVisible(true), []);
+
+  useEffect(() => {
+    if (reduced) setCardVisible(true);
+  }, [reduced]);
+
   const pick = (id: string) => {
     if (id === 'admin') onChooseAdmin?.();
     else onChooseStudent?.();
@@ -82,14 +209,9 @@ export default function StartScreen({
       <TechBackground />
 
       <div className="relative w-full max-w-2xl">
-        <div className="cp-lockup text-center mb-8">
-          <AnimatedLogo size={72} />
-          <div className="mt-3">
-            <AnimatedTitle />
-          </div>
-        </div>
+        <LandingLockup reduced={reduced} onReveal={revealCard} />
 
-        <div className="cp-card space-y-5">
+        <div className={`cp-card space-y-5${cardVisible ? '' : ' cp-card--waiting'}`}>
           <h2 className="text-lg font-semibold text-center" style={{ color: 'var(--cp-text)' }}>
             How are you signing in?
           </h2>

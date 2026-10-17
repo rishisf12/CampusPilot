@@ -310,6 +310,41 @@ body {
   }
 }
 
+/* Waving hand (landing screen only). Its colours live in AnimatedLogo.tsx - the
+   glove yellow and its darker cuff. It pops in, then waves about its own wrist -
+   the bottom of its box - so it reads as a wave rather than the whole hand
+   swinging. */
+.cp-logo-hand {
+  transform-box: fill-box;
+  transform-origin: 50% 88%;
+  animation:
+    cp-hand-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    cp-wave 2.2s ease-in-out 0.4s infinite;
+}
+@keyframes cp-hand-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes cp-wave {
+  0%,
+  50%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(12deg);
+  }
+  75% {
+    transform: rotate(-12deg);
+  }
+}
+
 .cp-logo-num {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -404,6 +439,73 @@ body {
   }
 }
 
+/* -- Landing intro ------------------------------------------------------- */
+
+/* Both slots always hold their height, so the card below never jumps while the
+   intro text comes and goes and while the wordmark is still hidden. */
+.cp-intro-slot {
+  height: 1.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cp-wordmark-slot {
+  min-height: 2.9rem;
+}
+
+/* The "Hi" bubble: pops in, then fades up and away. */
+.cp-hi {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--cp-primary);
+  animation: cp-hi-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.cp-hi--out {
+  animation: cp-hi-out 0.32s ease-in forwards;
+}
+@keyframes cp-hi-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-10deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.18) rotate(5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes cp-hi-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.8);
+  }
+}
+
+/* The typed first line, with a caret while it is still being written. */
+.cp-welcome {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--cp-text);
+}
+.cp-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -0.15em;
+  background: var(--cp-primary);
+  animation: cp-caret-blink 0.9s steps(1) infinite;
+}
+@keyframes cp-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 /* -- Card ---------------------------------------------------------------- */
 
 .cp-card {
@@ -428,6 +530,16 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* On the landing screen the card waits its turn: hidden, but still holding its
+   space so nothing below jumps. The intro removes this when it is time, which
+   starts the rise above. It then stays for good - the loop keeps running above
+   it, but the card never leaves again. */
+.cp-card--waiting {
+  visibility: hidden;
+  pointer-events: none;
+  animation: none;
 }
 
 .cp-microlabel {

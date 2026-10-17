@@ -1,12 +1,9 @@
-﻿import { GraduationCap } from 'lucide-react';
-import IconTile from '../ui/IconTile';
+﻿import Logo3D from './Logo3D';
 
 export default function Logo({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <IconTile hue="indigo" size={40}>
-        <GraduationCap size={22} strokeWidth={2} aria-hidden />
-      </IconTile>
+      <Logo3D size={40} />
       {!collapsed && (
         <div className="leading-tight">
           <p className="text-lg font-bold" style={{ color: 'var(--cp-text)' }}>

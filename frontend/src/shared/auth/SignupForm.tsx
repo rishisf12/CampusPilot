@@ -14,6 +14,8 @@ import {
   type Programme,
   type ProgrammeGroup,
 } from '../constants';
+import Logo3D from '../../components/layout/Logo3D';
+
 import ErrorBanner from '../components/ErrorBanner';
 import SignupProgress from './SignupProgress';
 
@@ -166,7 +168,7 @@ export default function SignupForm({
     >
       <div className="w-full max-w-2xl">
         <div className="text-center mb-6">
-          <img src="/logo-icon.svg" alt="Essential" className="w-14 h-14 mx-auto" />
+          <Logo3D size={24} />
           <h1 className="mt-2 text-2xl font-bold text-primary-500">Create your account</h1>
           <p className="text-xs tracking-widest text-primary-400 font-medium">
             YOUR CAMPUS ASSISTANT

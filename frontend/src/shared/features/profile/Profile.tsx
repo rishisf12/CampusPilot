@@ -1,6 +1,7 @@
 import { useProfile } from '../../hooks/useProfile';
-import { profileApi, scheduleApi } from '../../../api';
+import { profileApi, scheduleApi, attendanceApi } from '../../../api';
 import { bumpProfileVersion } from '../../lib/storage';
+import useProfileVersion from '../../hooks/useProfileVersion';
 import {
   BRANCH_OPTIONS,
   GROUP_PROGRAMMES,
@@ -11,12 +12,12 @@ import {
   type BranchOption,
   type Programme,
 } from '../../constants';
-import { useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCw, Save, X } from 'lucide-react';
 import { Badge, Button, Card, Input, Select } from '@/components/ui';
 import Spinner from '../../components/Spinner';
 import ManagePasskeys from '../../auth/ManagePasskeys';
-import type { ExtraCourseResponse } from '../../types/api';
+import type { ExtraCourseResponse, AttendanceSubject } from '../../types/api';
 
 /**
  * Profile settings page.
@@ -65,6 +66,28 @@ export default function Profile() {
   const [extraCoursesList, setExtraCoursesList] = useState<ExtraCourseResponse[]>(
     extraCourses || []
   );
+
+  // Attendance subjects for this profile, shown below the Save button.
+  const [subjects, setSubjects] = useState<AttendanceSubject[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const profileVersion = useProfileVersion();
+
+  const loadSubjects = useCallback(async () => {
+    setSubjectsLoading(true);
+    try {
+      const data = await attendanceApi.subjects();
+      setSubjects(Array.isArray(data.subjects) ? data.subjects : []);
+    } catch {
+      setSubjects([]);
+    } finally {
+      setSubjectsLoading(false);
+    }
+  }, []);
+
+  // Refetch whenever the profile changes (save, branch change, extra course).
+  useEffect(() => {
+    loadSubjects();
+  }, [loadSubjects, profileVersion]);
 
   const semesters = useMemo(
     () =>
@@ -225,11 +248,15 @@ export default function Profile() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900">Profile Settings</h2>
+      <h2 className="text-xl font-semibold" style={{ color: 'var(--cp-text)' }}>
+        Profile Settings
+      </h2>
 
       {/* Programme & Semester */}
       <Card className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Programme & Semester</h3>
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Programme &amp; Semester
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <span className="label">Programme</span>
@@ -280,7 +307,9 @@ export default function Profile() {
 
       {/* Branch */}
       <Card className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Branch</h3>
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Branch
+        </h3>
         <Select
           value={branchState}
           onChange={e => {
@@ -299,7 +328,9 @@ export default function Profile() {
 
       {/* Elective/Extra/Backlog courses */}
       <Card className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Elective/Extra/Backlog courses</h3>
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Elective/Extra/Backlog courses
+        </h3>
         <p className="text-xs text-gray-500">
           Add courses using either course code or instructor name (as mentioned in timetable). The
           timetable is filtered by your semester, so if either field matches, we can find the room
@@ -354,7 +385,9 @@ export default function Profile() {
 
       {/* Attendance target */}
       <Card className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Attendance Target</h3>
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Attendance Target
+        </h3>
         <div className="flex items-center gap-2">
           <Input
             type="number"
@@ -372,7 +405,9 @@ export default function Profile() {
 
       {/* Branch change request */}
       <Card className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">Branch Change Request</h3>
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Branch Change Request
+        </h3>
         {branchChange.requested && branchChange.to && (
           <div className="p-2.5 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm">
             Pending request: {branchChange.from} &rarr; {branchChange.to}
@@ -407,7 +442,7 @@ export default function Profile() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--cp-text)' }}>
             <input
               type="checkbox"
               checked={noBranchChange}
@@ -457,6 +492,43 @@ export default function Profile() {
 
       {/* Passkeys */}
       <ManagePasskeys />
+
+      {/* Your courses (from the uploaded timetable, filtered by this profile) */}
+      <Card className="space-y-3">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+          Your Subjects ({subjects.length})
+        </h3>
+        {subjectsLoading ? (
+          <Spinner size={24} />
+        ) : subjects.length === 0 ? (
+          <p className="text-xs text-center py-4" style={{ color: 'var(--cp-muted)' }}>
+            No subjects match this profile yet. Upload the class timetable and save your
+            branch/semester.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {subjects.map(subject => (
+              <Card key={subject.course_id} className="p-2 border-0 bg-transparent">
+                <p
+                  className="text-xs font-mono font-semibold truncate"
+                  style={{ color: 'var(--cp-text)' }}
+                >
+                  {subject.course_code}
+                </p>
+                {subject.instructor && (
+                  <p
+                    className="text-[10px] truncate"
+                    style={{ color: 'var(--cp-muted)' }}
+                    title={subject.instructor}
+                  >
+                    {subject.instructor}
+                  </p>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

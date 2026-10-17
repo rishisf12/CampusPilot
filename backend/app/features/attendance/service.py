@@ -1,7 +1,7 @@
 """Attendance service: business logic for attendance calculations."""
 import logging
 from datetime import date
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
 
@@ -218,11 +218,34 @@ def get_subjects(
 
     # ---- 4. Build summaries for the relevant courses ----
     result: List[dict] = []
+    # Build a code -> instructor map from timetable slots so each subject
+    # carries its teacher name. Look at ALL slots for the semester (not just
+    # branch-filtered ones) so a course's instructor is found even when the
+    # row is listed under a different section of the same branch.
+    instructor_map: Dict[str, str] = {}
+    all_slots = session.exec(select(TimetableSlot)).all()
+    for slot in all_slots:
+        code = (slot.course_code or "").strip().upper()
+        inst = (slot.instructor or "").strip()
+        if code and inst and inst.upper() not in ("LAB", "VF", "STAFF", "TBA"):
+            instructor_map.setdefault(code, inst)
+    # Also fall back to the Course table's instructor field.
+    course_instructor_map: Dict[str, str] = {}
+    for code in sorted(relevant_codes):
+        course = session.exec(select(Course).where(Course.code == code)).first()
+        if course and (course.instructor or "").strip():
+            course_instructor_map[code] = course.instructor.strip()
     for code in sorted(relevant_codes):
         course = session.exec(select(Course).where(Course.code == code)).first()
         if course:
             summary = get_course_summary(session, course.id, user_id)
             if summary:
+                # Prefer timetable-slot instructor, fall back to course instructor.
+                summary["instructor"] = (
+                    instructor_map.get(code)
+                    or course_instructor_map.get(code)
+                    or ""
+                )
                 result.append(summary)
     return result
 
@@ -276,18 +299,21 @@ def get_course_summary(session: Session, course_id: int, user_id: int) -> dict:
     absent = sum(1 for r in records if r.status == AttendanceStatus.ABSENT)
     cancelled = sum(1 for r in records if r.status == AttendanceStatus.CANCELLED)
 
-    pct = calculate_percentage(present, absent)
+    total_held = present + absent
+    pct = calculate_percentage(present, absent) if total_held > 0 else None
 
     return {
         "course_id": course.id,
         "course_code": course.code,
         "course_name": course.name,
+        "instructor": course.instructor,
         "present": present,
         "absent": absent,
         "cancelled": cancelled,
-        "total_held": present + absent,
+        "total_held": total_held,
         "percentage": pct,
-        "status": get_status(pct),
+        "has_records": total_held > 0,
+        "status": get_status(pct) if pct is not None else "No records",
         "can_miss": classes_can_miss(present, absent),
         "must_attend": classes_to_attend(present, absent),
     }
@@ -312,11 +338,12 @@ def get_overall_summary(session: Session, profile: Optional[dict] = None) -> dic
 
     total_present = sum(s["present"] for s in course_summaries)
     total_absent = sum(s["absent"] for s in course_summaries)
-    overall_pct = calculate_percentage(total_present, total_absent)
+    total_held = total_present + total_absent
+    overall_pct = calculate_percentage(total_present, total_absent) if total_held > 0 else None
 
     return {
         "overall_percentage": overall_pct,
-        "overall_status": get_status(overall_pct),
+        "overall_status": get_status(overall_pct) if overall_pct is not None else "No records",
         "total_present": total_present,
         "total_absent": total_absent,
         "courses": course_summaries,

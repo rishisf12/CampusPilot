@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="150" viewBox="0 0 420 150" role="img" aria-label="essential - your campus assistant">
+  <title>essential</title>
+
+  <!-- Lightbulb with time slots and a smile -->
+  <g transform="translate(95, 75)">
+    <circle cx="0" cy="-10" r="52" fill="none" stroke="#0E7490" stroke-width="9"/>
+    <g transform="translate(0, -12)">
+      <!-- 9 o'clock ring -->
+      <circle cx="-22" cy="-8" r="10" fill="none" stroke="#475569" stroke-width="5"/>
+      <text x="-22" y="-4" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="11" font-weight="700" fill="#475569">9</text>
+      <!-- 11 o'clock ring -->
+      <circle cx="0" cy="-4" r="12" fill="#0E7490"/>
+      <text x="0" y="0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="11" font-weight="700" fill="#FFFFFF">11</text>
+      <!-- 2 o'clock ring -->
+      <circle cx="22" cy="-8" r="10" fill="none" stroke="#475569" stroke-width="5"/>
+      <text x="22" y="-4" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="11" font-weight="700" fill="#475569">2</text>
+      <!-- Smile -->
+      <path d="M-16 12 Q0 24 16 12" stroke="#0E7490" stroke-width="5.5" fill="none" stroke-linecap="round" opacity="0.95"/>
+    </g>
+    <!-- Base -->
+    <path d="M-20 35 L-12 50 L12 50 L20 35 Z" fill="#0E7490"/>
+    <rect x="-8" y="52" width="16" height="6" rx="3" fill="#0E7490"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="175" y="78" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="46" font-weight="800" fill="#0F2A4A">essential</text>
+  <text x="178" y="102" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" letter-spacing="3" fill="#06B6D4">YOUR CAMPUS ASSISTANT</text>
+</svg>
