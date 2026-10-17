@@ -273,27 +273,32 @@ function ScheduleView({
 }: ScheduleViewProps) {
   const today = todayWeekday();
 
-  /** The student's classes today, then the next one later in the week. */
-  const { todaySlots, upcoming } = useMemo(() => {
+  /** The student's classes today, then the next two later in the week. */
+  const { todaySlots, upcoming, nextList } = useMemo(() => {
     const now = istNow().minutes;
     const todays = myClasses
       .filter(slot => slot.day === today)
       .sort((a, b) => a.sort_key - b.sort_key);
 
-    let next: ProfileCourseLike | null = null;
+    // The first two upcoming classes, in calendar order. The schedule home
+    // shows one card each.
+    const nextList: ProfileCourseLike[] = [];
     // Walk forward from today, wrapping. The "already started" cut applies only
     // to today: WEEKDAY_ORDER[0] is Monday, so a plain forEach would wrongly
     // skip Monday's morning classes and leap to Tuesday.
     const todayIndex = WEEKDAY_ORDER.indexOf(today);
-    for (let step = 0; step < WEEKDAY_ORDER.length && !next; step++) {
+    for (let step = 0; step < WEEKDAY_ORDER.length && nextList.length < 2; step++) {
       const day = WEEKDAY_ORDER[(todayIndex + step) % WEEKDAY_ORDER.length];
       const candidates = myClasses
         .filter(slot => slot.day === day && (step > 0 || toMinutes(slot.start_time) > now))
         .sort((a, b) => a.sort_key - b.sort_key);
-      if (candidates.length) next = candidates[0];
+      for (const slot of candidates) {
+        nextList.push(slot);
+        if (nextList.length >= 2) break;
+      }
     }
 
-    return { todaySlots: todays, upcoming: next };
+    return { todaySlots: todays, upcoming: nextList[0] ?? null, nextList };
   }, [myClasses, today]);
 
   // Classes later today that have not ended yet, for the timeline.
@@ -307,6 +312,7 @@ function ScheduleView({
         hasTimetable={hasTimetable}
         current={current as HomeClass | null}
         nextClass={nextClass ? (nextClass as HomeClass) : (upcoming as HomeClass | null)}
+        nextClasses={nextList as HomeClass[]}
         todayRemaining={todayRemaining as HomeClass[]}
         courseLabel={courseLabel}
         onJumpTab={onJumpTab ?? (() => {})}

@@ -21,6 +21,12 @@ interface ScheduleHomeProps {
   current: HomeClass | null;
   /** Next upcoming class, or null. */
   nextClass: HomeClass | null;
+  /**
+   * The next classes in calendar order, the first being nextClass itself.
+   * Optional: callers that only know a single next class simply omit it and
+   * the Up-next section falls back to that one card.
+   */
+  nextClasses?: HomeClass[];
   /** Today's classes that have not ended yet, sorted. */
   todayRemaining: HomeClass[];
   courseLabel: (item: { course_name?: string; course_code?: string }) => string;
@@ -84,6 +90,7 @@ export default function ScheduleHome({
   hasTimetable,
   current,
   nextClass,
+  nextClasses,
   todayRemaining,
   courseLabel,
   onJumpTab,
@@ -106,6 +113,12 @@ export default function ScheduleHome({
   // The next class can fall on a later weekday once today is over, so ask the
   // day-aware helper instead of assuming it is today.
   const nextOffset = next ? daysUntilWeekday(next.day) : 0;
+  // Up-next cards: the next two classes on the calendar. Falls back to the
+  // single nextClass when the caller only knows one.
+  const upcomingList = (nextClasses && nextClasses.length ? nextClasses : next ? [next] : []).slice(
+    0,
+    2
+  );
   // Friendly empty states name the next class when there is one.
   const nextHint = next
     ? nextOffset > 0
@@ -197,33 +210,41 @@ export default function ScheduleHome({
         </Card>
       )}
 
-      {/* 2 — Up next */}
-      {next && (
-        <Card style={{ background: 'var(--cp-warning-bg)', borderColor: 'transparent' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Clock size={16} strokeWidth={2} aria-hidden style={{ color: 'var(--cp-warning)' }} />
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
-              Up next
-            </h3>
-            <span
-              className="ml-auto text-xs font-medium"
-              style={{ color: 'var(--cp-warning)' }}
-              aria-live="off"
-            >
-              {formatCountdown(minutesUntil(next.start_time, nowMinutes), nextOffset)}
-            </span>
-          </div>
-          <p className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
-            {courseLabel(next)}
-          </p>
-          <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
-            {nextOffset > 0 ? `${next.day} · ` : ''}Room {next.room || 'TBA'}
-            {next.instructor ? ` · ${next.instructor}` : ''}
-            {' · '}
-            {formatClock(next.start_time)} - {formatClock(next.end_time)}
-          </p>
-        </Card>
-      )}
+      {/* 2 — Up next: one card per class, first then second. The card count
+          is what the caller computed; the countdown is per card, since the
+          second can sit on the same day as the first, only hours later. */}
+      {upcomingList.map((item, idx) => {
+        const offset = daysUntilWeekday(item.day);
+        return (
+          <Card
+            key={`${item.course_code}-${item.start_time}`}
+            style={{ background: 'var(--cp-warning-bg)', borderColor: 'transparent' }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Clock size={16} strokeWidth={2} aria-hidden style={{ color: 'var(--cp-warning)' }} />
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
+                {idx === 0 ? 'Up next' : 'Then'}
+              </h3>
+              <span
+                className="ml-auto text-xs font-medium"
+                style={{ color: 'var(--cp-warning)' }}
+                aria-live="off"
+              >
+                {formatCountdown(minutesUntil(item.start_time, nowMinutes), offset)}
+              </span>
+            </div>
+            <p className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
+              {courseLabel(item)}
+            </p>
+            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
+              {offset > 0 ? `${item.day} · ` : ''}Room {item.room || 'TBA'}
+              {item.instructor ? ` · ${item.instructor}` : ''}
+              {' · '}
+              {formatClock(item.start_time)} - {formatClock(item.end_time)}
+            </p>
+          </Card>
+        );
+      })}
 
       {/* 3 — Today's remaining timeline */}
       {todayRemaining.length > 0 && (
