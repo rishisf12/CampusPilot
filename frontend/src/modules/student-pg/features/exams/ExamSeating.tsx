@@ -31,6 +31,9 @@ interface ExamDay {
 interface ExamRow {
   id?: number | string;
   course_code: string;
+  /** The instructor who teaches this student the course, joined from the
+      class timetable; missing when the timetable doesn't know. */
+  instructor?: string | null;
   semester?: number | string;
   branch?: string;
   date?: string;
@@ -802,7 +805,7 @@ function TimetableView({
                   {exam.course_code}
                 </span>,
                 <span key="instructor" style={{ color: 'var(--cp-muted)' }}>
-                  —
+                  {exam.instructor || '—'}
                 </span>,
               ])}
             />

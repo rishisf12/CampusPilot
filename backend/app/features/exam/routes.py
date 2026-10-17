@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, delete, select
 
 from core.database import get_session
-from models import ExamSeating, ExamUpload, MidSemSchedule, User
+from models import ExamSeating, ExamUpload, MidSemSchedule, TimetableSlot, User
 from core.deps import get_current_admin, get_current_user
 from core.files import UPLOAD_DIR, save_upload, validate_upload
 from features.exam.clash import (
@@ -27,6 +27,7 @@ from features.exam.parser import (
     parse_mid_sem_file,
     parse_seating_index_file,
     roll_in_range,
+    split_course_codes,
 )
 from features.exam.pdf import generate_exam_pdf
 from features.profile.service import elective_codes, get_profile_for_user, profile_to_filter
@@ -235,12 +236,15 @@ def list_exam_timetable(
     """
     Mid-sem timetable for the signed-in student, grouped by day.
 
-    Applies rule 1 of the lookup: rows are filtered by the profile branch,
-    semester and elective codes.
+    Two filters: rule 1 of the lookup (profile branch, semester and elective
+    codes), then an intersection with the student's own class timetable - a
+    paper shows only for a course whose code sits in their timetable, joined to
+    its instructor so the list reads like the class timetable does.
     """
     profile = get_profile_for_user(session, user)
     profile_filter = profile_to_filter(profile, session)
     extras = elective_codes(profile)
+    study = _student_course_map(session, profile_filter, extras)
 
     stored = session.exec(select(MidSemSchedule)).all()
     rows: List[Dict[str, Any]] = []
@@ -256,9 +260,21 @@ def list_exam_timetable(
             "branch": item.branch,
             "semester": item.semester,
             "is_extra": bool(item.group and str(item.group).upper().startswith("OE")),
+            "instructor": None,
         }
-        if exam_row_visible(row, profile_filter, extras):
-            rows.append(row)
+        if not exam_row_visible(row, profile_filter, extras):
+            continue
+        # A paper is only the student's when it is a paper of a course they
+        # attend: the course code must come from their own timetable, and the
+        # instructor shown is the one who teaches them that course. A cell can
+        # name two codes; the row survives if any of them is theirs.
+        if study is not None:
+            codes = split_course_codes(item.course_code or "")
+            mine = next((c for c in codes if c.upper() in study), None)
+            if mine is None:
+                continue
+            row["instructor"] = study[mine.upper()]
+        rows.append(row)
 
     # The timetable PDF has no hall column; borrow rooms from the seating index.
     fill_rooms_from_seating(session, rows)
@@ -272,6 +288,49 @@ def list_exam_timetable(
             for key, exams in grouped.items()
         ],
     }
+
+
+def _student_course_map(
+    session: Session,
+    profile_filter: Dict[str, Any],
+    extras: List[str],
+) -> Optional[Dict[str, str]]:
+    """
+    The courses the student actually attends, as ``code -> joined instructors``.
+
+    Built from the master class timetable - branch and semester for the section
+    courses, plus every slot of an opted-in elective regardless of which branch
+    teaches it. ``None`` when the timetable holds nothing for the student at
+    all: there is then nothing to intersect with, so the profile-only filter
+    stands rather than wiping the exam list.
+    """
+    branch = profile_filter or {}
+    section_slots = session.exec(
+        select(TimetableSlot).where(TimetableSlot.semester == branch.get("semester"))
+        .where(TimetableSlot.branch_or_program == branch.get("branch"))
+    ).all()
+    if extras:
+        extra_slots = session.exec(
+            select(TimetableSlot).where(
+                TimetableSlot.course_code.in_([c.upper() for c in extras])
+            )
+        ).all()
+    else:
+        extra_slots = []
+
+    if not section_slots and not extra_slots:
+        return None
+
+    by_code: Dict[str, List[str]] = {}
+    for slot in section_slots + extra_slots:
+        code = (slot.course_code or "").upper()
+        if not code:
+            continue
+        names = by_code.setdefault(code, [])
+        instructor = (slot.instructor or "").strip()
+        if instructor and instructor.upper() not in {n.upper() for n in names}:
+            names.append(instructor)
+    return {code: " / ".join(sorted(names)) for code, names in by_code.items()}
 
 
 def _weekday(iso_date: str) -> Optional[str]:
