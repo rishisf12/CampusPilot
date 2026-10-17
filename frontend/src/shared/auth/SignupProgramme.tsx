@@ -23,19 +23,16 @@ import Logo3D from '../../components/layout/Logo3D';
  * easiest to make when all three are visible at once.
  *
  * Each card is now the name of the programme and the degrees that count as it,
- * and nothing else. The feature list went first because it answered a question
- * nobody was asking: what you get is the same whichever of the three you pick,
- * and "Live Schedule, Exam, Team, Feedback, Profile" appears on all of them
- * anyway. Reading three versions of that to choose between three cards is work
- * the screen was asking for and giving nothing back.
+ * and nothing else. Every feature list has gone, including the footnote that
+ * listed what all three share. None of it answered a question anyone was
+ * asking: what you get is the same whichever of the three you pick, so reading
+ * it three times was work the screen was asking for and giving nothing back.
+ * The nav bar after signup says the same thing far more usefully.
  */
 interface SignupProgrammeProps {
   onChoose: (group: ProgrammeGroup) => void;
   onBack: () => void;
 }
-
-/** Sections everyone gets, whatever the group. */
-const COMMON_SECTIONS = ['My Team', 'Feedback', 'Profile'];
 
 export default function SignupProgramme({ onChoose, onBack }: SignupProgrammeProps) {
   return (
@@ -76,14 +73,6 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
               </button>
             ))}
           </div>
-
-          {/* Stated once, not repeated on all three cards.
-              Team, Feedback and Profile are on every programme, so printing
-              them inside each card spent nine chips saying one thing - and on a
-              phone that alone was the difference between fitting and scrolling. */}
-          <p className="text-xs text-center mt-3" style={{ color: 'var(--cp-muted)' }}>
-            Every programme also includes {COMMON_SECTIONS.join(', ').toLowerCase()}.
-          </p>
 
           <div className="mt-4 pt-3 text-center flex flex-wrap items-center justify-center gap-3">
             <span className="text-sm" style={{ color: 'var(--cp-muted)' }}>
