@@ -253,6 +253,17 @@ async def start_signup(
     ``/auth/signup``, once the requester has proved they can read mail there.
     """
     _check_auth_rate_limit(request)
+
+    # Don't send a code to an address that already owns an account - tell them
+    # to sign in instead. This deliberately reveals whether an account exists,
+    # which is the product choice here rather than hiding it.
+    existing = session.exec(select(User).where(User.email == data.email.lower())).first()
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="This email is already associated with an account. Please sign in to continue.",
+        )
+
     try:
         code, _retry_after = signup_verification_service.start(session, data.email)
     except signup_verification_service.SignupVerificationError as exc:
