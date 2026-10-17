@@ -1,5 +1,5 @@
 import { GraduationCap, ShieldCheck, ArrowRight } from 'lucide-react';
-import { Badge, Card } from '@/components/ui';
+import { Badge, Button, Card } from '@/components/ui';
 
 /**
  * The landing screen: who are you signing in as?
@@ -55,9 +55,15 @@ const ROLES: Role[] = [
 interface StartScreenProps {
   onChooseStudent?: () => void;
   onChooseAdmin?: () => void;
+  /** Sign in with an existing account, rather than creating one. */
+  onSignIn?: () => void;
 }
 
-export default function StartScreen({ onChooseStudent, onChooseAdmin }: StartScreenProps) {
+export default function StartScreen({
+  onChooseStudent,
+  onChooseAdmin,
+  onSignIn,
+}: StartScreenProps) {
   const pick = (id: string) => {
     if (id === 'admin') onChooseAdmin?.();
     else onChooseStudent?.();
@@ -86,6 +92,20 @@ export default function StartScreen({ onChooseStudent, onChooseAdmin }: StartScr
               <RoleCard key={role.id} role={role} onChoose={() => pick(role.id)} />
             ))}
           </div>
+
+          <p className="text-xs text-center" style={{ color: 'var(--cp-muted)' }}>
+            Already have an account?
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            onClick={onSignIn}
+            aria-label="Sign in to an existing account"
+          >
+            Sign in
+          </Button>
         </Card>
       </div>
     </div>

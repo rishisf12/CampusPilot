@@ -241,6 +241,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
         <StartScreen
           onChooseStudent={() => setScreen('signup-programme')}
           onChooseAdmin={() => setScreen('admin-login')}
+          onSignIn={() => setScreen('login')}
         />
       );
     }
