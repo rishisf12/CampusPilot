@@ -15,7 +15,6 @@ TEST_DATABASE_URL must be set before any test module imports
 The database is destroyed and rebuilt from the Alembic history on every
 run, so it must never be a database you care about.
 """
-import contextlib
 import os
 from urllib.parse import urlparse
 
@@ -52,7 +51,7 @@ def _require_test_database(url: str) -> None:
     if "test" not in db_name.lower():
         pytest.exit(
             f"Refusing to run tests against '{db_name}': the _schema fixture "
-            "runs 'alembic downgrade base', which drops every table. "
+            "wipes and rebuilds the schema, which drops every table. "
             "Point TEST_DATABASE_URL at a dedicated *_test database instead.",
             returncode=1,
         )
@@ -124,17 +123,48 @@ def _schema():
 
     Production runs Alembic, so a test suite that built its schema any
     other way would happily pass against a schema that could never be
-    migrated to. The downgrade first is what makes an interrupted
-    previous run safe to re-run.
+    migrated to. The wipe first is what makes an interrupted previous
+    run safe to re-run.
+
+    Why a wipe instead of ``alembic downgrade base``. The downgrade chain
+    through the older migrations is not actually reversible - enum types
+    shared with create_all's schema-tagged mirror tables, FK ordering in
+    the phase3 baseline, and the unqualified monitoring tables all fail
+    partway down. Because the failure used to be swallowed here, each run
+    silently inherited the previous run's rows and the suite sprayed
+    duplicate-user IntegrityErrors that looked like test bugs. Dropping
+    the schemas is the same ``destroyed and rebuilt`` contract, reliably.
     """
     from alembic import command
+    from sqlalchemy import text
 
-    from core.database import alembic_config
+    from core.database import alembic_config, engine
 
     cfg = alembic_config()
-    # Base first: a previous interrupted run may have left tables behind.
-    with contextlib.suppress(Exception):
-        command.downgrade(cfg, "base")
+    with engine.begin() as conn:
+        # The version marker is unqualified, so it may sit in any schema
+        # the search path offers; find rather than assume.
+        for (schema,) in conn.execute(
+            text("SELECT table_schema FROM information_schema.tables WHERE table_name = 'alembic_version'")
+        ).all():
+            conn.execute(text(f'DROP TABLE IF EXISTS "{schema}".alembic_version'))
+        # Unqualified baseline tables land in `core` (the search path's
+        # first hit); create_all's schema-tagged mirrors land in the rest.
+        # Dropping the schemas first takes every mirrored enum dependency
+        # with them.
+        for schema in ("core", "academic", "social", "telemetry"):
+            conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        # Native enum types from create_all land in the connection's default
+        # schema (`public`), so clear those or the next upgrade's unqualified
+        # CREATE TYPE picks the wrong namespace. Mirror-table dependents are
+        # already gone above; CASCADE covers any stray column that is not.
+        for (type_name,) in conn.execute(
+            text(
+                "SELECT t.typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace "
+                "WHERE n.nspname = 'public' AND t.typtype = 'e'"
+            )
+        ).all():
+            conn.execute(text(f'DROP TYPE IF EXISTS public."{type_name}" CASCADE'))
     command.upgrade(cfg, "heads")
     # Catch-up for tables that exist via create_all in prod but never via
     # Alembic (social.feedback, academic.timetable_slot, ...). Prod gets

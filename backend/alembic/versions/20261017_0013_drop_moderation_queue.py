@@ -75,10 +75,11 @@ def downgrade() -> None:
         )
         """
     )
-    for name in (
-        "ix_moderation_queue_content_type",
-        "ix_moderation_queue_content_id",
-        "ix_moderation_queue_status",
+    for name, column in (
+        ("ix_moderation_queue_content_type", "content_type"),
+        ("ix_moderation_queue_content_id", "content_id"),
+        ("ix_moderation_queue_status", "status"),
     ):
-        op.execute(f'CREATE INDEX IF NOT EXISTS {name} ON {SCHEMA}.{TABLE} '
-                   f'({name.rsplit("_", 1)[1]})')
+        op.execute(
+            f'CREATE INDEX IF NOT EXISTS {name} ON {SCHEMA}.{TABLE} ({column})'
+        )

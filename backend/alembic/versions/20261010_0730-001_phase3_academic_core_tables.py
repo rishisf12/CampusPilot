@@ -166,6 +166,13 @@ def downgrade() -> None:
     op.drop_constraint('fk_timetable_slot_branch_slot', 'timetable_slot_branch', schema='academic', type_='foreignkey')
     op.drop_table('timetable_slot_branch', schema='academic')
 
+    # timetable_slot references course_offering (offering_id, ON DELETE SET
+    # NULL), so it must be dropped first - otherwise Postgres refuses to drop
+    # course_offering while that dependent table still exists.
+    op.execute(sa.text('DROP TABLE IF EXISTS academic.timetable_slot'))
+    op.execute(sa.text('DROP INDEX IF EXISTS academic.ix_academic_timetable_slot_day'))
+    op.execute(sa.text('DROP INDEX IF EXISTS academic.ix_academic_timetable_slot_course_code'))
+
     op.drop_index('ix_course_offering_branch_id', table_name='course_offering', schema='academic')
     op.drop_index('ix_course_offering_term_id', table_name='course_offering', schema='academic')
     op.drop_index('ix_course_offering_course_id', table_name='course_offering', schema='academic')
