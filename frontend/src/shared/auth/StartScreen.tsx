@@ -5,9 +5,15 @@ import { Badge, Card } from '@/components/ui';
  * The landing screen: who are you signing in as?
  *
  * Student is the full app; admin is the developer sign-in for feedback
- * responses. Faculty is shown so the shape of the product is visible, but it
- * says plainly that it is not built yet rather than offering a form that
- * would fail.
+ * responses. Faculty is shown with a "Soon" badge rather than offering a form
+ * that would fail.
+ *
+ * The cards carry a single short line each. An earlier version had a second
+ * "detail" sentence on every card ("Track your classes, attendance, exam
+ * seating and vacant rooms. Sign in with your password, a passkey, or your
+ * college email.") plus a "Choose your role to continue." subtitle and a
+ * "Students register with your college email address." footer. Three sentences
+ * saying what a label already says, before the user had chosen anything.
  *
  * Two choices were made here on purpose:
  *
@@ -20,33 +26,29 @@ import { Badge, Card } from '@/components/ui';
 interface Role {
   id: string;
   label: string;
+  /** One short line. The card shows nothing else. */
   description: string;
   available: boolean;
-  detail: string;
 }
 
 const ROLES: Role[] = [
   {
     id: 'student',
     label: 'Student',
-    description: 'Your timetable, attendance, exam hall and seats.',
+    description: 'Timetable, attendance, exams, rooms.',
     available: true,
-    detail:
-      'Track your classes, attendance, exam seating and vacant rooms. Sign in with your password, a passkey, or your college email.',
   },
   {
     id: 'faculty',
     label: 'Faculty',
-    description: 'Teaching schedule and your classes.',
+    description: 'Teaching schedule.',
     available: false,
-    detail: 'Not built yet. Faculty accounts are on the way.',
   },
   {
     id: 'admin',
     label: 'Admin',
-    description: 'Feedback responses and publishing.',
+    description: 'Feedback responses.',
     available: true,
-    detail: 'Developer sign-in to answer student feedback.',
   },
 ];
 
@@ -75,24 +77,15 @@ export default function StartScreen({ onChooseStudent, onChooseAdmin }: StartScr
         </div>
 
         <Card className="space-y-5">
-          <div className="text-center">
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
-              How are you signing in?
-            </h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
-              Choose your role to continue.
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-center" style={{ color: 'var(--cp-text)' }}>
+            How are you signing in?
+          </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {ROLES.map(role => (
               <RoleCard key={role.id} role={role} onChoose={() => pick(role.id)} />
             ))}
           </div>
-
-          <p className="text-xs text-center pt-1" style={{ color: 'var(--cp-muted)' }}>
-            Students register with your college email address.
-          </p>
         </Card>
       </div>
     </div>
@@ -118,7 +111,7 @@ function RoleCard({ role, onChoose }: { role: Role; onChoose: () => void }) {
           <Badge tone="neutral">Soon</Badge>
         </div>
         <p className="text-xs mt-1.5" style={{ color: 'var(--cp-muted)' }}>
-          {role.detail}
+          {role.description}
         </p>
       </div>
     );
@@ -143,7 +136,7 @@ function RoleCard({ role, onChoose }: { role: Role; onChoose: () => void }) {
         </span>
       </div>
       <p className="text-xs mt-1.5" style={{ color: 'var(--cp-muted)' }}>
-        {role.detail}
+        {role.description}
       </p>
     </button>
   );
