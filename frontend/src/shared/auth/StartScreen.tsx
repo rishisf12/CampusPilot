@@ -1,5 +1,9 @@
 import { GraduationCap, ShieldCheck, ArrowRight } from 'lucide-react';
-import { Badge, Button, Card } from '@/components/ui';
+import { Badge, Button } from '@/components/ui';
+
+import AnimatedLogo from './AnimatedLogo';
+import AnimatedTitle from './AnimatedTitle';
+import TechBackground from './TechBackground';
 
 /**
  * The landing screen: who are you signing in as?
@@ -69,20 +73,18 @@ export default function StartScreen({
     else onChooseStudent?.();
   };
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 py-12"
-      style={{ background: 'var(--cp-bg)' }}
-    >
-      <div className="w-full max-w-2xl">
-        <div className="text-center mb-8">
-          <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
-          <h1 className="mt-3 text-2xl font-bold text-primary-500">essential</h1>
-          <p className="text-xs tracking-widest text-primary-400 font-medium">
-            YOUR CAMPUS ASSISTANT
-          </p>
+    <div className="cp-auth-root min-h-screen flex items-center justify-center px-4 py-12">
+      <TechBackground />
+
+      <div className="relative w-full max-w-2xl">
+        <div className="cp-lockup text-center mb-8">
+          <AnimatedLogo size={72} />
+          <div className="mt-3">
+            <AnimatedTitle />
+          </div>
         </div>
 
-        <Card className="space-y-5">
+        <div className="cp-card space-y-5">
           <h2 className="text-lg font-semibold text-center" style={{ color: 'var(--cp-text)' }}>
             How are you signing in?
           </h2>
@@ -106,7 +108,7 @@ export default function StartScreen({
           >
             Sign in
           </Button>
-        </Card>
+        </div>
       </div>
     </div>
   );
