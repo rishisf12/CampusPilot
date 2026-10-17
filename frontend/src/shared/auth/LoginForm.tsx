@@ -1,8 +1,10 @@
-import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
-import { LogIn, ArrowLeft } from 'lucide-react';
-import { Button, Card, Input } from '@/components/ui';
+import { useEffect, useState, FormEvent } from 'react';
+import { LogIn, User, Lock, Loader2 } from 'lucide-react';
 import { clearEmailJustVerified, readEmailJustVerified } from '../lib/storage';
 import ErrorBanner from '../components/ErrorBanner';
+
+import AuthLayout from './AuthLayout';
+import TextField from './TextField';
 
 /**
  * Sign in. Username and password only - email is not accepted.
@@ -10,6 +12,11 @@ import ErrorBanner from '../components/ErrorBanner';
  * "Forgot password?" opens the passkey recovery screen rather than a reset:
  * a reset would change the password, and the point is to get back in without
  * doing that.
+ *
+ * Presentation only: AuthLayout supplies the frame and TextField the fields.
+ * The props, the validation, the submit handler and the state are unchanged, so
+ * the auth flow and every id, name and autocomplete value are exactly as they
+ * were.
  */
 interface LoginFormProps {
   onSwitchToSignup: () => void;
@@ -66,130 +73,90 @@ export default function LoginForm({
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 py-12"
-      style={{ background: 'var(--cp-bg)' }}
-    >
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
-          <h1 className="mt-3 text-2xl font-bold text-primary-500">essential</h1>
-          <p className="text-xs tracking-widest text-primary-400 font-medium">
-            YOUR CAMPUS ASSISTANT
-          </p>
+    <AuthLayout microLabel="// STUDENT ACCESS" title="Sign in" onBack={onChangeRole}>
+      {offline && (
+        <div className="cp-note cp-note-warn">
+          Backend offline. Start it with: uvicorn main:app --port 8000
         </div>
+      )}
+      {notice && <div className="cp-note cp-note-ok">{notice}</div>}
+      {resetNotice && (
+        <div className="cp-note cp-note-ok flex items-start justify-between gap-2">
+          <span>{resetNotice}</span>
+          <button
+            type="button"
+            onClick={onDismissResetNotice}
+            className="cp-note-x"
+            aria-label="Dismiss"
+          >
+            x
+          </button>
+        </div>
+      )}
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-        <Card className="space-y-4">
-          {offline && (
-            <div className="p-3 rounded-lg border border-warning-200 bg-warning-50 text-warning-700 text-sm">
-              Backend offline. Start it with: uvicorn main:app --port 8000
-            </div>
+      <form onSubmit={submit} className="space-y-4">
+        <TextField
+          label="Username"
+          id="login-username"
+          name="username"
+          value={username}
+          onChange={value => {
+            setUsername(value);
+            setError(null);
+          }}
+          icon={<User size={17} />}
+          autoComplete="username"
+          required
+          index={0}
+        />
+
+        <TextField
+          label="Password"
+          id="login-password"
+          name="password"
+          type="password"
+          value={password}
+          onChange={value => {
+            setPassword(value);
+            setError(null);
+          }}
+          icon={<Lock size={17} />}
+          autoComplete="current-password"
+          required
+          index={1}
+        />
+
+        {/* The label lives inside the button so it is announced with it, and the
+            spinner is fixed-width so swapping the text cannot shift the row. */}
+        <button type="submit" className="cp-submit mt-1" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 size={17} className="animate-spin" aria-hidden />
+              Signing in…
+            </>
+          ) : (
+            <>
+              <LogIn size={17} aria-hidden />
+              Sign in
+            </>
           )}
-          {notice && (
-            <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm">
-              {notice}
-            </div>
-          )}
-          {resetNotice && (
-            <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm flex items-start justify-between gap-2">
-              <span>{resetNotice}</span>
-              <button
-                type="button"
-                onClick={onDismissResetNotice}
-                className="text-success-600 hover:text-success-700 shrink-0"
-                aria-label="Dismiss"
-              >
-                x
-              </button>
-            </div>
-          )}
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+        </button>
+      </form>
 
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <label className="label" htmlFor="login-username">
-                Username
-              </label>
-              <Input
-                id="login-username"
-                name="username"
-                value={username}
-                onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                  setUsername(event.target.value);
-                  setError(null);
-                }}
-                autoComplete="username"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="label" htmlFor="login-password">
-                Password
-              </label>
-              <Input
-                id="login-password"
-                name="password"
-                type="password"
-                value={password}
-                onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                  setPassword(event.target.value);
-                  setError(null);
-                }}
-                autoComplete="current-password"
-                required
-              />
-            </div>
-
-            <Button
-              type="submit"
-              variant="primary"
-              icon={<LogIn size={18} />}
-              loading={loading}
-              className="w-full"
-            >
-              Sign In
-            </Button>
-          </form>
-
-          {/* Below the button, as a secondary route rather than competing with it. */}
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={onForgotPassword}
-              className="text-sm text-primary-600 hover:text-primary-500"
-            >
-              Forgot password?
-            </button>
-          </div>
-
-          <p className="text-sm text-center pt-1" style={{ color: 'var(--cp-muted)' }}>
-            No account?{' '}
-            <button
-              type="button"
-              onClick={onSwitchToSignup}
-              className="font-medium text-primary-600 hover:text-primary-500"
-            >
-              Create one
-            </button>
-          </p>
-
-          {/* Back to the role choice, for anyone in the wrong place. */}
-          {onChangeRole && (
-            <p className="text-center">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                icon={<ArrowLeft size={14} />}
-                onClick={onChangeRole}
-              >
-                Not a student? Change role
-              </Button>
-            </p>
-          )}
-        </Card>
+      {/* Below the button, as a secondary route rather than competing with it. */}
+      <div className="text-center">
+        <button type="button" onClick={onForgotPassword} className="cp-link">
+          Forgot password?
+        </button>
       </div>
-    </div>
+
+      <p className="text-sm text-center pt-1" style={{ color: 'var(--cp-muted)' }}>
+        No account?{' '}
+        <button type="button" onClick={onSwitchToSignup} className="cp-link">
+          Create one
+        </button>
+      </p>
+    </AuthLayout>
   );
 }
