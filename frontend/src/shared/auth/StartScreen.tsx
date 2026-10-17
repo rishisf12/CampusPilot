@@ -33,6 +33,8 @@ interface Role {
   /** One short line. The card shows nothing else. */
   description: string;
   available: boolean;
+  /** Accent tint for the card. See the .cp-choice--* rules in index.css. */
+  hue: 'teal' | 'amber' | 'violet';
 }
 
 const ROLES: Role[] = [
@@ -41,18 +43,21 @@ const ROLES: Role[] = [
     label: 'Student',
     description: 'Timetable, attendance, exams, rooms.',
     available: true,
+    hue: 'teal',
   },
   {
     id: 'faculty',
     label: 'Faculty',
     description: 'Teaching schedule.',
     available: false,
+    hue: 'amber',
   },
   {
     id: 'admin',
     label: 'Admin',
     description: 'Feedback responses.',
     available: true,
+    hue: 'violet',
   },
 ];
 
@@ -119,7 +124,7 @@ function RoleCard({ role, onChoose }: { role: Role; onChoose: () => void }) {
   if (!role.available) {
     return (
       <div
-        className="neu-inset rounded-xl p-4 text-left"
+        className={`cp-choice-static cp-choice--${role.hue}`}
         // Not a control: there is nothing to click, so it is not a button.
         aria-disabled="true"
       >
@@ -128,7 +133,7 @@ function RoleCard({ role, onChoose }: { role: Role; onChoose: () => void }) {
             className="font-semibold flex items-center gap-1.5"
             style={{ color: 'var(--cp-muted)' }}
           >
-            <Icon size={18} aria-hidden /> {role.label}
+            <Icon size={18} aria-hidden className="cp-choice-icon" /> {role.label}
           </span>
           <Badge tone="neutral">Soon</Badge>
         </div>
@@ -144,16 +149,16 @@ function RoleCard({ role, onChoose }: { role: Role; onChoose: () => void }) {
       type="button"
       onClick={onChoose}
       aria-label={`Continue as ${role.label}`}
-      className="neu-raised rounded-xl p-4 text-left hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition-all"
+      className={`cp-choice cp-choice--${role.hue}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span
           className="font-semibold flex items-center gap-1.5"
           style={{ color: 'var(--cp-text)' }}
         >
-          <Icon size={18} aria-hidden /> {role.label}
+          <Icon size={18} aria-hidden className="cp-choice-icon" /> {role.label}
         </span>
-        <span aria-hidden="true" className="text-primary-500">
+        <span aria-hidden="true" className="cp-choice-arrow">
           <ArrowRight size={18} />
         </span>
       </div>

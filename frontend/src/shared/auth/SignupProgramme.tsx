@@ -58,7 +58,7 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
                 key={group}
                 type="button"
                 onClick={() => onChoose(group)}
-                className="cp-choice"
+                className="cp-choice cp-choice--primary"
                 aria-label={`Join as ${GROUP_DETAILS[group].title}`}
               >
                 <span className="block font-semibold" style={{ color: 'var(--cp-text)' }}>

@@ -1,4 +1,4 @@
-﻿@import 'tailwindcss';
+@import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -32,6 +32,12 @@
   --cp-on-primary: #ffffff;
   --cp-accent: #f59e0b;
   --cp-on-accent: #1f2937;
+  /* Per-role accents for the role picker. Light values here, and a lighter set
+     in .dark below, so a card's tint stays legible in both themes rather than
+     relying on color-mix to rescue a colour that was too dark to read. */
+  --cp-role-student: #0f766e;
+  --cp-role-faculty: #b45309;
+  --cp-role-admin: #6d28d9;
   --cp-success: #15803d;
   --cp-success-bg: #e7f6ec;
   --cp-warning: #b45309;
@@ -59,6 +65,10 @@
   --cp-on-primary: #14171c;
   --cp-accent: #f59e0b;
   --cp-on-accent: #14171c;
+  /* Lighter than the light-theme set, for the same tints against a dark card. */
+  --cp-role-student: #2dd4bf;
+  --cp-role-faculty: #fbbf24;
+  --cp-role-admin: #a78bfa;
   --cp-success: #4ade80;
   --cp-success-bg: rgba(74, 222, 128, 0.12);
   --cp-warning: #fbbf24;
@@ -758,31 +768,40 @@ body {
   transform: scale(1);
 }
 
-/* -- Choice card (programme picker, role cards) --------------------------- */
-
 /* The selectable option. A <button>, so it is keyboard reachable and announces
-   its role without a tabindex and role pair. */
+   its role without a tabindex and role pair.
+
+   `--accent` is set by a --hue modifier below, so every card picks up the same
+   shape and only differs in colour. The tint is a low-percentage mix against
+   --cp-surface rather than a flat colour: it stays a tint at 6% and deepens on
+   hover, which reads as colour without the card becoming a colour block. Text
+   colour is untouched, so contrast is whatever --cp-text already guarantees. */
 .cp-choice {
+  --accent: var(--cp-primary);
+  --tint: color-mix(in srgb, var(--accent) 6%, var(--cp-surface));
+  --tint-strong: color-mix(in srgb, var(--accent) 13%, var(--cp-surface));
   display: block;
   width: 100%;
   text-align: left;
   padding: 0.875rem 1rem;
-  background: var(--cp-surface);
-  border: 1px solid rgba(15, 118, 110, 0.16);
+  background: var(--tint);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: 0.875rem;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(15, 118, 110, 0.05);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 12%, transparent);
   transition:
     transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.18s ease,
+    background 0.18s ease,
     border-color 0.18s ease;
 }
 .cp-choice:hover {
   transform: translateY(-2px);
-  border-color: var(--cp-primary);
+  background: var(--tint-strong);
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
   box-shadow:
-    0 2px 4px rgba(15, 118, 110, 0.08),
-    0 10px 20px -10px rgba(15, 118, 110, 0.28);
+    0 2px 4px color-mix(in srgb, var(--accent) 14%, transparent),
+    0 10px 20px -10px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 /* Same tactile press as the primary button, scaled down: a plain translate is
    too small to feel on a card this size, but the full bounce would be noisy
@@ -791,8 +810,53 @@ body {
   transform: translateY(1px) scale(0.985);
 }
 .cp-choice:focus-visible {
-  outline: 2px solid var(--cp-primary);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* The icon and the arrow pick up the card's accent, so colour comes from one
+   place rather than from a colour prop at every call site. */
+.cp-choice .cp-choice-icon,
+.cp-choice .cp-choice-arrow {
+  color: var(--accent);
+  transition: transform 0.18s ease;
+}
+.cp-choice:hover .cp-choice-arrow {
+  transform: translateX(2px);
+}
+
+/* Faculty is not built, so it is not a button and takes no hover treatment -
+   only the tint, held back a little so it does not look available. */
+.cp-choice-static {
+  --tint: color-mix(in srgb, var(--accent) 4%, var(--cp-surface));
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.875rem 1rem;
+  background: var(--tint);
+  border: 1px dashed color-mix(in srgb, var(--accent) 26%, transparent);
+  border-radius: 0.875rem;
+  cursor: default;
+}
+.cp-choice-static .cp-choice-icon {
+  color: color-mix(in srgb, var(--accent) 70%, var(--cp-muted));
+}
+
+/* Hues. Referenced by name from the role list in StartScreen and the programme
+   cards in SignupProgramme. */
+.cp-choice--teal {
+  --accent: var(--cp-role-student);
+}
+.cp-choice--amber {
+  --accent: var(--cp-role-faculty);
+}
+.cp-choice--violet {
+  --accent: var(--cp-role-admin);
+}
+/* Programme cards keep the app's own accent rather than a per-degree colour:
+   three different hues there would imply three different products. */
+.cp-choice--primary {
+  --accent: var(--cp-primary);
 }
 
 /* -- Inline notices ------------------------------------------------------ */
