@@ -73,7 +73,7 @@ export default function LoginForm({
   };
 
   return (
-    <AuthLayout microLabel="// STUDENT ACCESS" title="Sign in" onBack={onChangeRole}>
+    <AuthLayout title="Sign in" onBack={onChangeRole}>
       {offline && (
         <div className="cp-note cp-note-warn">
           Backend offline. Start it with: uvicorn main:app --port 8000
