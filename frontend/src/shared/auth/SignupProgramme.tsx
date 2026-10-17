@@ -1,12 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui';
-import {
-  GROUP_CLASSROOM_TABS,
-  GROUP_DETAILS,
-  NAV_TABS,
-  PROGRAMME_GROUPS,
-  type ProgrammeGroup,
-} from '../constants';
+import { GROUP_DETAILS, PROGRAMME_GROUPS, type ProgrammeGroup } from '../constants';
 import SignupProgress from './SignupProgress';
 import TechBackground from './TechBackground';
 import Logo3D from '../../components/layout/Logo3D';
@@ -28,13 +22,12 @@ import Logo3D from '../../components/layout/Logo3D';
  * only reachable by scrolling, and a choice that is really a comparison is
  * easiest to make when all three are visible at once.
  *
- * The prose is gone for the same reason. "We shape the app around your answer"
- * and "Classes, attendance, exams, rooms and teams - the full campus toolkit"
- * both restate what the three cards already show: the chips *are* the feature
- * list, so the sentence above them was a second, wordier copy of it.
- *
- * Only the chips that differ per programme stay on the cards. Team, Feedback
- * and Profile are on all three, so they are stated once underneath instead.
+ * Each card is now the name of the programme and the degrees that count as it,
+ * and nothing else. The feature list went first because it answered a question
+ * nobody was asking: what you get is the same whichever of the three you pick,
+ * and "Live Schedule, Exam, Team, Feedback, Profile" appears on all of them
+ * anyway. Reading three versions of that to choose between three cards is work
+ * the screen was asking for and giving nothing back.
  */
 interface SignupProgrammeProps {
   onChoose: (group: ProgrammeGroup) => void;
@@ -71,19 +64,15 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
                 className="cp-choice"
                 aria-label={`Join as ${GROUP_DETAILS[group].title}`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold" style={{ color: 'var(--cp-text)' }}>
-                    {GROUP_DETAILS[group].title}
-                  </span>
-                  <Badge tone="primary">{GROUP_DETAILS[group].programmes}</Badge>
-                </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {classroomLabels(group).map(label => (
-                    <Badge key={label} tone="neutral">
-                      {label}
-                    </Badge>
-                  ))}
-                </div>
+                <span className="block font-semibold" style={{ color: 'var(--cp-text)' }}>
+                  {GROUP_DETAILS[group].title}
+                </span>
+                {/* Which programmes count as this one, set under the name rather
+                    than beside it: side by side it fought the title for the same
+                    line and squeezed the longer names onto two rows. */}
+                <Badge tone="primary" className="mt-1.5">
+                  {GROUP_DETAILS[group].programmes}
+                </Badge>
               </button>
             ))}
           </div>
@@ -112,10 +101,4 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
       </div>
     </div>
   );
-}
-
-/** The classroom features this group will see, as labels for the preview chips. */
-function classroomLabels(group: ProgrammeGroup): string[] {
-  const allowed = GROUP_CLASSROOM_TABS[group];
-  return NAV_TABS.filter(tab => allowed.includes(tab.id)).map(tab => tab.label);
 }
