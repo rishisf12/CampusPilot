@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
-import { Badge, Button, Card } from '@/components/ui';
+import { Badge } from '@/components/ui';
 import {
   GROUP_CLASSROOM_TABS,
   GROUP_DETAILS,
@@ -8,6 +8,8 @@ import {
   type ProgrammeGroup,
 } from '../constants';
 import SignupProgress from './SignupProgress';
+import TechBackground from './TechBackground';
+import Logo3D from '../../components/layout/Logo3D';
 
 /**
  * Registration step 0: which programme are you here for?
@@ -19,6 +21,20 @@ import SignupProgress from './SignupProgress';
  * lightest bundle of all. Nothing is created by this screen, so abandoning it
  * costs nothing - the choice simply travels in wrapper state to the details
  * step, where it pre-filters the programme list.
+ *
+ * The three options sit side by side rather than stacked. Stacked, each card
+ * carried a sentence of prose and a row of feature chips, and the whole thing
+ * ran off the bottom of a phone screen - so the third option, Doctoral, was
+ * only reachable by scrolling, and a choice that is really a comparison is
+ * easiest to make when all three are visible at once.
+ *
+ * The prose is gone for the same reason. "We shape the app around your answer"
+ * and "Classes, attendance, exams, rooms and teams - the full campus toolkit"
+ * both restate what the three cards already show: the chips *are* the feature
+ * list, so the sentence above them was a second, wordier copy of it.
+ *
+ * Only the chips that differ per programme stay on the cards. Team, Feedback
+ * and Profile are on all three, so they are stated once underneath instead.
  */
 interface SignupProgrammeProps {
   onChoose: (group: ProgrammeGroup) => void;
@@ -30,39 +46,29 @@ const COMMON_SECTIONS = ['My Team', 'Feedback', 'Profile'];
 
 export default function SignupProgramme({ onChoose, onBack }: SignupProgrammeProps) {
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 py-12"
-      style={{ background: 'var(--cp-bg)' }}
-    >
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
-          <h1 className="mt-3 text-2xl font-bold text-primary-500">essential</h1>
-          <p className="text-xs tracking-widest text-primary-400 font-medium">
-            YOUR CAMPUS ASSISTANT
-          </p>
+    <div className="cp-auth-root min-h-screen flex items-center justify-center px-4 py-8">
+      <TechBackground />
+
+      <div className="relative w-full max-w-3xl">
+        <div className="text-center mb-5">
+          <Logo3D size={32} />
+          <h1 className="mt-2 text-2xl font-bold text-primary-500">essential</h1>
+          <p className="cp-tagline mt-1">YOUR CAMPUS ASSISTANT</p>
         </div>
 
-        <Card className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
-              Which programme are you in?
-            </h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
-              We shape the app around your answer - your classes, your exams, nothing extra in the
-              way.
-            </p>
+        <div className="cp-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="cp-card-title !mb-0">Which programme are you in?</h2>
+            <SignupProgress current="programme" />
           </div>
 
-          <SignupProgress current="programme" />
-
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {PROGRAMME_GROUPS.map(group => (
               <button
                 key={group}
                 type="button"
                 onClick={() => onChoose(group)}
-                className="neu-raised w-full text-left p-4 rounded-xl hover:-translate-y-px transition-all"
+                className="cp-choice"
                 aria-label={`Join as ${GROUP_DETAILS[group].title}`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -71,11 +77,8 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
                   </span>
                   <Badge tone="primary">{GROUP_DETAILS[group].programmes}</Badge>
                 </div>
-                <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
-                  {GROUP_DETAILS[group].blurb}
-                </p>
-                <div className="flex flex-wrap gap-1.5 mt-2.5">
-                  {[...classroomLabels(group), ...COMMON_SECTIONS].map(label => (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {classroomLabels(group).map(label => (
                     <Badge key={label} tone="neutral">
                       {label}
                     </Badge>
@@ -85,33 +88,27 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
             ))}
           </div>
 
-          <div
-            className="border-t pt-3 text-center"
-            style={{ borderColor: 'rgba(163,177,198,.3)' }}
-          >
-            <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
+          {/* Stated once, not repeated on all three cards.
+              Team, Feedback and Profile are on every programme, so printing
+              them inside each card spent nine chips saying one thing - and on a
+              phone that alone was the difference between fitting and scrolling. */}
+          <p className="text-xs text-center mt-3" style={{ color: 'var(--cp-muted)' }}>
+            Every programme also includes {COMMON_SECTIONS.join(', ').toLowerCase()}.
+          </p>
+
+          <div className="mt-4 pt-3 text-center flex flex-wrap items-center justify-center gap-3">
+            <span className="text-sm" style={{ color: 'var(--cp-muted)' }}>
               Already registered?{' '}
-              <button
-                type="button"
-                onClick={onBack}
-                className="font-medium text-primary-600 hover:underline"
-              >
+              <button type="button" onClick={onBack} className="cp-link">
                 Sign in
               </button>
-            </p>
-            <p className="text-center mt-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                icon={<ArrowLeft size={14} />}
-                onClick={onBack}
-              >
-                Back
-              </Button>
-            </p>
+            </span>
+            <button type="button" onClick={onBack} className="cp-backlink">
+              <ArrowLeft size={14} aria-hidden />
+              Back
+            </button>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );
