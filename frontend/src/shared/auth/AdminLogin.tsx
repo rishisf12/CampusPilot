@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { LogIn, User, Lock, ShieldCheck, Loader2 } from 'lucide-react';
+import { LogIn, User, Lock, Loader2 } from 'lucide-react';
 import ErrorBanner from '../components/ErrorBanner';
 
 import AuthLayout from './AuthLayout';
@@ -48,21 +48,13 @@ export default function AdminLogin({ onLogin, onBack, offline }: AdminLoginProps
   };
 
   return (
-    <AuthLayout microLabel="// ADMIN ACCESS" title="Admin sign in" onBack={onBack}>
+    <AuthLayout title="Admin sign in" onBack={onBack}>
       {offline && (
         <div className="cp-note cp-note-warn">
           Backend offline. Start it with: uvicorn main:app --port 8000
         </div>
       )}
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
-
-      <p
-        className="text-sm -mt-1 mb-4 flex items-center gap-1.5"
-        style={{ color: 'var(--cp-muted)' }}
-      >
-        <ShieldCheck size={15} aria-hidden />
-        Developer access — feedback responses live here.
-      </p>
 
       <form onSubmit={submit} className="space-y-4">
         <TextField
