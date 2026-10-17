@@ -5,6 +5,7 @@ import { authApi } from '../../api';
 import { GROUP_DETAILS, type ProgrammeGroup } from '../constants';
 import ErrorBanner from '../components/ErrorBanner';
 import SignupProgress from './SignupProgress';
+import Logo3D from '../../components/layout/Logo3D';
 
 /**
  * Registration step 1: prove the college email before an account exists.
@@ -102,7 +103,7 @@ export default function SignupEmail({
     >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/logo-icon.svg" alt="Essential" className="w-16 h-16 mx-auto" />
+          <Logo3D size={24} />
           <h1 className="mt-3 text-2xl font-bold text-primary-500">essential</h1>
           <p className="text-xs tracking-widest text-primary-400 font-medium">
             YOUR CAMPUS ASSISTANT
@@ -118,13 +119,19 @@ export default function SignupEmail({
 
           <div>
             <h2 className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
-              {stage === 'email' ? 'Verify your college email' : 'Enter the code'}
+              {stage === 'email' ? 'College email' : 'Enter the code'}
             </h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
-              {stage === 'email'
-                ? 'We check the address first, so a half-created account cannot block you later.'
-                : `We sent a 6-digit code to ${email.trim().toLowerCase()}.`}
-            </p>
+            {/* Only the code stage has something worth saying here: which
+                address the code went to. The email stage has no subtitle - it
+                used to explain that the address is checked before an account is
+                made, which is a design note rather than anything the person
+                filling in the field can act on. The reason the order is that way
+                lives in this file's docstring. */}
+            {stage === 'code' && (
+              <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
+                We sent a 6-digit code to {email.trim().toLowerCase()}.
+              </p>
+            )}
             {/* The choice from step 0, changeable without restarting the flow. */}
             {programmeGroup && (
               <p className="text-xs mt-2" style={{ color: 'var(--cp-muted)' }}>
