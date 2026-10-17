@@ -20,10 +20,19 @@ const KEYS = {
   pendingVerification: 'pending_verification_email',
   /** Flag that makes the sign-in page show "Email verified, please sign in". */
   emailJustVerified: 'email_just_verified',
+  /**
+   * Per-class alarms: slot key -> { lead minutes before the class, last fired
+   * occurrence }. Small UI preference that would otherwise be lost on reload;
+   * the recurrence travels with the slot key, not with a date.
+   */
+  classAlarms: 'class_alarms',
 };
 
 /** Keys this app owns. Anything else in localStorage is left untouched. */
 export const STORAGE_KEYS = Object.values(KEYS);
+
+/** The key list, accessible by name for reads and writes. */
+export const STORAGE_KEY = KEYS;
 
 /**
  * Namespace for per-setting keys owned by the Settings bundle.

@@ -1,8 +1,18 @@
-import { useEffect, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock, DoorOpen, FileText } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AlarmClock,
+  BellRing,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  DoorOpen,
+  FileText,
+  X,
+} from 'lucide-react';
 import { Badge, Button, Card } from '@/components/ui';
-import { formatTime as formatClock, daysUntilWeekday, istNow } from '@shared/lib/time';
+import { formatTime as formatClock, daysUntilWeekday, istNow, todayIso } from '@shared/lib/time';
 import { toMinutes } from '@shared/lib/normalise';
+import { readJson, writeJson, STORAGE_KEY } from '@shared/lib/storage';
 
 export interface HomeClass {
   course_code: string;
@@ -85,6 +95,161 @@ function SkeletonCard() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Class alarms                                                        */
+/* ------------------------------------------------------------------ */
+
+/** Lead times a student can pick, in minutes before the class starts. */
+const ALARM_OPTIONS = [5, 10, 15, 30, 60];
+
+/** An alarm is bound to the weekly slot, so it re-arms for every occurrence. */
+interface ClassAlarm {
+  /** Minutes before the class to fire. */
+  lead: number;
+  /** ISO date (IST) of the occurrence last fired; never refire it. */
+  lastFired: string | null;
+}
+
+type AlarmMap = Record<string, ClassAlarm>;
+
+/** Slot key: same course, day and start time share one alarm, week after week. */
+function slotKeyOf(item: HomeClass): string {
+  return `${item.course_code}|${item.day}|${item.start_time}`;
+}
+
+function readAlarms(): AlarmMap {
+  return readJson<AlarmMap>(STORAGE_KEY.classAlarms, {}) ?? {};
+}
+
+/**
+ * The bell on an upcoming-class card. Opens a popover with a Disable row on
+ * top and lead-time choices under it. No alarm library here: the choice is
+ * stored locally and a tick in ScheduleHome decides when it rings.
+ */
+function AlarmButton({
+  courseCode,
+  alarm,
+  onChange,
+}: {
+  courseCode: string;
+  alarm: ClassAlarm | null;
+  onChange: (alarm: ClassAlarm | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const armed = alarm !== null;
+
+  // Open the panel moving focus into it, so keyboard users are not left at the
+  // bell with a dialog rendered elsewhere in the tab order.
+  useEffect(() => {
+    if (open) panelRef.current?.focus();
+  }, [open]);
+
+  // The permission prompt must ride on a user gesture - a click on a time
+  // choice, never page load.
+  const choose = (lead: number) => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      void Notification.requestPermission();
+    }
+    onChange({ lead, lastFired: alarm?.lastFired ?? null });
+    setOpen(false);
+  };
+
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        aria-label={
+          armed
+            ? `Alarm set for ${courseCode}: ${alarm.lead} minutes before, change or disable`
+            : `Set an alarm for ${courseCode}`
+        }
+        className="inline-flex items-center justify-center w-7 h-7 rounded-full transition-opacity hover:opacity-100"
+        style={{
+          color: armed ? 'var(--cp-warning)' : 'var(--cp-muted)',
+          opacity: armed ? 1 : 0.75,
+        }}
+      >
+        {armed ? (
+          <BellRing size={15} strokeWidth={2} aria-hidden />
+        ) : (
+          <AlarmClock size={15} strokeWidth={2} aria-hidden />
+        )}
+      </button>
+      {open && (
+        <>
+          {/* Click-away catcher: closes the popover without a focus trap. */}
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-20 cursor-default"
+          />
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label={`Alarm for ${courseCode}`}
+            tabIndex={-1}
+            onKeyDown={e => {
+              if (e.key === 'Escape') setOpen(false);
+            }}
+            className="absolute right-0 top-full mt-1 z-30 w-52 rounded-xl p-3 space-y-2 outline-none"
+            style={{
+              background: 'var(--cp-surface, var(--cp-bg))',
+              border: '1px solid rgba(127,127,127,.3)',
+              boxShadow: '0 12px 28px rgba(0,0,0,.28)',
+            }}
+          >
+            <button
+              type="button"
+              disabled={!armed}
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+              className="w-full text-xs font-medium rounded-lg py-1.5 disabled:cursor-not-allowed"
+              style={{
+                color: armed ? 'var(--cp-text)' : 'var(--cp-muted)',
+                opacity: armed ? 1 : 0.55,
+                background: 'rgba(127,127,127,.12)',
+              }}
+            >
+              Disable alarm
+            </button>
+            <p className="text-xs font-medium" style={{ color: 'var(--cp-muted)' }}>
+              Min before class
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {ALARM_OPTIONS.map(mins => {
+                const selected = armed && alarm.lead === mins;
+                return (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => choose(mins)}
+                    aria-pressed={selected}
+                    className="text-xs font-medium rounded-full px-2.5 py-1 focus-visible:outline-2"
+                    style={
+                      selected
+                        ? { background: 'var(--cp-warning)', color: 'var(--cp-on-accent)' }
+                        : { background: 'rgba(127,127,127,.14)', color: 'var(--cp-text)' }
+                    }
+                  >
+                    {mins} min
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
 export default function ScheduleHome({
   loading,
   hasTimetable,
@@ -97,22 +262,40 @@ export default function ScheduleHome({
   showAttendanceAction,
   showVacantAction,
 }: ScheduleHomeProps) {
-  useNow(1000);
+  // Ticks every second so countdowns stay live and alarms fire on time.
+  const now: number = useNow(1000);
 
-  if (loading) {
-    return (
-      <div className="space-y-4" aria-label="Loading today's schedule">
-        <SkeletonCard />
-        <SkeletonCard />
-      </div>
-    );
-  }
+  // Alarms are a localStorage-backed preference; the ref lets the tick effect
+  // read the current map without being recreated by every write.
+  const [alarms, setAlarms] = useState<AlarmMap>(readAlarms);
+  const alarmsRef = useRef(alarms);
+  alarmsRef.current = alarms;
 
-  const nowMinutes = istNow().minutes;
+  /** Persist a one-slot change. Stable identity, so effects can depend on it. */
+  const writeAlarms = useCallback((key: string, alarm: ClassAlarm | null) => {
+    setAlarms(prev => {
+      const next = { ...prev };
+      if (alarm) next[key] = alarm;
+      else delete next[key];
+      writeJson(STORAGE_KEY.classAlarms, next);
+      return next;
+    });
+  }, []);
+
+  /** The ring: an in-app banner on top of the schedule. */
+  const [notice, setNotice] = useState<{ code: string; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 90_000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const nowMinutes = istNow(new Date(now)).minutes;
   const next = nextClass;
   // The next class can fall on a later weekday once today is over, so ask the
   // day-aware helper instead of assuming it is today.
-  const nextOffset = next ? daysUntilWeekday(next.day) : 0;
+  const nextOffset = next ? daysUntilWeekday(next.day, new Date(now)) : 0;
   // Up-next cards: the next two classes on the calendar. Falls back to the
   // single nextClass when the caller only knows one.
   const upcomingList = (nextClasses && nextClasses.length ? nextClasses : next ? [next] : []).slice(
@@ -128,8 +311,93 @@ export default function ScheduleHome({
       : `Next one starts at ${formatClock(next.start_time)} in Room ${next.room || 'TBA'}.`
     : null;
 
+  /**
+   * The tick that rings alarms. Ran every second `now` moves; each slotted
+   * alarm fires once per weekly occurrence, inside the window from its fire
+   * time to the class end, and records that occurrence so it re-arms next week.
+   */
+  useEffect(() => {
+    // Upcoming cards and later-today slots overlap; a slot is checked once.
+    const seen = new Set<string>();
+    const slots: Array<{ item: HomeClass; key: string }> = [];
+    for (const item of [...upcomingList, ...todayRemaining]) {
+      const key = slotKeyOf(item);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      slots.push({ item, key });
+    }
+
+    for (const { item, key } of slots) {
+      const alarm = alarmsRef.current[key];
+      if (!alarm) continue;
+
+      const n = istNow(new Date(now));
+      const offset = daysUntilWeekday(item.day, new Date(now));
+      const startMin = toMinutes(item.start_time);
+      const endMin = toMinutes(item.end_time) || startMin;
+      // Days-out classes sit beyond the 1439-minute day, so they cannot fire
+      // early; on the class day the offset clamps to zero and the window opens.
+      const fireAbs = offset * 1440 + startMin - alarm.lead;
+      const endAbs = offset * 1440 + endMin;
+      if (n.minutes < fireAbs || n.minutes > endAbs) continue;
+      const occIso = todayIso(new Date(now + offset * 86400000));
+      if (alarm.lastFired === occIso) continue;
+
+      const text = `starts at ${formatClock(item.start_time)} in Room ${item.room || 'TBA'}`;
+      setNotice({ code: item.course_code, text });
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(`Class alarm · ${item.course_code}`, {
+          body: `${text} — ${alarm.lead} min reminder`,
+        });
+      }
+      // Fire-and-rearm: mark only this occurrence, so it rings again next week.
+      writeAlarms(key, { lead: alarm.lead, lastFired: occIso });
+      break; // one ring at a time; the next tick can ring a later slot.
+    }
+  }, [now, upcomingList, todayRemaining, writeAlarms]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4" aria-label="Loading today's schedule">
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {/* 0 — Alarm ring: shown on top, one at a time; lives 90 seconds or
+          until dismissed. */}
+      {notice && (
+        <Card
+          role="alert"
+          style={{ background: 'var(--cp-warning-bg)', borderColor: 'transparent' }}
+        >
+          <div className="flex items-center gap-2">
+            <BellRing
+              size={16}
+              strokeWidth={2}
+              aria-hidden
+              style={{ color: 'var(--cp-warning)' }}
+            />
+            <p className="text-sm min-w-0" style={{ color: 'var(--cp-text)' }}>
+              <span className="font-semibold">{notice.code}</span>
+              <span style={{ color: 'var(--cp-muted)' }}> · {notice.text}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              aria-label="Dismiss alarm"
+              className="ml-auto shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full"
+              style={{ color: 'var(--cp-muted)' }}
+            >
+              <X size={14} aria-hidden />
+            </button>
+          </div>
+        </Card>
+      )}
+
       {/* 1 — Hero: what is happening right now */}
       {current ? (
         <Card
@@ -220,18 +488,27 @@ export default function ScheduleHome({
             key={`${item.course_code}-${item.start_time}`}
             style={{ background: 'var(--cp-warning-bg)', borderColor: 'transparent' }}
           >
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-start gap-2 mb-2">
               <Clock size={16} strokeWidth={2} aria-hidden style={{ color: 'var(--cp-warning)' }} />
               <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
                 {idx === 0 ? 'Up next' : 'Then'}
               </h3>
-              <span
-                className="ml-auto text-xs font-medium"
-                style={{ color: 'var(--cp-warning)' }}
-                aria-live="off"
-              >
-                {formatCountdown(minutesUntil(item.start_time, nowMinutes), offset)}
-              </span>
+              {/* Countdown on top, its alarm right under it - one column so
+                  the two stay visually paired. */}
+              <div className="ml-auto flex flex-col items-end gap-1">
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: 'var(--cp-warning)' }}
+                  aria-live="off"
+                >
+                  {formatCountdown(minutesUntil(item.start_time, nowMinutes), offset)}
+                </span>
+                <AlarmButton
+                  courseCode={item.course_code}
+                  alarm={alarms[slotKeyOf(item)] ?? null}
+                  onChange={next => writeAlarms(slotKeyOf(item), next)}
+                />
+              </div>
             </div>
             <p className="text-lg font-semibold" style={{ color: 'var(--cp-text)' }}>
               {courseLabel(item)}
