@@ -92,14 +92,24 @@ def test_timetable_upload_needs_admin(anon_client, student_headers):
     assert anon_client.delete("/timetable/", headers=student_headers).status_code == 403
 
 
-def test_exam_uploads_need_admin(anon_client, student_headers):
-    files = {"file": ("e.csv", io.BytesIO(b"a,b\n1,2\n"), "text/csv")}
+def test_exam_uploads_individual_allowed(anon_client, student_headers):
+    """
+    Exam uploads are no longer admin-only.
+
+    Anonymous callers still get 401. A signed-in account gets past the
+    permission gate - an invalid file now fails in the parser (400), and the
+    scoping of what it does upload is covered in test_exam_personal_uploads.py.
+    """
+    # An empty file parses to zero rows: past the gate now, refused by the parser.
+    files = {"file": ("e.csv", io.BytesIO(b""), "text/csv")}
     for url in ("/exam/seating/upload", "/exam/timetable/upload"):
         assert anon_client.post(url, files=files).status_code == 401
-        assert anon_client.post(url, files=files, headers=student_headers).status_code == 403
+        assert anon_client.post(url, files=files, headers=student_headers).status_code == 400
     for url in ("/exam/timetable", "/exam/seating"):
         assert anon_client.delete(url).status_code == 401
-        assert anon_client.delete(url, headers=student_headers).status_code == 403
+        # Clearing only ever touches the caller's own scope, so a student's
+        # delete is a no-op the server confirms rather than a refusal.
+        assert anon_client.delete(url, headers=student_headers).status_code == 204
 
 
 def test_reinforcement_needs_admin(anon_client, admin_headers, student_headers):

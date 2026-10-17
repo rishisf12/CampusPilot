@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlmodel import Session, delete, select
 
 from core.database import get_session
@@ -51,16 +52,62 @@ def _upload_meta(file: UploadFile) -> tuple[Path, bool]:
     return saved_path, is_csv
 
 
-def _record_upload(session: Session, kind: str, saved_path: Path, original_name: Optional[str]) -> None:
-    """
-    Remember which section an uploaded file belongs to.
+def _is_admin(user: User) -> bool:
+    """Whether the signed-in user may upload for everybody."""
+    return (user.role or "student") == "admin"
 
-    Only the newest file per section is referenced, so the preview always matches
-    the data actually in use. Older files are left on disk rather than deleted:
-    the timetable and seating uploads share a filename prefix, so there is no
-    safe way to tell a superseded file from the other section's current one.
+
+def _upload_owner(user: User) -> Optional[int]:
     """
-    session.exec(delete(ExamUpload).where(ExamUpload.kind == kind))
+    Whose data an upload writes.
+
+    An admin's upload carries no owner - it is the public index every account
+    reads. An individual's upload is stamped with their id and stays personal.
+    """
+    return None if _is_admin(user) else user.id
+
+
+def _delete_scope(model, owner: Optional[int]):
+    """
+    Where clause clearing exactly one upload scope in ``model``.
+
+    ``owner=None`` targets the public (admin) rows - an admin replacing the
+    index must not sweep away what individuals uploaded to their own accounts.
+    A user id targets that one account's rows only.
+    """
+    return model.uploaded_by.is_(None) if owner is None else model.uploaded_by == owner
+
+
+def _account_scope(model, user: User):
+    """
+    Where clause reading exam rows in this account.
+
+    Every account sees the public (admin-uploaded) rows plus its own personal
+    ones; nobody ever sees another individual's upload. For an admin this
+    reduces to the public rows, which is exactly what the admin maintains.
+    """
+    return or_(model.uploaded_by.is_(None), model.uploaded_by == user.id)
+
+
+def _record_upload(
+    session: Session,
+    kind: str,
+    saved_path: Path,
+    original_name: Optional[str],
+    owner: Optional[int],
+) -> None:
+    """
+    Remember which section an uploaded file belongs to, and for whom.
+
+    Only the newest file per section and scope is referenced, so the preview
+    always matches the data actually in use in that scope. Older files are left
+    on disk rather than deleted: the timetable and seating uploads share a
+    filename prefix, so there is no safe way to tell a superseded file from the
+    other section's current one.
+    """
+    session.exec(
+        delete(ExamUpload).where(ExamUpload.kind == kind, _delete_scope(ExamUpload, owner))
+    )
     session.add(
         ExamUpload(
             kind=kind,
@@ -68,6 +115,7 @@ def _record_upload(session: Session, kind: str, saved_path: Path, original_name:
             original_name=original_name,
             size_bytes=saved_path.stat().st_size,
             uploaded_at=datetime.now(),
+            uploaded_by=owner,
         )
     )
     session.commit()
@@ -81,13 +129,16 @@ def _record_upload(session: Session, kind: str, saved_path: Path, original_name:
 async def upload_seating_index(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    user: User = Depends(get_current_user),
 ):
     """
     Upload the seating-index PDF/CSV.
 
-    Parses every roll range into ``ExamSeating`` and replaces the previous index.
+    Parses every roll range into ``ExamSeating`` and replaces the previous
+    index *for that scope*: an admin refreshes the public index, an individual
+    replaces the seating table in their own account.
     """
+    owner = _upload_owner(user)
     saved_path, is_csv = _upload_meta(file)
 
     try:
@@ -103,16 +154,17 @@ async def upload_seating_index(
             detail="No seating rows found. Check that the PDF is a readable Class room Index.",
         )
 
-    session.exec(delete(ExamSeating))
+    session.exec(delete(ExamSeating).where(_delete_scope(ExamSeating, owner)))
     for row in rows:
-        session.add(ExamSeating(**row))
+        session.add(ExamSeating(uploaded_by=owner, **row))
     session.commit()
-    _record_upload(session, "seating", saved_path, file.filename)
+    _record_upload(session, "seating", saved_path, file.filename, owner)
 
     stats = result["stats"]
     logger.info("Seating index stored: %s rows (%s skipped)", stats["rows_parsed"], stats.get("rows_skipped"))
+    note = "" if owner is None else " (visible only in your account)"
     return {
-        "message": f"Seating index uploaded: {stats['rows_parsed']} rows parsed",
+        "message": f"Seating index uploaded: {stats['rows_parsed']} rows parsed{note}",
         "rows_inserted": stats["rows_parsed"],
         "rows_skipped": stats.get("rows_skipped", 0),
     }
@@ -122,10 +174,10 @@ async def upload_seating_index(
 async def upload_exam_seating_legacy(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    user: User = Depends(get_current_user),
 ):
     """Backwards-compatible alias of :func:`upload_seating_index`."""
-    return await upload_seating_index(file=file, session=session, _=_)
+    return await upload_seating_index(file=file, session=session, user=user)
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +188,15 @@ async def upload_exam_seating_legacy(
 async def upload_mid_sem_timetable(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    user: User = Depends(get_current_user),
 ):
-    """Upload the mid-sem exam timetable PDF/CSV into ``MidSemSchedule``."""
+    """
+    Upload the mid-sem exam timetable PDF/CSV into ``MidSemSchedule``.
+
+    Scope follows the uploader: an admin refreshes the paper list every account
+    reads; an individual's upload replaces their own account's copy of it.
+    """
+    owner = _upload_owner(user)
     saved_path, is_csv = _upload_meta(file)
 
     try:
@@ -154,15 +212,16 @@ async def upload_mid_sem_timetable(
             detail="No timetable rows found. Check that the PDF is a readable exam timetable.",
         )
 
-    session.exec(delete(MidSemSchedule))
+    session.exec(delete(MidSemSchedule).where(_delete_scope(MidSemSchedule, owner)))
     for row in rows:
-        session.add(MidSemSchedule(**row))
+        session.add(MidSemSchedule(uploaded_by=owner, **row))
     session.commit()
-    _record_upload(session, "timetable", saved_path, file.filename)
+    _record_upload(session, "timetable", saved_path, file.filename, owner)
 
     logger.info("Mid-sem timetable stored: %s rows", result["stats"]["rows_parsed"])
+    note = "" if owner is None else " (visible only in your account)"
     return {
-        "message": f"Exam timetable uploaded: {result['stats']['rows_parsed']} rows parsed",
+        "message": f"Exam timetable uploaded: {result['stats']['rows_parsed']} rows parsed{note}",
         "rows_inserted": result["stats"]["rows_parsed"],
     }
 
@@ -189,19 +248,24 @@ def _group_by_day(rows: List[Dict[str, Any]], date_key: str) -> "OrderedDict[str
 @router.get("/options")
 def exam_options(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Branch / semester / course options discovered in the uploaded exam data.
 
     Aggregates from both the mid-sem timetable (``MidSemSchedule``) and the
     seating index (``ExamSeating``), so profile dropdowns reflect the real
-    exam data no matter which section was uploaded.
+    exam data no matter which section was uploaded. Only this account's view
+    counts: the public rows plus whatever the account uploaded itself.
     """
     from features.exam.parser import normalize_branch
 
-    slots = session.exec(select(MidSemSchedule)).all()
-    seatings = session.exec(select(ExamSeating)).all()
+    slots = session.exec(
+        select(MidSemSchedule).where(_account_scope(MidSemSchedule, user))
+    ).all()
+    seatings = session.exec(
+        select(ExamSeating).where(_account_scope(ExamSeating, user))
+    ).all()
 
     branches: "OrderedDict[str, int]" = OrderedDict()
     for item in list(slots) + list(seatings):
@@ -245,7 +309,9 @@ def list_exam_timetable(
     profile_filter = profile_to_filter(profile, session)
     study = _student_course_map(session, profile_filter)
 
-    stored = session.exec(select(MidSemSchedule)).all()
+    stored = session.exec(
+        select(MidSemSchedule).where(_account_scope(MidSemSchedule, user))
+    ).all()
     rows: List[Dict[str, Any]] = []
     for item in stored:
         row = {
@@ -274,8 +340,9 @@ def list_exam_timetable(
         row["instructor"] = study[mine.upper()]
         rows.append(row)
 
-    # The timetable PDF has no hall column; borrow rooms from the seating index.
-    fill_rooms_from_seating(session, rows)
+    # The timetable PDF has no hall column; borrow rooms from the seating index
+    # the account reads - public plus its own - never someone else's.
+    fill_rooms_from_seating(session, rows, owner_id=user.id)
 
     grouped = _group_by_day(rows, "schedule_date")
     return {
@@ -349,8 +416,8 @@ def list_exam_clashes(
         )
 
     profile = profile_to_filter(get_profile_for_user(session, user))
-    clashes = detect_student_exam_clashes(session, target, profile)
-    exams = collect_student_exams(session, target, profile)
+    clashes = detect_student_exam_clashes(session, target, profile, owner_id=user.id)
+    exams = collect_student_exams(session, target, profile, owner_id=user.id)
 
     return {
         "roll": target,
@@ -389,7 +456,9 @@ def list_exam_seating(
     # Layer 2 target roll: query parameter wins, then the profile's own roll.
     target_roll = (roll or (user.roll_number or "")).strip().upper() or None
 
-    stored = session.exec(select(ExamSeating)).all()
+    stored = session.exec(
+        select(ExamSeating).where(_account_scope(ExamSeating, user))
+    ).all()
     rows: List[Dict[str, Any]] = []
     for item in stored:
         row = {
@@ -477,10 +546,12 @@ class ExamSlotResponse(BaseModel):
 @router.get("/slots", response_model=List[ExamSlotResponse])
 def list_exam_slots(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """List all exam timetable slots (ungrouped, for debugging and editing)."""
-    slots = session.exec(select(MidSemSchedule)).all()
+    """List exam timetable slots the account may see (ungrouped, for editing)."""
+    slots = session.exec(
+        select(MidSemSchedule).where(_account_scope(MidSemSchedule, user))
+    ).all()
     return [
         ExamSlotResponse(
             id=slot.id,
@@ -507,7 +578,10 @@ def edit_exam_slot(
 ):
     """Edit a single exam timetable slot."""
     slot = session.get(MidSemSchedule, slot_id)
-    if not slot:
+    if not slot or slot.uploaded_by is not None:
+        # Personal rows live in one student's account; this endpoint maintains
+        # the public timetable, so a personal id is simply not an exam slot
+        # here.
         raise HTTPException(status_code=404, detail="Exam slot not found")
 
     data = payload.model_dump(exclude_unset=True)
@@ -570,7 +644,7 @@ def lookup_exam(
         profile_filter = profile_to_filter(get_profile_for_user(session, user))
 
     try:
-        result = lookup_roll(session, roll, profile_filter)
+        result = lookup_roll(session, roll, profile_filter, owner_id=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -581,14 +655,16 @@ def lookup_exam(
 def quick_lookup_exam(
     roll: str = Query(..., description="Roll number (e.g., 23BCS100)"),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Quick Roll Lookup: only date, room and course code, with no profile filter.
 
-    Passes an empty profile so every range in the index is considered.
+    Passes an empty profile so every visible range is considered - the public
+    index plus the signed-in account's own upload - regardless of whose roll
+    is looked up.
     """
-    result = lookup_roll(session, roll.strip().upper(), profile={})
+    result = lookup_roll(session, roll.strip().upper(), profile={}, owner_id=user.id)
     exams = [
         {
             "date": exam["date"],
@@ -620,7 +696,7 @@ def download_exam_pdf(
     )
 
     try:
-        result = lookup_roll(session, roll, profile_filter)
+        result = lookup_roll(session, roll, profile_filter, owner_id=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -657,11 +733,13 @@ def download_exam_pdf(
 @router.get("/status")
 def exam_status(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Row counts so the Exam page can show whether uploads are present."""
-    timetable_rows = len(session.exec(select(MidSemSchedule)).all())
-    seating_rows = len(session.exec(select(ExamSeating)).all())
+    """Row counts in this account: the public rows plus the account's own."""
+    scope_timetable = _account_scope(MidSemSchedule, user)
+    scope_seating = _account_scope(ExamSeating, user)
+    timetable_rows = len(session.exec(select(MidSemSchedule).where(scope_timetable)).all())
+    seating_rows = len(session.exec(select(ExamSeating).where(scope_seating)).all())
     return {
         "timetable_rows": timetable_rows,
         "seating_rows": seating_rows,
@@ -673,10 +751,12 @@ def exam_status(
 UPLOAD_KINDS = {"timetable", "seating"}
 
 
-def _latest_upload(session: Session, kind: str) -> Optional[ExamUpload]:
-    """The newest recorded upload for a section, or ``None``."""
+def _latest_upload(session: Session, kind: str, user: User) -> Optional[ExamUpload]:
+    """The newest file recorded for a section in this account, or ``None``."""
     return session.exec(
-        select(ExamUpload).where(ExamUpload.kind == kind).order_by(ExamUpload.id.desc())
+        select(ExamUpload)
+        .where(ExamUpload.kind == kind, _account_scope(ExamUpload, user))
+        .order_by(ExamUpload.id.desc())
     ).first()
 
 
@@ -701,10 +781,12 @@ def _resolve_upload_path(filename: str) -> Path:
 def latest_exam_upload(
     kind: str = Query("timetable", description="`timetable` or `seating`"),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """
-    Metadata for the newest file uploaded to a section, for the preview button.
+    Metadata for the newest file uploaded to a section in this account, for the
+    preview button: the public file or, when this account uploaded one itself,
+    whichever landed last.
 
     Returns ``{"available": false}`` rather than 404 when nothing has been
     uploaded, so the UI can simply hide the button.
@@ -712,7 +794,7 @@ def latest_exam_upload(
     if kind not in UPLOAD_KINDS:
         raise HTTPException(status_code=400, detail=f"kind must be one of {sorted(UPLOAD_KINDS)}")
 
-    record = _latest_upload(session, kind)
+    record = _latest_upload(session, kind, user)
     if record is None:
         return {"available": False, "kind": kind}
 
@@ -736,13 +818,13 @@ def latest_exam_upload(
 def preview_exam_upload(
     kind: str = Query("timetable", description="`timetable` or `seating`"),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Stream the newest uploaded file for a section, inline, for preview."""
+    """Stream the newest file uploaded to a section in this account, inline."""
     if kind not in UPLOAD_KINDS:
         raise HTTPException(status_code=400, detail=f"kind must be one of {sorted(UPLOAD_KINDS)}")
 
-    record = _latest_upload(session, kind)
+    record = _latest_upload(session, kind, user)
     if record is None:
         raise HTTPException(status_code=404, detail="No file has been uploaded for this section")
 
@@ -759,10 +841,21 @@ def preview_exam_upload(
 @router.delete("/timetable", status_code=204)
 def clear_exam_timetable(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    user: User = Depends(get_current_user),
 ):
-    session.exec(delete(MidSemSchedule))
-    session.exec(delete(ExamUpload).where(ExamUpload.kind == "timetable"))
+    """
+    Remove one exam timetable upload.
+
+    An admin clears the public index - the paper list every account reads. An
+    individual clears the copy in their own account; nobody else's changes.
+    """
+    owner = _upload_owner(user)
+    session.exec(delete(MidSemSchedule).where(_delete_scope(MidSemSchedule, owner)))
+    session.exec(
+        delete(ExamUpload).where(
+            ExamUpload.kind == "timetable", _delete_scope(ExamUpload, owner)
+        )
+    )
     session.commit()
     return
 
@@ -770,10 +863,20 @@ def clear_exam_timetable(
 @router.delete("/seating", status_code=204)
 def clear_exam_seating(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    user: User = Depends(get_current_user),
 ):
-    session.exec(delete(ExamSeating))
-    session.exec(delete(ExamUpload).where(ExamUpload.kind == "seating"))
+    """
+    Remove one seating-index upload.
+
+    An admin clears the public seating index; an individual clears their own.
+    """
+    owner = _upload_owner(user)
+    session.exec(delete(ExamSeating).where(_delete_scope(ExamSeating, owner)))
+    session.exec(
+        delete(ExamUpload).where(
+            ExamUpload.kind == "seating", _delete_scope(ExamUpload, owner)
+        )
+    )
     session.commit()
     return
 

@@ -420,6 +420,10 @@ class ExamSeating(SQLModel, table=True):
     semester: Optional[int] = Field(default=None, index=True)
     #: True for open-elective / extra-course rows that span other branches.
     is_extra: bool = Field(default=False, index=True)
+    #: Who uploaded the row. ``None`` is an admin upload - the public index
+    #: every account sees. A user id is an individual's own upload, shown in
+    #: their account only.
+    uploaded_by: Optional[int] = Field(default=None, foreign_key="core.user.id", index=True)
 
 
 class ExamUpload(SQLModel, table=True):
@@ -453,6 +457,10 @@ class ExamUpload(SQLModel, table=True):
     size_bytes: Optional[int] = Field(default=None)
     #: Set explicitly on insert; ``None`` for rows written by older code.
     uploaded_at: Optional[datetime] = Field(default=None, sa_column=Column("uploaded_at", DateTime, nullable=True))
+    #: Who uploaded the file. ``None`` is an admin upload - its preview is
+    #: public. A user id is an individual's upload, previewed in their account
+    #: only.
+    uploaded_by: Optional[int] = Field(default=None, foreign_key="core.user.id", index=True)
 
 
 class TimetableUpload(SQLModel, table=True):
@@ -492,6 +500,10 @@ class MidSemSchedule(SQLModel, table=True):
     semester: Optional[int] = Field(default=None, index=True)
     #: OE group / elective group label when the PDF groups open electives.
     group: Optional[str] = Field(default=None)
+    #: Who uploaded the row. ``None`` is an admin upload - the paper list every
+    #: account reads. A user id is an individual's own upload, shown in their
+    #: account only.
+    uploaded_by: Optional[int] = Field(default=None, foreign_key="core.user.id", index=True)
 
 
 class Feedback(SQLModel, table=True):

@@ -70,6 +70,7 @@ def collect_student_exams(
     session: Session,
     roll: str,
     profile: Optional[Dict[str, Any]] = None,
+    owner_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     The student's own exams, de-duplicated per course and time slot.
@@ -84,7 +85,7 @@ def collect_student_exams(
     them, because an index lists every branch's elective papers and they are not
     all the student's.
     """
-    result = lookup_roll(session, roll.strip().upper(), profile)
+    result = lookup_roll(session, roll.strip().upper(), profile, owner_id=owner_id)
     declared = declared_course_codes(session, profile)
 
     exams: Dict[tuple, Dict[str, Any]] = {}
@@ -125,6 +126,7 @@ def detect_student_exam_clashes(
     session: Session,
     roll: str,
     profile: Optional[Dict[str, Any]] = None,
+    owner_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     Return the student's overlapping exams, grouped by date and time band.
@@ -136,7 +138,7 @@ def detect_student_exam_clashes(
          "courses": [{"course_code": "OE3E33", "rooms": ["L-104"]},
                      {"course_code": "HS1001", "rooms": ["L-105"]}]}
     """
-    exams = collect_student_exams(session, roll, profile)
+    exams = collect_student_exams(session, roll, profile, owner_id=owner_id)
     if len(exams) < 2:
         return []
 
