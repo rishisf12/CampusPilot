@@ -59,9 +59,17 @@ function Step({ n, label, done, active, last }: StepProps) {
           className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold"
           style={
             done
-              ? { background: 'var(--cp-primary)', color: 'var(--cp-on-primary)', boxShadow: 'var(--cp-clay)' }
+              ? {
+                  background: 'var(--cp-primary)',
+                  color: 'var(--cp-on-primary)',
+                  boxShadow: 'var(--cp-clay)',
+                }
               : active
-                ? { background: 'var(--cp-primary)', color: 'var(--cp-on-primary)', boxShadow: 'var(--cp-clay)' }
+                ? {
+                    background: 'var(--cp-primary)',
+                    color: 'var(--cp-on-primary)',
+                    boxShadow: 'var(--cp-clay)',
+                  }
                 : {
                     background: 'var(--cp-bg)',
                     color: 'var(--cp-muted)',
@@ -69,7 +77,7 @@ function Step({ n, label, done, active, last }: StepProps) {
                   }
           }
         >
-          {done ? 'âœ“' : n}
+          {n}
         </span>
         <span className="hidden sm:inline">{label}</span>
       </span>

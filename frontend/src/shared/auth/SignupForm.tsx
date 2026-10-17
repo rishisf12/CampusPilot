@@ -74,6 +74,7 @@ export default function SignupForm({
     branch: PROGRAMME_BRANCHES[firstProgramme][0] as BranchOption,
     username: '',
     roll_number: '',
+    whatsapp: '',
     password: '',
     confirm_password: '',
   });
@@ -108,6 +109,9 @@ export default function SignupForm({
       found.username = '3-30 characters: letters, numbers, dot, dash or underscore';
     const roll = form.roll_number.trim().toUpperCase();
     if (!ROLL_PATTERN.test(roll)) found.roll_number = 'Use YYBBBNNN, e.g. 23BCS125';
+    const digits = form.whatsapp.replace(/\D/g, '');
+    if (!digits) found.whatsapp = 'WhatsApp number is required';
+    else if (!/^[6-9]\d{9}$/.test(digits)) found.whatsapp = 'Enter a valid 10-digit mobile number';
     // No email check here: the address was proven in step 1 and is not editable.
     if (form.password.length < 8) found.password = 'At least 8 characters';
     if (form.password !== form.confirm_password) found.confirm_password = 'Passwords do not match';
@@ -126,6 +130,7 @@ export default function SignupForm({
       last_name: true,
       username: true,
       roll_number: true,
+      whatsapp: true,
       email: true,
       password: true,
       confirm_password: true,
@@ -149,6 +154,7 @@ export default function SignupForm({
         branch: canChangeBranch && showBranchChange && branchTo ? branchTo : form.branch,
         username: form.username.trim(),
         roll_number: form.roll_number.trim().toUpperCase(),
+        whatsapp: form.whatsapp.trim(),
         // The proven address, not anything typed here.
         email: verifiedEmail,
         password: form.password,
@@ -214,6 +220,7 @@ export default function SignupForm({
                   id="su-gender"
                   value={form.gender}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) => update('gender', e.target.value)}
+                  required
                 >
                   {GENDERS.map(gender => (
                     <option key={gender} value={gender}>
@@ -256,6 +263,7 @@ export default function SignupForm({
                     setBranchTo('');
                     setShowBranchChange(false);
                   }}
+                  required
                 >
                   {groupProgrammes.map(programme => (
                     <option key={programme} value={programme}>
@@ -275,6 +283,7 @@ export default function SignupForm({
                   onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                     update('semester', e.target.value)
                   }
+                  required
                 >
                   {semesters.map(value => (
                     <option key={value} value={value}>
@@ -294,6 +303,7 @@ export default function SignupForm({
                     update('branch', e.target.value);
                     setBranchFrom(e.target.value);
                   }}
+                  required
                 >
                   {branchOptions.map(branch => (
                     <option key={branch} value={branch}>
@@ -414,6 +424,23 @@ export default function SignupForm({
               >
                 Use a different email
               </button>
+            </Field>
+
+            {/* WhatsApp mobile number */}
+            <Field label="WhatsApp number" error={invalid('whatsapp')}>
+              <Input
+                id="su-whatsapp"
+                type="tel"
+                value={form.whatsapp}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  update('whatsapp', e.target.value.replace(/\s/g, ''))
+                }
+                onBlur={() => setTouched(t => ({ ...t, whatsapp: true }))}
+                autoComplete="tel"
+                placeholder="9876543210"
+                maxLength={10}
+                required
+              />
             </Field>
 
             {/* Password + strength */}

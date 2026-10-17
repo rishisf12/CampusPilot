@@ -41,6 +41,7 @@ class SignupRequest(BaseModel):
     branch: str
     username: str
     roll_number: str
+    whatsapp: Optional[str] = None
     email: EmailStr
     password: str
 
@@ -377,6 +378,7 @@ async def signup(data: SignupRequest, session: Session = Depends(get_session), r
         first_name=data.first_name,
         last_name=data.last_name,
         gender=data.gender,
+        phone=data.whatsapp,
         programme=data.programme,
         semester=data.semester,
         branch=data.branch,

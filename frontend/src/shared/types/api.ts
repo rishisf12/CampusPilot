@@ -35,6 +35,7 @@ export interface SignupRequest {
   branch: string;
   username: string;
   roll_number: string;
+  whatsapp: string;
   email: string;
   password: string;
 }
