@@ -8,7 +8,6 @@ import { normaliseRoom, splitCourseCodes } from '@shared/lib/normalise';
 import { readQuickLookup, writeQuickLookup } from '@shared/lib/storage';
 import { useSettings } from '@shared/features/settings/SettingsProvider';
 import { bumpProfileVersion } from '@shared/lib/storage';
-import useProfile from '@shared/hooks/useProfile';
 import useProfileVersion from '@shared/hooks/useProfileVersion';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import FileUpload from '@shared/components/FileUpload';
@@ -104,8 +103,6 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
   const [status, setStatus] = useState({ timetable_rows: 0, seating_rows: 0 });
   const [timetable, setTimetable] = useState<ExamTimetable | null>(null);
   const [seating, setSeating] = useState<ExamSeating | null>(null);
-  const [semester, setSemester] = useState('');
-  const [branch, setBranch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -117,7 +114,6 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
   const [looking, setLooking] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
 
-  const { branch: profileBranch, semester: profileSemester, electiveCodes } = useProfile();
   const profileVersion = useProfileVersion();
   // Privacy & Data > "Remember my exam lookup". Read through the settings store
   // rather than the storage module, so the switch in Settings is the one thing
@@ -133,11 +129,6 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
       ]);
       setStatus(statusData);
       setTimetable(timetableData);
-      // The dropdowns default to the profile. `||` rather than a "keep current"
-      // guard: a branch change must move the default, and the user can still
-      // override it afterwards.
-      setSemester(String(profileSemester ?? timetableData?.profile?.semester ?? ''));
-      setBranch(profileBranch || timetableData?.profile?.branch || '');
       setError(null);
     } catch (err) {
       // Keep the last good data: a failed refresh must not blank the exam views.
@@ -147,7 +138,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
     } finally {
       setLoading(false);
     }
-  }, [onError, profileBranch, profileSemester]);
+  }, [onError]);
 
   // Refetch on mount and whenever the profile changes, in this tab or another.
   useEffect(() => {
@@ -196,12 +187,12 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
   }, [subTab]);
 
   /**
-   * Semester/branch narrowing of the exam timetable.
+   * The papers as the profile gave them, one row per code.
    *
-   * Programme separation happens at registration now, so a BTech student and a
-   * master's student never share a filter: the branch match alone decides. The
-   * old PG/UG cross-check that sat here is gone with it. A cell listing two
-   * codes ("OE3M27/ME5D02") still counts as two papers rather than one.
+   * The backend narrows the list to the profile's synced subjects, so there is
+   * no semester or branch menu here to fight it: a paper the student does not
+   * sit is not in the payload at all. A paired cell ("OE3M27/ME5D02") still
+   * counts as two papers rather than one.
    */
   const visibleDays = useMemo(() => {
     if (!timetable?.days) return [];
@@ -213,43 +204,10 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
           // A paired cell is two papers.
           .flatMap(exam =>
             splitCourseCodes(exam.course_code).map(code => ({ ...exam, course_code: code }))
-          )
-          .filter(exam => {
-            if (semester && String(exam.semester ?? '') !== semester) return false;
-            if (!branch || !exam.branch) return true;
-            return exam.branch === branch || exam.branch.split(' ')[0] === branch.split(' ')[0];
-          }),
+          ),
       }))
       .filter(day => day.exams.length > 0);
-  }, [timetable, semester, branch]);
-
-  const hiddenCount = useMemo(() => {
-    const total = (timetable?.days || []).reduce((sum, day) => sum + day.exams.length, 0);
-    const visible = visibleDays.reduce((sum, day) => sum + day.exams.length, 0);
-    return total - visible;
-  }, [timetable, visibleDays]);
-
-  const isSynced =
-    String(timetable?.profile?.semester) === semester &&
-    (timetable?.profile?.branch || '') === branch;
-
-  /**
-   * Electives in the index that the student has not chosen.
-   *
-   * Shown as a hint, because "my papers are missing" is otherwise impossible to
-   * explain: the papers are in the index, just not opted into.
-   */
-  const hiddenElectives = useMemo(() => {
-    const seen = new Set<string>();
-    (timetable?.days || []).forEach(day => {
-      day.exams.forEach(exam => {
-        splitCourseCodes(exam.course_code).forEach(code => {
-          if (/^(OE|OI)/i.test(code)) seen.add(code);
-        });
-      });
-    });
-    return [...seen].filter(code => !electiveCodes.includes(code)).sort();
-  }, [timetable, electiveCodes]);
+  }, [timetable]);
 
   const runLookup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -458,19 +416,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
         </div>
       )}
 
-      {subTab === 'timetable' && (
-        <TimetableView
-          days={visibleDays}
-          semester={semester}
-          setSemester={setSemester}
-          branch={branch}
-          setBranch={setBranch}
-          isSynced={isSynced}
-          hiddenCount={hiddenCount}
-          total={status.timetable_rows}
-          hiddenElectives={hiddenElectives}
-        />
-      )}
+      {subTab === 'timetable' && <TimetableView days={visibleDays} total={status.timetable_rows} />}
 
       {subTab === 'seating' && (
         <SeatingView
@@ -697,27 +643,10 @@ function ExamUploadCard({ title, kind, count, onUpload, onRemove }: ExamUploadCa
 
 interface TimetableViewProps {
   days: ExamDay[];
-  semester: string;
-  setSemester: (value: string) => void;
-  branch: string;
-  setBranch: (value: string) => void;
-  isSynced: boolean;
-  hiddenCount: number;
   total?: number;
-  hiddenElectives?: string[];
 }
 
-function TimetableView({
-  days,
-  semester,
-  setSemester,
-  branch,
-  setBranch,
-  isSynced,
-  hiddenCount,
-  total,
-  hiddenElectives = [],
-}: TimetableViewProps) {
+function TimetableView({ days, total }: TimetableViewProps) {
   if (!total) {
     return (
       <Card className="text-center py-10 text-sm" style={{ color: 'var(--cp-muted)' }}>
@@ -728,65 +657,9 @@ function TimetableView({
 
   return (
     <div className="space-y-3">
-      <Card className="flex flex-wrap items-end gap-3">
-        <div>
-          <span className="label">Semester</span>
-          <Select
-            id="exam-semester"
-            className="w-32"
-            value={semester}
-            onChange={event => setSemester(event.target.value)}
-          >
-            <option value="">All</option>
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(value => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <span className="label">Branch</span>
-          <Select
-            id="exam-branch"
-            className="w-40"
-            value={branch}
-            onChange={event => setBranch(event.target.value)}
-          >
-            <option value="">All</option>
-            {BRANCH_OPTIONS.map(item => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </Select>
-        </div>
-        {isSynced && (
-          <Badge tone="success">
-            <CheckCircle2 size={12} strokeWidth={2} aria-hidden />
-            Synced with profile
-          </Badge>
-        )}
-        {hiddenCount > 0 && (
-          <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
-            {hiddenCount} row{hiddenCount === 1 ? '' : 's'} hidden by these filters.
-          </span>
-        )}
-      </Card>
-
-      {hiddenElectives.length > 0 && (
-        <p className="mt-2 text-xs" style={{ color: 'var(--cp-muted)' }}>
-          {hiddenElectives.length} elective{hiddenElectives.length === 1 ? '' : 's'} in this index{' '}
-          {hiddenElectives.length === 1 ? 'is' : 'are'} not in your profile:{' '}
-          <span className="font-mono">{hiddenElectives.slice(0, 6).join(', ')}</span>
-          {hiddenElectives.length > 6 && ` +${hiddenElectives.length - 6} more`}. Add one under
-          Profile &rarr; Electives to see its paper.
-        </p>
-      )}
-
       {days.length === 0 ? (
         <Card className="text-center py-8 text-sm" style={{ color: 'var(--cp-muted)' }}>
-          Nothing matches these filters.
+          None of the papers in this index are courses your profile lists.
         </Card>
       ) : (
         days.map((day, index) => (
