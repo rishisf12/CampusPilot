@@ -231,15 +231,20 @@ describe('weekOrderStartingOn', () => {
   });
 
   test('daysUntilWeekday wraps forward', () => {
-    // Friday is Friday: 0. Monday from Friday is 3, not -4.
-    assert.equal(daysUntilWeekday('Fri'), 0);
-    assert.equal(daysUntilWeekday('Sat'), 1);
-    assert.equal(daysUntilWeekday('Mon'), 3);
-    assert.equal(daysUntilWeekday('Sun'), 2);
+    // Today is pinned to a Friday. These assertions only hold on a Friday, so
+    // the day is passed in rather than read from the clock: this test used to
+    // fail on four days out of seven and pass on three, which is the kind of
+    // flake that gets dismissed as unrelated.
+    const friday = new Date('2026-10-16T09:00:00'); // a Friday, local time
+
+    assert.equal(daysUntilWeekday('Fri', friday), 0);
+    assert.equal(daysUntilWeekday('Sat', friday), 1);
+    assert.equal(daysUntilWeekday('Sun', friday), 2);
+    assert.equal(daysUntilWeekday('Mon', friday), 3);
   });
 
   test('an unknown target is treated as today', () => {
-    assert.equal(daysUntilWeekday('nonsense'), 0);
+    assert.equal(daysUntilWeekday('nonsense', new Date('2026-10-16T09:00:00')), 0);
   });
 });
 

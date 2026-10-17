@@ -64,7 +64,7 @@ def log_audit(
              before_json, after_json, ip_hash, user_agent_hash, request_id, created_at)
             VALUES (:actor_id, :actor_email, :actor_role, :action, :target_type, :target_id,
                     :before_json, :after_json, :ip_hash, :ua_hash, :request_id, :created_at)
-        """),
+        """),  # noqa: E501
         {
             "actor_id": actor.id if actor else None,
             "actor_email": actor.email if actor else None,
@@ -80,3 +80,12 @@ def log_audit(
             "created_at": datetime.utcnow(),
         }
     )
+    # Committed here rather than left to the caller.
+    #
+    # Every admin service function commits its own transaction before returning,
+    # so by the time a route calls this the session has already been committed
+    # and nothing will commit the audit row afterwards - `get_session` only
+    # closes. Without this the INSERT is silently rolled back on close and the
+    # audit log stays permanently empty, which looks exactly like "no actions
+    # were ever taken".
+    session.commit()

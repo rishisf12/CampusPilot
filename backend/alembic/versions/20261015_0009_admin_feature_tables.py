@@ -42,7 +42,12 @@ TABLES: list[tuple[str, str]] = [
     ("features.force_update.models", "core.force_update_rule"),
     ("features.health.models", "core.health_check"),
     ("features.health.models", "core.health_history"),
-    ("features.moderation.models", "core.moderation_queue"),
+    # ("features.moderation.models", "core.moderation_queue"),
+    #   Removed with the moderation feature. Nothing ever enqueued content for
+    #   review - ModerationQueue was only ever read, never written - so a fresh
+    #   install has no reason to create the table. Installations that already ran
+    #   this migration keep an empty core.moderation_queue; it is inert and can
+    #   be dropped in a later cleanup.
     ("features.security.models", "core.security_feed"),
     ("features.security.models", "core.security_event"),
     ("features.user_control.models", "core.user_control_action"),

@@ -192,7 +192,6 @@ from features.user_control import routes as user_control_routes
 from features.broadcasts import routes as broadcasts_routes
 from features.force_update import routes as force_update_routes
 from features.security import routes as security_routes
-from features.moderation import routes as moderation_routes
 from ocr import routes as ocr_routes
 from features.settings import routes as settings_routes
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
@@ -224,7 +223,6 @@ app.include_router(user_control_routes.router, tags=["Admin - User Control"])
 app.include_router(broadcasts_routes.router, tags=["Admin - Broadcasts"])
 app.include_router(force_update_routes.router, tags=["Admin - Force Update"])
 app.include_router(security_routes.router, tags=["Admin - Security"])
-app.include_router(moderation_routes.router, tags=["Admin - Moderation"])
 app.include_router(collect_router)
 app.include_router(monitoring_router)
 

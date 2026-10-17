@@ -1105,14 +1105,20 @@ class TestAdminRoutes:
             user_id = user.id
         return {"Authorization": f"Bearer {create_access_token(user_id, 'monadmin')}"}
 
-    def test_subsection_list_has_all_eight(self, anon_client, admin):
+    def test_subsection_list_is_web_only(self, anon_client, admin):
+        """Four subsections, not eight.
+
+        The four Android entries (A_A_HEALTH, B_A_ACTIVITY, C_A_SECURITY,
+        D_A_FEEDBACK) were removed with the Android client they described. There
+        has never been an Android build: every telemetry row this install
+        collects is platform="web". C_W_SECURITY stays - failed logins and brute
+        force are recorded by auth/routes.py and are real.
+        """
         body = anon_client.get("/monitoring/subsections", headers=admin).json()
-        assert len(body["subsections"]) == 8
+        assert len(body["subsections"]) == 4
         ids = {s["id"] for s in body["subsections"]}
-        assert ids == {
-            "A_W_HEALTH", "B_W_ACTIVITY", "C_W_SECURITY", "D_W_FEEDBACK",
-            "A_A_HEALTH", "B_A_ACTIVITY", "C_A_SECURITY", "D_A_FEEDBACK",
-        }
+        assert ids == {"A_W_HEALTH", "B_W_ACTIVITY", "C_W_SECURITY", "D_W_FEEDBACK"}
+        assert all(s["platform"] == "web" for s in body["subsections"])
 
     def test_overview_returns_every_section(self, anon_client, admin, db):
         r = anon_client.get("/monitoring/overview?days=7", headers=admin)

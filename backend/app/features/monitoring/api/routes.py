@@ -236,15 +236,22 @@ def collect_security_signal(
 
 monitoring_router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
+# Only the web platform is monitored.
+#
+# The four Android subsections (A_A_HEALTH, B_A_ACTIVITY, C_A_SECURITY,
+# D_A_FEEDBACK) were removed with the Android client they described. There has
+# never been an Android build: every telemetry row this install has collected is
+# platform="web", and android-sdk-snippet was two files nothing imported.
+# C_A_SECURITY went with them, which is the one genuine loss here - it checked
+# for root, emulator, tampering and hooking, none of which a browser app is
+# exposed to. The web half (C_W_SECURITY: failed logins, brute force, security
+# headers, dependency CVEs) is kept, because auth/routes.py really does record
+# those events and brute-force detection has live writers.
 SUBSECTIONS: tuple[dict[str, str], ...] = (
     {"id": "A_W_HEALTH", "platform": "web", "group": "Web App Monitoring", "title": "Health & Performance"},
-    {"id": "B_W_ACTIVITY", "platform": "web", "group": "Web App Monitoring", "title": "User Activity & Monetization"},
+    {"id": "B_W_ACTIVITY", "platform": "web", "group": "Web App Monitoring", "title": "User Activity"},
     {"id": "C_W_SECURITY", "platform": "web", "group": "Web App Monitoring", "title": "Security Monitoring"},
     {"id": "D_W_FEEDBACK", "platform": "web", "group": "Web App Monitoring", "title": "Feedback Analysis"},
-    {"id": "A_A_HEALTH", "platform": "android", "group": "Android App Monitoring", "title": "Health & Performance"},
-    {"id": "B_A_ACTIVITY", "platform": "android", "group": "Android App Monitoring", "title": "User Activity & Monetization"},
-    {"id": "C_A_SECURITY", "platform": "android", "group": "Android App Monitoring", "title": "Security Monitoring"},
-    {"id": "D_A_FEEDBACK", "platform": "android", "group": "Android App Monitoring", "title": "Feedback Analysis"},
 )
 
 
@@ -392,27 +399,18 @@ def activity(
     return queries.activity_detail(session, start, end, platform)
 
 
-@monitoring_router.get("/monetisation")
-def monetisation(
-    days: int = Query(default=30, ge=1, le=365),
-    platform: Optional[str] = Query(default=None, pattern="^(web|android)$"),
-    session: Session = Depends(get_session),
-    _admin=Depends(get_current_admin),
-):
-    days = max(1, min(days, 365))
-    start, end = _window(days)
-    prev_start, prev_end = start - timedelta(days=days), start
-    return queries.monetisation_detail(session, start, end, prev_start, prev_end, platform)
-
-
 # --------------------------------------------------------------------------
-# Security Monitoring (Subsection C)
+# Security Monitoring (Subsection C - web only)
 # --------------------------------------------------------------------------
+
+# The android platform parameter is gone from this endpoint's sibling queries
+# along with the Android client. C_A_SECURITY (root / emulator / tampering)
+# was removed; this is the web half and it has live writers in auth/routes.py.
 
 @monitoring_router.get("/security")
 def security(
     days: int = Query(default=7, ge=1, le=90),
-    platform: Optional[str] = Query(default=None, pattern="^(web|android)$"),
+    platform: Optional[str] = Query(default=None, pattern="^web$"),
     session: Session = Depends(get_session),
     _admin=Depends(get_current_admin),
 ):
@@ -881,12 +879,9 @@ def export_subsection(
     if kind == "A":
         payload: dict[str, Any] = queries.health_detail(session, start, end, platform)
     elif kind == "B":
-        payload = {
-            "activity": queries.activity_detail(session, start, end, platform),
-            "monetisation": queries.monetisation_detail(
-                session, start, end, start - timedelta(days=days), start, platform
-            ),
-        }
+        # Activity only. The "monetisation" half of this payload described ad
+        # revenue and in-app purchases for a client that does not exist.
+        payload = queries.activity_detail(session, start, end, platform)
     elif kind == "C":
         payload = queries.security_detail(session, start, end, platform)
     else:

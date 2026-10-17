@@ -1,5 +1,5 @@
-﻿import { Suspense, lazy, useEffect, useState } from 'react';
-import { Activity, Menu, MessageSquare, Smartphone, X } from 'lucide-react';
+import { Suspense, lazy, useEffect, useState } from 'react';
+import { Activity, Menu, MessageSquare, X } from 'lucide-react';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { healthApi } from '@/api';
 import { Badge, Tabs } from '@/components/ui';
@@ -81,12 +81,6 @@ export function AdminRoutes() {
       label: 'Web App Monitoring',
       icon: <Activity size={16} strokeWidth={2} aria-hidden />,
       hue: 'sky',
-    },
-    {
-      id: 'android-monitoring',
-      label: 'Android App Monitoring',
-      icon: <Smartphone size={16} strokeWidth={2} aria-hidden />,
-      hue: 'mint',
     },
   ];
 
@@ -206,9 +200,6 @@ export function AdminRoutes() {
           <Suspense fallback={<ModuleLoading />}>
             {adminTab === 'responses' && <AdminPanel onError={setConnectionError} />}
             {adminTab === 'web-monitoring' && <Monitoring platformGroup="Web App Monitoring" />}
-            {adminTab === 'android-monitoring' && (
-              <Monitoring platformGroup="Android App Monitoring" />
-            )}
             {adminTab === 'profile' && <Profile />}
             {adminTab === 'settings' && <Settings onOpenProfile={() => setAdminTab('profile')} />}
           </Suspense>

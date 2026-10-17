@@ -17,7 +17,6 @@ import {
   pctChange,
 } from '../components/components';
 import type { MiniBarDatum } from '../components/components';
-import type { MonetisationData } from './Monetisation';
 
 interface DimensionRow {
   value: string;
@@ -46,12 +45,11 @@ export interface ActivityData {
 
 interface ActivityPanelProps {
   data?: ActivityData | null;
-  monetisation?: MonetisationData | null;
   loading?: boolean;
   awaiting?: boolean;
 }
 
-export function ActivityPanel({ data, monetisation, loading, awaiting }: ActivityPanelProps) {
+export function ActivityPanel({ data, loading, awaiting }: ActivityPanelProps) {
   if (awaiting) {
     return (
       <div className="space-y-4">
@@ -219,46 +217,6 @@ export function ActivityPanel({ data, monetisation, loading, awaiting }: Activit
           </>
         )}
       </Panel>
-
-      {/* Monetization summary (inline in Activity panel) */}
-      {monetisation && (
-        <Panel
-          title="Monetization summary"
-          subtitle="Verified = store-validated. Unverified = client-claimed."
-        >
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatTile
-              label="Verified revenue"
-              value={num(monetisation.current?.revenue_verified_micros || 0)}
-              delta={monetisation.changes?.verified_revenue_pct}
-              deltaLabel="vs previous period"
-              hint="store-validated only"
-              hue="mint"
-            />
-            <StatTile
-              label="Ad revenue"
-              value={num(monetisation.current?.ad_revenue_micros || 0)}
-              delta={monetisation.changes?.ad_revenue_pct}
-              deltaLabel="vs previous period"
-              hue="amber"
-            />
-            <StatTile
-              label="Active subscriptions"
-              value={num(monetisation.current?.active_subscriptions || 0)}
-              delta={monetisation.changes?.subscriptions_pct}
-              deltaLabel="vs previous period"
-              hue="sky"
-            />
-            <StatTile
-              label="Total revenue"
-              value={num(monetisation.current?.total_revenue_micros || 0)}
-              delta={monetisation.changes?.total_revenue_pct}
-              deltaLabel="vs previous period"
-              hue="indigo"
-            />
-          </div>
-        </Panel>
-      )}
     </div>
   );
 }

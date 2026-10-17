@@ -72,7 +72,6 @@ const proxied = [
   '/admin/flags',
   '/admin/force-update',
   '/admin/maintenance',
-  '/admin/moderation',
   '/admin/remote-config',
   '/admin/security',
   '/admin/users',

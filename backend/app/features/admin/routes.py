@@ -6,10 +6,26 @@ from sqlmodel import Session
 
 from core.database import get_session
 from core.deps import get_current_admin
+from core.audit import log_audit
 from models import User
 from features.admin import service
 
 router = APIRouter(tags=["Admin"])
+
+
+def user_role_before(session: Session, user_id: int) -> Optional[str]:
+    """The role a user held before this change, for the audit trail.
+
+    Read before the mutation so the log can say what changed rather than only
+    what it became. Returns None when the user does not exist, which the caller
+    already treats as a 404.
+    """
+    from sqlmodel import select
+
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    if user is None:
+        return None
+    return getattr(user.role, "value", str(user.role))
 
 
 class RoleBody(BaseModel):
@@ -51,9 +67,16 @@ def admin_set_role(
         raise HTTPException(status_code=400, detail="role must be admin or student")
     if admin.id == user_id and body.role != "admin":
         raise HTTPException(status_code=400, detail="You cannot demote yourself")
+    before_role = user_role_before(session, user_id)
     user = service.set_role(session, user_id, body.role)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    log_audit(
+        session, actor=admin, action="user.role.change",
+        target_type="user", target_id=str(user_id),
+        before={"role": before_role},
+        after={"role": body.role},
+    )
     return service.to_public(user)
 
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Web App Monitoring and Android App Monitoring.
  *
  * Two groups of four subsections, sharing one data fetch. The eight subsections
@@ -28,7 +28,6 @@ import { ActivityPanel, type ActivityData } from './panels/Activity';
 import { FeedbackPanel, type FeedbackData } from './panels/Feedback';
 import { HealthPanel, type HealthData } from './panels/Health';
 import { HistoryPanel, type HistoryData } from './panels/History';
-import { type MonetisationData, MonetisationPanel } from './panels/Monetisation';
 import { SecurityPanel, type SecurityData } from './panels/Security';
 
 const RANGES = [
@@ -38,13 +37,8 @@ const RANGES = [
   { days: 90, label: '90d' },
 ] as const;
 
-/** Rendered when a platform has never reported anything. */
-function isAwaiting(group: string): boolean {
-  return group === 'Android App Monitoring';
-}
-
 /**
- * Scan history is a tab across all eight subsections, not a ninth one.
+ * Scan history is a tab across every subsection, not an extra one.
  *
  * Kept out of the server-provided list so the count of eight stays
  * authoritative and the backend's scan allowlist cannot drift from what the UI
@@ -122,28 +116,22 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
     }
   }, [platformGroup, subsections, selected]);
 
-  const [monetisation, setMonetisation] = useState<MonetisationData | null>(null);
   const [exporting, setExporting] = useState<'json' | 'csv' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     const platform = current?.platform ?? 'web';
-    // Android has no client, so asking for its numbers would only ever produce
-    // zeros. Fetch anyway so the moment a client starts reporting, the panel is
-    // already wired to it.
     const results = await Promise.allSettled([
       monitoringApi.overview(days, platform),
       monitoringApi.health(days, platform),
       monitoringApi.feedback(days),
       monitoringApi.history(selected),
-      monitoringApi.monetisation(days),
     ]);
     if (results[0].status === 'fulfilled') setOverview(results[0].value as ActivityData);
     if (results[1].status === 'fulfilled') setHealth(results[1].value as HealthData);
     if (results[2].status === 'fulfilled') setFeedback(results[2].value as FeedbackData);
     if (results[3].status === 'fulfilled') setHistory(results[3].value as HistoryData);
-    if (results[4].status === 'fulfilled') setMonetisation(results[4].value as MonetisationData);
 
     const failures = results.filter(r => r.status === 'rejected');
     if (failures.length === results.length) {
@@ -393,8 +381,8 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
                 {selected === 'E_HISTORY'
                   ? 'Every scan verdict, the incident log, and the tool-call audit'
                   : current
-                    ? `${current.group} Â· ${current.id}`
-                    : 'Loading subsection listâ€¦'}
+                    ? `${current.group} · ${current.id}`
+                    : 'Loading subsection list…'}
               </p>
             </div>
             {selected !== 'E_HISTORY' && (
@@ -417,7 +405,6 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
             health={health}
             feedback={feedback}
             history={history}
-            monetisation={monetisation}
             loading={loading}
           />
         </div>
@@ -433,7 +420,6 @@ interface PanelBodyProps {
   health: HealthData | null;
   feedback: FeedbackData | null;
   history: HistoryData | null;
-  monetisation: MonetisationData | null;
   loading: boolean;
 }
 
@@ -444,7 +430,6 @@ function PanelBody({
   health,
   feedback,
   history,
-  monetisation,
   loading,
 }: PanelBodyProps) {
   // Scan history is dispatched on `selected`, not `current`.
@@ -452,47 +437,27 @@ function PanelBody({
   // `current` is the server-provided subsection matching the selection, so it is
   // undefined for E_HISTORY - which is exactly why that tab is not in the
   // server's list. Checking `current` first (which this did originally) makes
-  // the `case HISTORY_TAB` below unreachable, and the tab renders "Loadingâ€¦"
+  // the `case HISTORY_TAB` below unreachable, and the tab renders "Loading…"
   // forever with nothing in the console to explain it.
   if (selected === HISTORY_TAB) {
     return <HistoryPanel data={history} loading={loading} />;
   }
   if (!current) return <Loading />;
-  const awaiting = isAwaiting(current.group);
   switch (current.id) {
     case 'A_W_HEALTH':
-    case 'A_A_HEALTH':
-      return <HealthPanel data={health} loading={loading} awaiting={awaiting} />;
+      return <HealthPanel data={health} loading={loading} />;
     case 'B_W_ACTIVITY':
-    case 'B_A_ACTIVITY':
-      return (
-        <div className="space-y-4">
-          <ActivityPanel
-            data={overview}
-            monetisation={monetisation}
-            loading={loading}
-            awaiting={awaiting}
-          />
-          {/* The subsection is titled "User Activity & Monetization", but
-              ActivityPanel only carries four summary tiles. The detailed
-              revenue / subscription / ad breakdown lived in MonetisationPanel
-              and was never rendered anywhere, so it is mounted here to make
-              the second half of the subsection actually visible. */}
-          <MonetisationPanel data={monetisation} loading={loading} awaiting={awaiting} />
-        </div>
-      );
+      // No monetisation panel. This subsection is "User Activity & Monetization",
+      // but the second half described ad revenue and in-app purchases for a
+      // client that does not exist: this is a free student web app with no ads
+      // and no IAP. The breakdown read as all-zero panels an admin could not
+      // distinguish from a broken collector.
+      return <ActivityPanel data={overview} loading={loading} />;
     case 'C_W_SECURITY':
-    case 'C_A_SECURITY':
-      return (
-        <SecurityPanel
-          data={overview as SecurityData | null}
-          loading={loading}
-          awaiting={awaiting}
-        />
-      );
+      return <SecurityPanel data={overview as SecurityData | null} loading={loading} />;
     case 'D_W_FEEDBACK':
     case 'D_A_FEEDBACK':
-      return <FeedbackPanel data={feedback} loading={loading} awaiting={awaiting} />;
+      return <FeedbackPanel data={feedback} loading={loading} />;
     default:
       return <Loading />;
   }
@@ -501,7 +466,7 @@ function PanelBody({
 function Loading() {
   return (
     <Card className="text-center text-sm" style={{ color: 'var(--cp-muted)' }} aria-live="polite">
-      Loadingâ€¦
+      Loading…
     </Card>
   );
 }
@@ -544,7 +509,7 @@ function ScanButton({
             : `Scan ${subsection} with the rule engine only. Every figure comes from measured metrics.`
       }
     >
-      {scanning ? 'Scanning…' : 'Scan now'}
+      {scanning ? 'Scanning�' : 'Scan now'}
     </Button>
   );
 }
@@ -571,7 +536,7 @@ function ScanOutcome({ result, llmEnabled }: { result: ScanResultResponse; llmEn
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <Badge tone={SCAN_STATUS_TONES[result.status] ?? 'neutral'}>{result.status}</Badge>
         <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
-          {result.model} · {result.duration_ms} ms · {new Date(result.created_at).toLocaleString()}
+          {result.model} � {result.duration_ms} ms � {new Date(result.created_at).toLocaleString()}
         </span>
       </div>
       <p className="text-sm" style={{ color: 'var(--cp-text)' }}>
@@ -593,7 +558,7 @@ function ScanOutcome({ result, llmEnabled }: { result: ScanResultResponse; llmEn
           {result.findings.map((f, i) => (
             <li key={`${f.title}-${i}`} className="text-xs">
               <span style={{ color: 'var(--cp-text)' }}>{f.title}</span>
-              <span style={{ color: 'var(--cp-muted)' }}> — {f.severity}</span>
+              <span style={{ color: 'var(--cp-muted)' }}> � {f.severity}</span>
             </li>
           ))}
         </ul>

@@ -67,7 +67,6 @@ from features.flags import models as _flags_models  # noqa: E402,F401
 from features.force_update import models as _force_update_models  # noqa: E402,F401
 from features.health import models as _health_models  # noqa: E402,F401
 from features.maintenance import models as _maintenance_models  # noqa: E402,F401
-from features.moderation import models as _moderation_models  # noqa: E402,F401
 from features.remote_config import models as _remote_config_models  # noqa: E402,F401
 from features.security import models as _security_models  # noqa: E402,F401
 from features.settings import models as _settings_models  # noqa: E402,F401
@@ -113,7 +112,15 @@ def _assert_metadata_complete() -> None:
         existing -= {"alembic_version"}
     except Exception:  # noqa: BLE001 - database may not be reachable at import
         return
-    missing = existing - known_unqualified
+    # Tables for removed features, whose DROP migration has not yet run on
+    # every deployment. They are legitimately absent from SQLModel.metadata,
+    # and without listing them this check refuses to start *before* the very
+    # migration that removes them could run - a deadlock, because the app then
+    # cannot boot and so can never migrate. Drop the entry in the same change
+    # that drops the table for good.
+    _RETIRED_TABLES = {"moderation_queue"}
+
+    missing = existing - known_unqualified - _RETIRED_TABLES
     if missing:
         raise RuntimeError(
             "These tables exist in the database but not in SQLModel.metadata: "

@@ -9,6 +9,7 @@ from core.database import get_session
 from core.deps import get_current_admin
 from models import User
 from features.user_control import service
+from core.audit import log_audit
 
 router = APIRouter(prefix="/admin/users", tags=["Admin - User Control"])
 
@@ -57,6 +58,11 @@ def admin_suspend_user(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if action is None:
         raise HTTPException(status_code=404, detail="User not found")
+    log_audit(
+        session, actor=admin, action="user.suspend",
+        target_type="user", target_id=str(user_id),
+        after={"action": action.action, "reason": body.reason, "expires_at": str(action.expires_at)},
+    )
     return service.to_public(action)
 
 
@@ -73,6 +79,11 @@ def admin_ban_user(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if action is None:
         raise HTTPException(status_code=404, detail="User not found")
+    log_audit(
+        session, actor=admin, action="user.ban",
+        target_type="user", target_id=str(user_id),
+        after={"action": action.action, "reason": body.reason},
+    )
     return service.to_public(action)
 
 
@@ -89,6 +100,11 @@ def admin_force_logout(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if action is None:
         raise HTTPException(status_code=404, detail="User not found")
+    log_audit(
+        session, actor=admin, action="user.force_logout",
+        target_type="user", target_id=str(user_id),
+        after={"action": action.action, "reason": body.reason},
+    )
     return service.to_public(action)
 
 
@@ -105,6 +121,11 @@ def admin_revoke_tokens(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if action is None:
         raise HTTPException(status_code=404, detail="User not found")
+    log_audit(
+        session, actor=admin, action="user.revoke_tokens",
+        target_type="user", target_id=str(user_id),
+        after={"action": action.action, "reason": body.reason},
+    )
     return service.to_public(action)
 
 
@@ -121,6 +142,11 @@ def admin_reset_verification(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if action is None:
         raise HTTPException(status_code=404, detail="User not found")
+    log_audit(
+        session, actor=admin, action="user.reset_verification",
+        target_type="user", target_id=str(user_id),
+        after={"action": action.action, "reason": body.reason},
+    )
     return service.to_public(action)
 
 
@@ -161,6 +187,14 @@ def admin_bulk_action(
     if body.action == "suspend" and body.duration_days is None:
         raise HTTPException(status_code=400, detail="duration_days required for suspend")
     actions = service.bulk_action(session, admin.id, body.user_ids, body.action, body.reason, body.duration_days)
+    # One entry for the bulk action, not one per affected user: 500 rows from one
+    # click is unreadable in the log and the count of user_ids already records
+    # the scale.
+    log_audit(
+        session, actor=admin, action=f"user.bulk.{body.action}",
+        target_type="user", target_id=None,
+        after={"affected": len(actions), "reason": body.reason},
+    )
     return {"performed": len(actions), "actions": [service.to_public(a) for a in actions]}
 
 
