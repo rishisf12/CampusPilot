@@ -1,13 +1,13 @@
-"""Ollama client for local LLM inference.
+"""Async LLM client for the scan subsystem.
 
-This module provides a simple async client for calling a local Ollama
-server. It uses the OpenAI-compatible /v1/chat/completions endpoint
-that Ollama exposes.
+This module provides a simple async client for calling any LLM endpoint
+that speaks the OpenAI-compatible `/v1/chat/completions` shape - hosted
+providers (Groq free tier, HuggingFace Inference, NVIDIA NIM, OpenRouter)
+or a self-hosted server behind the same protocol.
 
 Key properties:
-- No API keys required
-- No egress - runs on localhost or in the same Docker network
-- CPU-only inference (models loaded on demand with keep_alive=0)
+- API key optional (empty means no Authorization header)
+- One code path for every provider: only base URL, model and key change
 - Structured output via JSON schema validation (Pydantic)
 """
 from __future__ import annotations
@@ -24,18 +24,19 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 
-class OllamaConfig(BaseModel):
+class LLMConfig(BaseModel):
     """Configuration for the Stage 2 client.
 
-    Despite the name this is provider-agnostic: every supported backend speaks
-    the OpenAI chat-completions shape (local Ollama, Groq free tier,
-    HuggingFace Inference, NVIDIA NIM). Only the base URL, model and key
-    change. `api_key` empty means no auth header, which is correct for local
-    Ollama.
+    Provider-agnostic: every supported backend speaks the OpenAI
+    chat-completions shape. Only the base URL, model and key change.
+    `api_key` empty means no auth header, which is correct for servers
+    that need none.
     """
 
-    base_url: str = "http://ollama:11434/v1"
-    model: str = "qwen3:4b"
+    #: Empty by default: there is no sensible built-in endpoint. Stage 2 stays
+    #: off unless the operator points `LLM_BASE_URL` at a reachable server.
+    base_url: str = ""
+    model: str = ""
     api_key: str = ""
     timeout: float = 240.0
     temperature: float = 0.1
@@ -44,8 +45,8 @@ class OllamaConfig(BaseModel):
     #:
     #: A scan verdict is a status, a one-line summary and a few findings that
     #: the rule engine has already fixed - it is not prose, so a large budget
-    #: only buys the model room to wander. Measured on CPU with qwen3:4b and a
-    #: 294-token prompt: a 4096 budget ran 509s and burned ~1960 tokens before
+    #: only buys the model room to wander. Measured on CPU with a 4B model and
+    #: a 294-token prompt: a 4096 budget ran 509s and burned ~1960 tokens before
     #: emitting a 381-character JSON object, while 512 finished the same object
     #: in 97s. The headroom bought nothing and blew the request timeout, which
     #: is what made every scan look like an LLM outage.
@@ -56,37 +57,27 @@ class LLMError(Exception):
     """LLM-related error."""
 
 
-def resolve_llm_config(settings) -> "OllamaConfig":
+def resolve_llm_config(settings) -> "LLMConfig":
     """Build the Stage 2 client config from settings.
 
-    `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY` win when set; otherwise the legacy
-    `OLLAMA_*` values apply so existing local setups keep working untouched.
     `GROQ_API_KEY` is accepted as a fallback key name because that is what
     Groq's own dashboard labels it.
     """
-    base_url = settings.llm_base_url or settings.ollama_base_url
-    model = settings.llm_model or settings.ollama_model
-    api_key = (
-        settings.llm_api_key
-        or getattr(settings, "groq_api_key", "")
-        or ""
-    )
-    return OllamaConfig(
-        base_url=base_url,
-        model=model,
-        api_key=api_key,
-        timeout=settings.ollama_timeout,
+    return LLMConfig(
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
+        api_key=settings.llm_api_key or getattr(settings, "groq_api_key", "") or "",
+        timeout=settings.llm_timeout,
     )
 
 
-class OllamaClient:
-    """Async client for Ollama's OpenAI-compatible API."""
+class LLMClient:
+    """Async client for an OpenAI-compatible chat-completions endpoint."""
 
-    def __init__(self, config: Optional[OllamaConfig] = None):
-        self.config = config or OllamaConfig(
-            base_url=os.getenv("LLM_BASE_URL")
-            or os.getenv("OLLAMA_BASE_URL", "http://ollama:11434/v1"),
-            model=os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL", "qwen3:4b"),
+    def __init__(self, config: Optional[LLMConfig] = None):
+        self.config = config or LLMConfig(
+            base_url=os.getenv("LLM_BASE_URL", ""),
+            model=os.getenv("LLM_MODEL", ""),
             api_key=os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY", ""),
         )
         self._client: Optional[httpx.AsyncClient] = None
@@ -94,7 +85,7 @@ class OllamaClient:
             {"Authorization": f"Bearer {self.config.api_key}"} if self.config.api_key else {}
         )
 
-    async def __aenter__(self) -> "OllamaClient":
+    async def __aenter__(self) -> "LLMClient":
         self._client = httpx.AsyncClient(
             base_url=self.config.base_url,
             timeout=httpx.Timeout(self.config.timeout),
@@ -121,10 +112,12 @@ class OllamaClient:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> BaseModel:
-        """Call Ollama chat completion and parse response as Pydantic model.
+        """Call chat completion and parse response as Pydantic model.
 
         Uses JSON schema from the response_model to guide generation.
         """
+        if not self.config.base_url:
+            raise LLMError("LLM_BASE_URL is not configured; Stage 2 is unavailable")
         client = await self._ensure_client()
 
         # Build JSON schema from Pydantic model
@@ -140,15 +133,6 @@ class OllamaClient:
             "messages": messages,
             "temperature": temperature if temperature is not None else self.config.temperature,
             "max_tokens": max_tokens if max_tokens is not None else self.config.max_tokens,
-            # Disable thinking. qwen3 is a reasoning model and spends its whole
-            # budget on a `reasoning` field, leaving `content` empty - "2+2"
-            # burned 200 tokens and returned "" with finish_reason "length".
-            #
-            # Note this is necessary but not sufficient: with `think: false` the
-            # model returned prose rather than JSON on this Ollama build, even
-            # under `response_format: json_schema`. That is why Stage 2 is off
-            # by default behind SCAN_LLM_ENABLED - see the note on that setting.
-            "think": False,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -171,17 +155,16 @@ class OllamaClient:
             message = data["choices"][0]["message"]
             content = message.get("content") or ""
             if not content:
-                # Older Ollama builds ignore `think: false` and return the whole
-                # answer in `reasoning`. Recover it rather than failing, so a
-                # version difference degrades to a working scan rather than to
-                # no scan.
+                # Some reasoning models put the whole answer in a `reasoning`
+                # field instead of `content`. Recover it rather than failing,
+                # so a model's stream shape difference degrades to a working
+                # scan rather than to no scan.
                 content = message.get("reasoning") or ""
                 if not content:
                     # An empty body almost always means the token budget ran
                     # out before the JSON closed. `finish_reason` says which,
-                    # and surfacing it matters: "empty response" was previously
-                    # indistinguishable from a broken model, which sent me
-                    # looking at Ollama's health instead of at the budget.
+                    # and surfacing it matters: "empty response" is otherwise
+                    # indistinguishable from a broken model.
                     finish = data["choices"][0].get("finish_reason", "unknown")
                     usage = data.get("usage", {})
                     raise LLMError(
@@ -205,16 +188,17 @@ class OllamaClient:
             raise LLMError(f"LLM call failed: {e}") from e
 
     async def health_check(self) -> bool:
-        """Check if Ollama is reachable and the model is available.
+        """Check that the endpoint is reachable and the model is available.
 
-        Handles both response shapes. The configured base_url points at the
-        OpenAI-compatible `/v1` surface, which answers
-        `{"object": "list", "data": [{"id": "qwen3:8b", ...}]}`, while the
-        native Ollama API answers `{"models": [{"name": "qwen3:8b"}]}`.
-        Reading only `models`/`name` meant the check returned False against a
-        perfectly healthy server, so Stage 2 never ran and every scan silently
-        degraded to the rule engine.
+        Handles both response shapes. The OpenAI-compatible `/v1` surface
+        answers `{"object": "list", "data": [{"id": ...}]}`, while a few
+        compatible servers answer `{"models": [{"name": ...}]}`. Reading only
+        one shape meant the check returned False against a perfectly healthy
+        server, so Stage 2 never ran and every scan silently degraded to the
+        rule engine.
         """
+        if not self.config.base_url:
+            return False
         try:
             client = await self._ensure_client()
             response = await client.get("/models", timeout=10.0, headers=self._headers or None)
@@ -230,7 +214,7 @@ class OllamaClient:
                 self.config.model == n or self.config.model in n or n in self.config.model
                 for n in names
             )
-        except Exception:  # noqa: BLE001 - local Ollama failure means 'stage 2 unavailable'
+        except Exception:  # noqa: BLE001 - endpoint unreachable means 'stage 2 unavailable'
             return False
 
 
@@ -246,7 +230,7 @@ def load_system_prompt() -> str:
         match = re.search(r"## 1\. System prompt\s*\n```text\n(.*?)\n```", content, re.DOTALL)
         if match:
             return match.group(1).strip()
-    except Exception:  # noqa: BLE001 - local Ollama failure means 'stage 2 unavailable'
+    except Exception:  # noqa: BLE001 - unreadable prompt file falls back to the default
         pass
     # Fallback - minimal prompt
     return """You are a monitoring analyst for CampusPilot. Produce a structured status report per invocation.

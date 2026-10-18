@@ -3,7 +3,7 @@
 #
 # Profiles:
 #   lite   - 4 GB RAM: postgres + backend + frontend + prometheus + node_exporter + alerting
-#   full   - 16 GB RAM: lite + cAdvisor + blackbox_exporter + Grafana + Ollama + VictoriaLogs
+#   full   - 16 GB RAM: lite + cAdvisor + blackbox_exporter + Grafana + VictoriaLogs
 #
 # MIGRATION FROM SQLITE:
 #   1. docker compose up -d postgres
@@ -116,10 +116,12 @@ services:
       - ALERT_TELEGRAM_BOT_TOKEN=${ALERT_TELEGRAM_BOT_TOKEN:-}
       - ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID:-}
       - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
-      # LLM
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434/v1}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
-      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-240}
+      # LLM (any OpenAI-compatible endpoint)
+      - LLM_PROVIDER=${LLM_PROVIDER:-off}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_TIMEOUT=${LLM_TIMEOUT:-240}
     volumes:
       - database:/app/database
       - ./backend/app/uploads:/app/backend/uploads
@@ -349,24 +351,6 @@ services:
           cpus: '0.1'
           memory: 64M
 
-  ollama:
-    image: ollama/ollama:latest
-    profiles: ["full"]
-    environment:
-      - OLLAMA_KEEP_ALIVE=0
-      - OLLAMA_HOST=0.0.0.0:11434
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 10G
-        reservations:
-          cpus: '1'
-          memory: 2G
-
   # ================================================================
   # Maintenance
   # ================================================================
@@ -413,4 +397,3 @@ volumes:
   alertmanager_data:
   victoria_logs_data:
   grafana_data:
-  ollama_data:

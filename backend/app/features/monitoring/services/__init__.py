@@ -37,8 +37,8 @@ from features.monitoring.services.scan_service import (
     enqueue_scan,
 )
 from features.monitoring.services.llm_client import (
-    OllamaClient,
-    OllamaConfig,
+    LLMClient,
+    LLMConfig,
     LLMError,
     load_system_prompt,
     build_user_prompt,
@@ -58,8 +58,8 @@ __all__ = [
     "SUBSECTION_PROMPTS",
     "TOPICS",
     "LLMError",
-    "OllamaClient",
-    "OllamaConfig",
+    "LLMClient",
+    "LLMConfig",
     "_aggregate_stmt",
     "_classify",
     "_coalesce_dim",

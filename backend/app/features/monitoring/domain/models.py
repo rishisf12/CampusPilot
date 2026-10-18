@@ -70,7 +70,7 @@ class ScanStatus(str, Enum):
 
     ``ERROR`` is separate from ``CRITICAL`` on purpose: a scan that could not run
     is not evidence that the system is broken, and conflating the two would page
-    an administrator at 3am because Ollama was restarting.
+    an administrator at 3am because a model server was restarting.
     """
 
     HEALTHY = "healthy"

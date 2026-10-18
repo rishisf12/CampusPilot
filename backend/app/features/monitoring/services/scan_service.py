@@ -1,7 +1,7 @@
 """Stage 2 LLM-based scan service.
 
-This module builds on the Stage 1 rule-based evaluator and uses a local
-Ollama LLM to generate the human-readable summary, root causes, and
+This module builds on the Stage 1 rule-based evaluator and uses an
+OpenAI-compatible LLM to generate the human-readable summary, root causes, and
 prioritized actions. The LLM never invents numbers - it only writes
 prose around the metrics already gathered by Stage 1 tools.
 
@@ -70,7 +70,7 @@ from features.monitoring.api.schemas import (
 )
 from features.monitoring.api.schemas import ScanResult as ScanResultSchema
 from features.monitoring.services.llm_client import (
-    OllamaClient,
+    LLMClient,
     load_system_prompt,
     build_user_prompt,
     resolve_llm_config,
@@ -764,11 +764,11 @@ async def _run_llm_stage(
         ],
     }, collected_data)
 
-    async with OllamaClient(config) as client:
-        # Check if Ollama is healthy
+    async with LLMClient(config) as client:
+        # Verify the endpoint is reachable before spending a Stage 2 call.
         healthy = await client.health_check()
         if not healthy:
-            raise LLMError("Ollama not available or model not loaded")
+            raise LLMError("LLM endpoint not available or model not loaded")
 
         result = await client.chat_completion(
             system_prompt=system_prompt,

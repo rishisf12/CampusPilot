@@ -266,7 +266,7 @@ class ScanRequest(BaseModel):
     override, which the shared `ScanRequest` does not.
     """
     window_days: int = Field(default=7, ge=1, le=90)
-    model: Optional[str] = Field(default=None, description="Override model (e.g. 'qwen2.5:7b')")
+    model: Optional[str] = Field(default=None, description="Override the configured model for this scan")
 
 
 # ScanResponse, SubsectionInfo, SubsectionsResponse, ScanHistoryResponse and

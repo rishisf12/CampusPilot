@@ -94,34 +94,32 @@ class Settings(BaseSettings):
     #: count and the finding move together.
     health_slow_query_ms: float = Field(default=500.0, alias="HEALTH_SLOW_QUERY_MS")
 
-    #: Accept the LLM-driven scan subsystem. Requires a local model server; see
-    #: `docs/observability/ARCHITECTURE.md`. Off by default so an installation
-    #: without a model is not full of ERROR verdicts.
+    #: Accept the LLM-driven scan subsystem. Requires a reachable LLM endpoint;
+    #: see `docs/observability/ARCHITECTURE.md`. Off by default so an
+    #: installation without a model is not full of ERROR verdicts.
     scan_enabled: bool = Field(default=False, alias="SCAN_ENABLED")
 
-    #: Which LLM backend writes the Stage 2 narrative: "off" (rule engine only),
-    #: "ollama" (local server), or "openai-compatible" (any hosted endpoint that
-    #: speaks the OpenAI chat-completions shape - Groq free tier, HuggingFace
-    #: Inference, NVIDIA NIM, OpenRouter). The client code path is identical;
-    #: only the base URL, model and key change. Default stays off so a fresh
-    #: install never waits on a model.
+    #: Which LLM backend writes the Stage 2 narrative: "off" (rule engine only)
+    #: or "openai-compatible" (any endpoint that speaks the OpenAI
+    #: chat-completions shape - Groq free tier, HuggingFace Inference, NVIDIA
+    #: NIM, OpenRouter). The client code path is identical; only the base URL,
+    #: model and key change. Default stays off so a fresh install never waits
+    #: on a model.
     llm_provider: str = Field(default="off", alias="LLM_PROVIDER")
     #: API key for hosted providers (Groq, HF, NIM...). Empty means no auth
-    #: header is sent, which is correct for a local Ollama. Never logged.
+    #: header is sent, which is correct for a server that needs none. Never
+    #: logged.
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
-    #: Overrides the provider default below when set. Empty falls back to the
-    #: matching OLLAMA_* value, so existing local setups keep working.
+    #: Base URL and model for the chat-completions endpoint. Empty falls back to
+    #: the client's built-in defaults.
     llm_base_url: str = Field(default="", alias="LLM_BASE_URL")
     llm_model: str = Field(default="", alias="LLM_MODEL")
     #: Accepted as a fallback key name because Groq's dashboard labels it this
     #: way. `LLM_API_KEY` wins when both are set.
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
-    #: qwen3:4b rather than 8b. On CPU the 8b model did not return inside the
-    #: timeout on this workload; 4b produces the same schema-valid verdict in a
-    #: fraction of the time, and the summary is the only field it writes.
-    ollama_base_url: str = Field(default="http://localhost:11434/v1", alias="OLLAMA_BASE_URL")
-    ollama_model: str = Field(default="qwen3:4b", alias="OLLAMA_MODEL")
-    ollama_timeout: float = Field(default=240.0, alias="OLLAMA_TIMEOUT")
+    #: Request timeout in seconds for a Stage 2 call. Generous because a small
+    #: CPU-hosted model can take a while; hosted providers finish in seconds.
+    llm_timeout: float = Field(default=240.0, alias="LLM_TIMEOUT")
 
     #: Run Stage 2 (the LLM narrative) at all, as opposed to Stage 1 alone.
     #:
