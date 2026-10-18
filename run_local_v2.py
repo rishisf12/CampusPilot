@@ -2,6 +2,7 @@
 """Run CampusPilot locally with SQLite database - simplified."""
 import os
 import sys
+from urllib.parse import urlparse
 
 # Set the database URL for SQLite BEFORE any imports
 os.environ["DATABASE_URL"] = "sqlite:///C:/Users/Appex/Documents/Default Project/CampusPilot/database/classpilot.db"
@@ -46,6 +47,7 @@ database_module.engine_kwargs = patched_engine_kwargs
 original_create_engine_with_retry = database_module.create_engine_with_retry
 
 def patched_create_engine_with_retry(url, max_retries=3, base_delay=0.5):
+    parsed = urlparse(url)
     if parsed.scheme in ("sqlite", "sqlite+pysqlite"):
         max_retries = 3
         base_delay = 0.5
