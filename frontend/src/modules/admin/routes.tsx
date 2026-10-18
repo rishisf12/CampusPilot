@@ -1,5 +1,14 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Activity, Menu, MessageSquare, X } from 'lucide-react';
+import {
+  Activity,
+  Menu,
+  MessageSquare,
+  X,
+  TrendingUp,
+  Briefcase,
+  SettingsIcon as SettingsIconLucide,
+  Bot,
+} from 'lucide-react';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { healthApi } from '@/api';
 import { Badge, Tabs } from '@/components/ui';
@@ -12,6 +21,11 @@ const AdminPanel = lazy(() => import('./features/admin/AdminPanel'));
 const Monitoring = lazy(() => import('./features/monitoring/Monitoring'));
 const Profile = lazy(() => import('@shared/features/profile/Profile'));
 const Settings = lazy(() => import('@shared/features/settings/Settings'));
+const OppFeedDashboard = lazy(() => import('./features/oppfeed/OppFeedDashboard'));
+const AgentRunsList = lazy(() => import('./features/oppfeed/AgentRunsList'));
+const OpportunitiesManager = lazy(() => import('./features/oppfeed/OpportunitiesManager'));
+const AgentSettings = lazy(() => import('./features/oppfeed/AgentSettings'));
+const LLMStatus = lazy(() => import('./features/oppfeed/LLMStatus'));
 
 function ModuleLoading() {
   return (
@@ -81,6 +95,36 @@ export function AdminRoutes() {
       label: 'Web App Monitoring',
       icon: <Activity size={16} strokeWidth={2} aria-hidden />,
       hue: 'sky',
+    },
+    {
+      id: 'oppfeed-dashboard',
+      label: 'OppFeed Dashboard',
+      icon: <TrendingUp size={16} strokeWidth={2} aria-hidden />,
+      hue: 'emerald',
+    },
+    {
+      id: 'oppfeed-runs',
+      label: 'Agent Runs',
+      icon: <Activity size={16} strokeWidth={2} aria-hidden />,
+      hue: 'sky',
+    },
+    {
+      id: 'oppfeed-opportunities',
+      label: 'Opportunities',
+      icon: <Briefcase size={16} strokeWidth={2} aria-hidden />,
+      hue: 'amber',
+    },
+    {
+      id: 'oppfeed-settings',
+      label: 'Agent Settings',
+      icon: <SettingsIconLucide size={16} strokeWidth={2} aria-hidden />,
+      hue: 'indigo',
+    },
+    {
+      id: 'oppfeed-llm-status',
+      label: 'LLM Status',
+      icon: <Bot size={16} strokeWidth={2} aria-hidden />,
+      hue: 'purple',
     },
   ];
 
@@ -200,6 +244,13 @@ export function AdminRoutes() {
           <Suspense fallback={<ModuleLoading />}>
             {adminTab === 'responses' && <AdminPanel onError={setConnectionError} />}
             {adminTab === 'web-monitoring' && <Monitoring platformGroup="Web App Monitoring" />}
+            {adminTab === 'oppfeed-dashboard' && <OppFeedDashboard onError={setConnectionError} />}
+            {adminTab === 'oppfeed-runs' && <AgentRunsList onError={setConnectionError} />}
+            {adminTab === 'oppfeed-opportunities' && (
+              <OpportunitiesManager onError={setConnectionError} />
+            )}
+            {adminTab === 'oppfeed-settings' && <AgentSettings onError={setConnectionError} />}
+            {adminTab === 'oppfeed-llm-status' && <LLMStatus onError={setConnectionError} />}
             {adminTab === 'profile' && <Profile />}
             {adminTab === 'settings' && <Settings onOpenProfile={() => setAdminTab('profile')} />}
           </Suspense>

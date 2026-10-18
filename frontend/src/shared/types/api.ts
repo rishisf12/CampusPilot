@@ -592,3 +592,400 @@ export interface ValidationErrorDetail {
 export interface HealthResponse {
   status: 'ok';
 }
+
+// ============================================================================
+// OppFeed Types
+// ============================================================================
+
+/** A single opportunity card for the faculty feed. */
+export interface OpportunityCard {
+  slug: string;
+  title: string;
+  organization_name: string;
+  organization_logo_url: string | null;
+  opportunity_type: string;
+  location: string | null;
+  work_mode: string | null;
+  stipend_min: number | null;
+  stipend_max: number | null;
+  stipend_currency: string;
+  stipend_period: string | null;
+  registration_deadline: string | null;
+  deadline_type: string;
+  short_summary: string | null;
+  eligibility_summary: string | null;
+  skills_required: string[];
+  tags: string[];
+  apply_url: string;
+  days_until_deadline: number | null;
+}
+
+/** Full opportunity detail for faculty view. */
+export interface OpportunityDetail {
+  slug: string;
+  title: string;
+  organization_name: string;
+  organization_logo_url: string | null;
+  banner_url: string | null;
+  opportunity_type: string;
+  short_summary: string | null;
+  full_description: string | null;
+  location: string | null;
+  work_mode: string | null;
+  duration: string | null;
+  start_date: string | null;
+  stipend_min: number | null;
+  stipend_max: number | null;
+  stipend_currency: string;
+  stipend_period: string | null;
+  stipend_notes: string | null;
+  registration_start_date: string | null;
+  registration_deadline: string | null;
+  deadline_type: string;
+  education_levels: string[];
+  allowed_branches: string[];
+  graduation_years: number[];
+  min_cgpa_or_percentage: number | null;
+  other_criteria: string | null;
+  open_to_countries: string[];
+  skills_required: string[];
+  perks_benefits: string[];
+  selection_process: string | null;
+  documents_required: string[];
+  how_to_apply: string | null;
+  apply_url: string;
+  secondary_sources: string[];
+  contact_email: string | null;
+  tags: string[];
+  attachments: Array<Record<string, unknown>>;
+  published_at: string | null;
+  days_until_deadline: number | null;
+}
+
+/** Admin opportunity list item. */
+export interface OpportunityListItem {
+  id: number;
+  slug: string;
+  title: string;
+  organization_name: string;
+  opportunity_type: string;
+  status: string;
+  confidence_score: number | null;
+  source_domain: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** Full opportunity detail for admin. */
+export interface OpportunityDetailAdmin {
+  id: number;
+  slug: string;
+  title: string;
+  organization_name: string;
+  organization_logo_url: string | null;
+  banner_url: string | null;
+  opportunity_type: string;
+  status: string;
+  short_summary: string | null;
+  full_description: string | null;
+  location: string | null;
+  work_mode: string | null;
+  duration: string | null;
+  start_date: string | null;
+  stipend_min: number | null;
+  stipend_max: number | null;
+  stipend_currency: string;
+  stipend_period: string | null;
+  stipend_notes: string | null;
+  registration_start_date: string | null;
+  registration_deadline: string | null;
+  deadline_type: string;
+  education_levels: string[];
+  allowed_branches: string[];
+  graduation_years: number[];
+  min_cgpa_or_percentage: number | null;
+  other_criteria: string | null;
+  open_to_countries: string[];
+  skills_required: string[];
+  perks_benefits: string[];
+  selection_process: string | null;
+  documents_required: string[];
+  how_to_apply: string | null;
+  apply_url: string;
+  secondary_sources: string[];
+  attachments: Array<Record<string, unknown>>;
+  contact_email: string | null;
+  source_domain: string | null;
+  verified_at: string | null;
+  verification_report: Record<string, unknown> | null;
+  confidence_score: number | null;
+  field_evidence: Record<string, unknown> | null;
+  llm_provider: string | null;
+  llm_model: string | null;
+  prompt_version: string | null;
+  tags: string[];
+  version: number;
+  created_by_run_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  published_at: string | null;
+  scheduled_publish_at: string | null;
+}
+
+/** Paginated opportunities response. */
+export interface PaginatedOpportunities {
+  items: OpportunityCard[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+/** Available filter values for the feed. */
+export interface FeedFilters {
+  opportunity_types: string[];
+  locations: string[];
+  work_modes: string[];
+  education_levels: string[];
+  allowed_branches: string[];
+  graduation_years: number[];
+  skills: string[];
+}
+
+/** Opportunity filter parameters. */
+export interface OpportunityFilterParams {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  opportunity_type?: string;
+  search?: string;
+  source_domain?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
+/** Admin: Update opportunity request. */
+export interface OpportunityUpdateRequest {
+  title?: string;
+  short_summary?: string;
+  full_description?: string;
+  location?: string;
+  work_mode?: string;
+  duration?: string;
+  stipend_min?: number;
+  stipend_max?: number;
+  stipend_currency?: string;
+  stipend_period?: string;
+  registration_deadline?: string;
+  deadline_type?: string;
+  education_levels?: string[];
+  allowed_branches?: string[];
+  graduation_years?: number[];
+  skills_required?: string[];
+  perks_benefits?: string[];
+  how_to_apply?: string;
+  apply_url?: string;
+  tags?: string[];
+  attachments?: Array<Record<string, unknown>>;
+  scheduled_publish_at?: string;
+}
+
+/** Admin: Bulk action request. */
+export interface BulkActionRequest {
+  ids: number[];
+  action: string; // approve, reject, publish, schedule, archive, delete
+  scheduled_publish_at?: string;
+}
+
+/** Admin: State transition request. */
+export interface StateTransitionRequest {
+  action: string; // approve, reject, publish, schedule, archive
+  scheduled_publish_at?: string;
+  reason?: string;
+}
+
+/** Admin: Run list item. */
+export interface RunListItem {
+  run_id: string;
+  status: string;
+  mode: string;
+  started_at: string | null;
+  completed_at: string | null;
+  opportunities_found: number;
+  opportunities_published: number;
+}
+
+/** Admin: Full run detail. */
+export interface RunResponse {
+  run_id: string;
+  status: string;
+  mode: string;
+  started_at: string | null;
+  completed_at: string | null;
+  opportunities_found: number;
+  opportunities_verified: number;
+  opportunities_rejected: number;
+  opportunities_drafted: number;
+  opportunities_published: number;
+  errors: string[] | null;
+  llm_calls: number;
+  llm_tokens: number;
+  current_stage: string | null;
+  steps: RunStepResponse[];
+}
+
+/** Admin: Run step detail. */
+export interface RunStepResponse {
+  step_name: string;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_ms: number | null;
+  output_data: Record<string, unknown> | null;
+  error_message: string | null;
+  llm_provider: string | null;
+  llm_model: string | null;
+}
+
+/** Admin: Create run request. */
+export interface RunCreateRequest {
+  mode: string; // manual | dry_run
+}
+
+/** Admin: Agent settings. */
+export interface AgentSettingsResponse {
+  run_window_start: string;
+  run_window_end: string;
+  auto_publish_enabled: boolean;
+  auto_publish_threshold: number;
+  llm_provider_chain: string;
+  llm_max_rpm: number;
+  enable_agent: boolean;
+  enable_scheduler: boolean;
+  enable_vision: boolean;
+  enable_banner_gen: boolean;
+  enable_audio_summary: boolean;
+}
+
+/** Admin: Agent settings update request. */
+export interface AgentSettingsUpdateRequest {
+  run_window_start?: string;
+  run_window_end?: string;
+  auto_publish_enabled?: boolean;
+  auto_publish_threshold?: number;
+  llm_provider_chain?: string;
+  llm_max_rpm?: number;
+  enable_agent?: boolean;
+  enable_scheduler?: boolean;
+  enable_vision?: boolean;
+  enable_banner_gen?: boolean;
+  enable_audio_summary?: boolean;
+}
+
+/** Admin: Source rule. */
+export interface SourceRuleResponse {
+  id: number;
+  domain: string;
+  rule_type: string; // allow | deny
+  enabled: boolean;
+  description: string | null;
+  created_at: string | null;
+}
+
+/** Admin: Source rule create request. */
+export interface SourceRuleCreateRequest {
+  domain: string;
+  rule_type: string; // allow | deny
+  description?: string;
+}
+
+/** Admin: Source rule update request. */
+export interface SourceRuleUpdateRequest {
+  enabled?: boolean;
+  description?: string;
+}
+
+/** Admin: Search query. */
+export interface SearchQueryResponse {
+  id: number;
+  query: string;
+  category: string | null;
+  enabled: boolean;
+  is_seed: boolean;
+  priority: number;
+  created_at: string | null;
+}
+
+/** Admin: Search query create request. */
+export interface SearchQueryCreateRequest {
+  query: string;
+  category?: string;
+  enabled?: boolean;
+  is_seed?: boolean;
+  priority?: number;
+}
+
+/** Admin: Search query update request. */
+export interface SearchQueryUpdateRequest {
+  query?: string;
+  category?: string;
+  enabled?: boolean;
+  priority?: number;
+}
+
+/** Admin: LLM provider health. */
+export interface ProviderHealth {
+  provider: string;
+  status: string; // healthy | degraded | unavailable
+  model: string;
+  latency_ms: number | null;
+  last_checked: string | null;
+  error: string | null;
+  rate_limit_remaining: number | null;
+  rate_limit_total: number | null;
+}
+
+/** Admin: LLM status response. */
+export interface LLMStatusResponse {
+  providers: ProviderHealth[];
+  active_provider: string;
+  cache_hit_rate: number;
+  total_calls_today: number;
+}
+
+/** Admin: LLM test request/response. */
+export interface LLMTestRequest {
+  provider?: string;
+  prompt: string;
+}
+
+export interface LLMTestResponse {
+  provider: string;
+  model: string;
+  success: boolean;
+  response: string | null;
+  latency_ms: number | null;
+  error: string | null;
+}
+
+/** Admin: Feedback detail. */
+export interface OppFeedFeedbackResponse {
+  id: number;
+  opportunity_id: number;
+  version: number;
+  thumbs_up: boolean | null;
+  rating: number | null;
+  tags: string[];
+  comment: string | null;
+  applied_as_instruction: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** Admin: Feedback create request. */
+export interface OppFeedFeedbackCreateRequest {
+  thumbs_up?: boolean;
+  rating?: number;
+  tags?: string[];
+  comment?: string;
+}

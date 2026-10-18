@@ -82,6 +82,14 @@ async def lifespan(app: FastAPI):
         _start_rollup_loop()
     if settings.health_sample_inline:
         _start_health_loop()
+
+    # Schedule OppFeed daily agent job if enabled
+    try:
+        from features.oppfeed.jobs import schedule_daily_agent_job
+        schedule_daily_agent_job()
+    except Exception as e:
+        logger.warning("Failed to schedule OppFeed daily agent job: %s", e)
+
     yield
     logger.info("Shutting down...")
 
@@ -194,6 +202,7 @@ from features.force_update import routes as force_update_routes
 from features.security import routes as security_routes
 from ocr import routes as ocr_routes
 from features.settings import routes as settings_routes
+from features.oppfeed.api import router as oppfeed_router
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
 app.include_router(timetable.router, prefix="/timetable", tags=["Timetable"])
@@ -201,6 +210,7 @@ app.include_router(reinforcement.router, prefix="/reinforcement", tags=["Reinfor
 app.include_router(schedule.router, prefix="/schedule", tags=["Schedule"])
 app.include_router(profile.router, prefix="/profile", tags=["Profile"])
 app.include_router(settings_routes.router, tags=["Settings"])
+app.include_router(oppfeed_router, tags=["OppFeed"])
 app.include_router(rooms.router, prefix="/rooms", tags=["Rooms"])
 app.include_router(exam.router, prefix="/exam", tags=["Exam"])
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])

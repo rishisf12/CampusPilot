@@ -54,6 +54,31 @@ import type {
   MonitoringSubsection,
   ValidationErrorDetail,
   HealthResponse,
+  OpportunityDetail,
+  OpportunityListItem,
+  OpportunityDetailAdmin,
+  PaginatedOpportunities,
+  FeedFilters,
+  OpportunityFilterParams,
+  OpportunityUpdateRequest,
+  BulkActionRequest,
+  StateTransitionRequest,
+  RunListItem,
+  RunResponse,
+  RunCreateRequest,
+  AgentSettingsResponse,
+  AgentSettingsUpdateRequest,
+  SourceRuleResponse,
+  SourceRuleCreateRequest,
+  SourceRuleUpdateRequest,
+  SearchQueryResponse,
+  SearchQueryCreateRequest,
+  SearchQueryUpdateRequest,
+  LLMStatusResponse,
+  LLMTestRequest,
+  LLMTestResponse,
+  OppFeedFeedbackResponse,
+  OppFeedFeedbackCreateRequest,
 } from './shared/types/api';
 
 const API_BASE = '';
@@ -1046,6 +1071,126 @@ export const monitoringApi = {
       `/monitoring/rollup?lookback_hours=${lookbackHours}`,
       { method: 'POST' }
     ),
+};
+
+// ------------------------------------------------------------ oppfeed
+//
+// OppFeed integration: admin-managed opportunity discovery + faculty-facing
+// feed. All endpoints live under /admin/oppfeed/* (admin) or
+// /faculty/oppfeed/* (faculty). Auth is CampusPilot JWT — same cookie,
+// same get_token().
+
+/** Admin: List opportunities (paginated, filterable). */
+export const oppfeedApi = {
+  // ---- Faculty feed ----
+  listFaculty: (params: OpportunityFilterParams = {}) => {
+    const search = new URLSearchParams();
+    if (params.page) search.set('page', String(params.page));
+    if (params.page_size) search.set('page_size', String(params.page_size));
+    if (params.status) search.set('status', params.status);
+    if (params.opportunity_type) search.set('opportunity_type', params.opportunity_type);
+    if (params.search) search.set('search', params.search);
+    if (params.source_domain) search.set('source_domain', params.source_domain);
+    if (params.date_from) search.set('date_from', params.date_from);
+    if (params.date_to) search.set('date_to', params.date_to);
+    return request<PaginatedOpportunities>(`/faculty/oppfeed?${search}`);
+  },
+  facultyFilters: () => request<FeedFilters>('/faculty/oppfeed/filters'),
+  facultyDetail: (slug: string) =>
+    request<OpportunityDetail>(`/faculty/oppfeed/${encodeURIComponent(slug)}`),
+
+  // ---- Admin: Opportunities ----
+  listOpportunities: (params: OpportunityFilterParams = {}) => {
+    const search = new URLSearchParams();
+    if (params.page) search.set('page', String(params.page));
+    if (params.page_size) search.set('page_size', String(params.page_size));
+    if (params.status) search.set('status', params.status);
+    if (params.opportunity_type) search.set('opportunity_type', params.opportunity_type);
+    if (params.search) search.set('search', params.search);
+    if (params.source_domain) search.set('source_domain', params.source_domain);
+    if (params.date_from) search.set('date_from', params.date_from);
+    if (params.date_to) search.set('date_to', params.date_to);
+    return request<OpportunityListItem[]>(`/admin/oppfeed/opportunities?${search}`);
+  },
+  getOpportunity: (id: number) =>
+    request<OpportunityDetailAdmin>(`/admin/oppfeed/opportunities/${id}`),
+  updateOpportunity: (id: number, data: OpportunityUpdateRequest) =>
+    request<OpportunityDetailAdmin>(`/admin/oppfeed/opportunities/${id}`, {
+      method: 'PATCH',
+      body: data,
+    }),
+  bulkAction: (data: BulkActionRequest) =>
+    request<{ processed: number; action: string }>('/admin/oppfeed/opportunities/bulk', {
+      method: 'POST',
+      body: data,
+    }),
+  transitionState: (id: number, data: StateTransitionRequest) =>
+    request<OpportunityDetailAdmin>(`/admin/oppfeed/opportunities/${id}/transition`, {
+      method: 'POST',
+      body: data,
+    }),
+
+  // ---- Admin: Agent runs ----
+  listRuns: (
+    params: { page?: number; page_size?: number; status?: string; mode?: string } = {}
+  ) => {
+    const search = new URLSearchParams();
+    if (params.page) search.set('page', String(params.page));
+    if (params.page_size) search.set('page_size', String(params.page_size));
+    if (params.status) search.set('status', params.status);
+    if (params.mode) search.set('mode', params.mode);
+    return request<RunListItem[]>(`/admin/oppfeed/runs?${search}`);
+  },
+  createRun: (data: RunCreateRequest) =>
+    request<RunResponse>(`/admin/oppfeed/runs`, { method: 'POST', body: data }),
+  getRun: (runId: string) =>
+    request<RunResponse>(`/admin/oppfeed/runs/${encodeURIComponent(runId)}`),
+
+  // ---- Admin: Agent settings ----
+  getSettings: () => request<AgentSettingsResponse>('/admin/oppfeed/settings'),
+  updateSettings: (data: AgentSettingsUpdateRequest) =>
+    request<AgentSettingsResponse>('/admin/oppfeed/settings', { method: 'PATCH', body: data }),
+
+  // ---- Admin: Source rules ----
+  listSourceRules: () => request<SourceRuleResponse[]>('/admin/oppfeed/source-rules'),
+  createSourceRule: (data: SourceRuleCreateRequest) =>
+    request<SourceRuleResponse>('/admin/oppfeed/source-rules', { method: 'POST', body: data }),
+  updateSourceRule: (id: number, data: SourceRuleUpdateRequest) =>
+    request<SourceRuleResponse>(`/admin/oppfeed/source-rules/${id}`, {
+      method: 'PATCH',
+      body: data,
+    }),
+  deleteSourceRule: (id: number) =>
+    request<void>(`/admin/oppfeed/source-rules/${id}`, { method: 'DELETE' }),
+
+  // ---- Admin: Search queries ----
+  listSearchQueries: () => request<SearchQueryResponse[]>('/admin/oppfeed/search-queries'),
+  createSearchQuery: (data: SearchQueryCreateRequest) =>
+    request<SearchQueryResponse>('/admin/oppfeed/search-queries', {
+      method: 'POST',
+      body: data,
+    }),
+  updateSearchQuery: (id: number, data: SearchQueryUpdateRequest) =>
+    request<SearchQueryResponse>(`/admin/oppfeed/search-queries/${id}`, {
+      method: 'PATCH',
+      body: data,
+    }),
+  deleteSearchQuery: (id: number) =>
+    request<void>(`/admin/oppfeed/search-queries/${id}`, { method: 'DELETE' }),
+
+  // ---- Admin: LLM status ----
+  llmStatus: () => request<LLMStatusResponse>('/admin/oppfeed/llm-status'),
+  testLLM: (data: LLMTestRequest) =>
+    request<LLMTestResponse>('/admin/oppfeed/llm-test', { method: 'POST', body: data }),
+
+  // ---- Admin: Feedback ----
+  listFeedback: (opportunityId: number) =>
+    request<OppFeedFeedbackResponse[]>(`/admin/oppfeed/opportunities/${opportunityId}/feedback`),
+  createFeedback: (opportunityId: number, data: OppFeedFeedbackCreateRequest) =>
+    request<OppFeedFeedbackResponse>(`/admin/oppfeed/opportunities/${opportunityId}/feedback`, {
+      method: 'POST',
+      body: data,
+    }),
 };
 
 // ------------------------------------------------------------ telemetry

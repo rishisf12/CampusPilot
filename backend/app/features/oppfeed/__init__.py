@@ -1,0 +1,38 @@
+"""OppFeed feature package."""
+from .models import (
+    Opportunity,
+    AgentRun,
+    RunStep,
+    AgentSettings,
+    SourceRule,
+    SearchQuery,
+    Feedback,
+    LLMCache,
+    LLMUsage,
+    OpportunityStatus,
+    OpportunityType,
+    WorkMode,
+    DeadlineType,
+    RunStatus,
+    StepStatus,
+    FeedbackTag,
+)
+
+__all__ = [
+    "Opportunity",
+    "AgentRun",
+    "RunStep",
+    "AgentSettings",
+    "SourceRule",
+    "SearchQuery",
+    "Feedback",
+    "LLMCache",
+    "LLMUsage",
+    "OpportunityStatus",
+    "OpportunityType",
+    "WorkMode",
+    "DeadlineType",
+    "RunStatus",
+    "StepStatus",
+    "FeedbackTag",
+]

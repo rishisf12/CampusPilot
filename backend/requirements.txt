@@ -59,3 +59,25 @@ pdf2image==1.17.0
 requests==2.31.0
 # pillow pinned without a version: 10.3.0 fails to build from source on 3.12+
 pillow
+
+# --- OppFeed Agent dependencies -----------------------------------------------
+# APScheduler for daily agent job scheduling
+apscheduler==3.10.4
+# LangGraph/LangChain for agent pipeline (pinned for Pydantic 2.10 compatibility)
+langgraph==0.2.0
+langchain-core==0.2.0
+langchain-community==0.2.0
+# OpenAI-compatible LLM clients
+openai==1.35.0
+# DuckDuckGo search
+duckduckgo-search==6.0.0
+# BeautifulSoup for HTML parsing
+beautifulsoup4==4.12.2
+# lxml for fast parsing
+lxml==5.2.0
+# Newspaper3k for article extraction (optional, may need system deps)
+# newspaper3k==0.2.8
+# Rate limiting for LLM providers
+aiolimiter==1.1.0
+# SearXNG client (optional)
+# searxng-client==0.1.0

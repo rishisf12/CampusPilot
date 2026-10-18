@@ -1,4 +1,7 @@
-﻿import { Suspense } from 'react';
+﻿/**
+ * Faculty Routes — includes OppFeed opportunity feed.
+ */
+import { Suspense, lazy } from 'react';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 
 function ModuleLoading() {
@@ -9,11 +12,8 @@ function ModuleLoading() {
   );
 }
 
-/**
- * Faculty Routes - placeholder for future faculty module.
- *
- * Currently empty - will be implemented when faculty features are added.
- */
+const OppFeedList = lazy(() => import('./features/oppfeed/OppFeedList'));
+
 export function FacultyRoutes() {
   return (
     <ModuleErrorBoundary moduleName="faculty">
@@ -27,8 +27,9 @@ export function FacultyRoutes() {
               Faculty Module
             </h1>
             <p className="mt-2" style={{ color: 'var(--cp-muted)' }}>
-              Coming soon â€” faculty features are not yet implemented.
+              OppFeed Opportunities
             </p>
+            <OppFeedList />
           </div>
         </div>
       </Suspense>
