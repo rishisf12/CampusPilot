@@ -40,12 +40,15 @@ interface AnimatedLogoProps {
   title?: string;
   /** Show the waving hand. Off by default so only the landing screen gets it. */
   hand?: boolean;
+  /** Fade the hand out (farewell). The element stays mounted while this runs. */
+  handOut?: boolean;
 }
 
 export default function AnimatedLogo({
   size = 64,
   title = 'Essential',
   hand = false,
+  handOut = false,
 }: AnimatedLogoProps) {
   return (
     <svg
@@ -108,7 +111,7 @@ export default function AnimatedLogo({
           <g transform="translate(-74 6)" aria-hidden="true">
             {/* Nudge the geometry about its own centre so it sits larger. */}
             <g transform="translate(21 19) scale(1.5) translate(-21 -19)">
-              <g className="cp-logo-hand" fill={GLOVE}>
+              <g className={`cp-logo-hand${handOut ? ' cp-logo-hand--out' : ''}`} fill={GLOVE}>
                 {/* Fingers - rounded so the silhouette stays soft. */}
                 <rect x="2" y="-6" width="6" height="28" rx="3" />
                 <rect x="9.5" y="-12" width="6" height="34" rx="3" />
@@ -137,18 +140,13 @@ export default function AnimatedLogo({
             they can still surface in some DOM-to-text paths. */}
         <g transform="translate(0, -12)" aria-hidden="true">
           {/* Eyes blink by scaling each group, so one transform covers both the
-              circle and its numeral. */}
+              circle and its numeral. The centre numeral is not one of them -
+              the face's "11" stays still, and is drawn last (see the bottom of
+              this svg) so nothing can ever paint over it. */}
           <g className="cp-logo-eye">
             <circle cx="-22" cy="-8" r="10" fill="none" stroke="#475569" strokeWidth="5" />
             <text x="-22" y="-4" textAnchor="middle" className="cp-logo-num" fill="#475569">
               9
-            </text>
-          </g>
-
-          <g className="cp-logo-eye cp-logo-eye-mid">
-            <circle cx="0" cy="-4" r="12" fill="var(--cp-primary)" />
-            <text x="0" y="0" textAnchor="middle" className="cp-logo-num" fill="#FFFFFF">
-              11
             </text>
           </g>
 
@@ -182,6 +180,16 @@ export default function AnimatedLogo({
           fill="var(--cp-primary)"
           className="cp-logo-body"
         />
+
+        {/* The centre clock numeral, "11". Drawn last so it is the top layer -
+            the ring, the hand, the grin and the body are all beneath it. It
+            does not take the blink either: the face's centre stays still. */}
+        <g transform="translate(0, -12)" aria-hidden="true">
+          <circle cx="0" cy="-4" r="12" fill="var(--cp-primary)" />
+          <text x="0" y="0" textAnchor="middle" className="cp-logo-num" fill="#FFFFFF">
+            11
+          </text>
+        </g>
       </g>
     </svg>
   );

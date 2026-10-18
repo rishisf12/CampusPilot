@@ -65,23 +65,34 @@ const ROLES: Role[] = [
 /** The first line the intro types out, one letter at a time. */
 const WELCOME = 'Welcome to the';
 
-/** One pass of the landing intro, in ms from the top. It runs once - no loop. */
+/** One pass of the landing intro, in ms from the top. It runs once - no loop.
+ *  The values are 40% of the original intro: same beats, same order, 60% less
+ *  wait before the sign-in card is on screen. */
 const INTRO = {
   /** Hand pops in and starts waving. */
-  hand: 1900,
+  hand: 760,
   /** "Hi" pops. */
-  hi: 3400,
+  hi: 1360,
   /** "Hi" fades away. */
-  hiOut: 4650,
+  hiOut: 1860,
   /** "Welcome to the" starts typing. */
-  typeStart: 5000,
+  typeStart: 2000,
   /** Gap between letters while typing. */
-  typeStep: 75,
+  typeStep: 30,
   /** The wordmark appears. */
-  wordmark: 6600,
+  wordmark: 2640,
   /** The sign-in card rises in - this marks completion. */
-  card: 7400,
+  card: 2960,
 } as const;
+
+/** How long the hand keeps waving after the intro has finished, before it is
+ *  let go. Long enough to read as a farewell, short enough not to hover over
+ *  the wordmark and card for the rest of the session. */
+const HAND_LINGER_MS = 5000;
+
+/** The hand's fade-out, in ms. It must match `.cp-logo-hand--out` in
+ *  index.css - the element stays mounted this long, then unmounts. */
+const HAND_EXIT_MS = 180;
 
 /** True when the visitor has asked for less motion, in which case the intro
  *  shows its end state once and never loops. */
@@ -118,6 +129,8 @@ interface LandingLockupProps {
  *   5. the wordmark appears
  *   6. the card rises in - this marks completion, and "Welcome to the"
  *      disappears so the wordmark and card have the stage to themselves
+ *   7. HAND_LINGER_MS later the hand waves goodbye (fades, stage 7), then
+ *      unmounts (stage 8) - it does not hover over the settled lockup
  *
  * It runs once and never restarts. `onReveal` fires when the card rises in,
  * and the card then stays put.
@@ -147,12 +160,17 @@ function LandingLockup({ reduced, onReveal }: LandingLockupProps) {
       onReveal();
       // Completion: the card has risen in, so "Welcome to the" steps aside.
       setStage(6);
+      // The hand has done its job; it waves through the linger window, fades,
+      // and is then removed from the tree for good.
+      at(INTRO.card + HAND_LINGER_MS, () => setStage(7));
+      at(INTRO.card + HAND_LINGER_MS + HAND_EXIT_MS, () => setStage(8));
     });
 
     return () => timers.forEach(clearTimeout);
   }, [reduced, onReveal]);
 
-  const showHand = !reduced && stage >= 1;
+  const showHand = !reduced && stage >= 1 && stage < 8;
+  const handOut = !reduced && stage === 7;
   const showHi = !reduced && (stage === 2 || stage === 3);
   // "Welcome to the" shows while typing and alongside the wordmark, then
   // disappears once the card rises in (stage 6 = intro complete).
@@ -161,7 +179,7 @@ function LandingLockup({ reduced, onReveal }: LandingLockupProps) {
 
   return (
     <div className="cp-lockup text-center mb-8">
-      <AnimatedLogo size={72} hand={showHand} />
+      <AnimatedLogo size={72} hand={showHand} handOut={handOut} />
       <div className="mt-3">
         <div className="cp-intro-slot">
           {showHi && <span className={`cp-hi${stage === 3 ? ' cp-hi--out' : ''}`}>Hi</span>}
