@@ -1,7 +1,9 @@
 """Room service: vacant room finder logic."""
 import logging
 from datetime import time, datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from core.config import (
@@ -29,21 +31,31 @@ def is_overlapping(start: time, end: time, query_time: time) -> bool:
     return start <= query_time < end
 
 
-def get_all_rooms(session: Session) -> List[str]:
+def get_all_rooms(session: Session, user_id: Optional[int] = None) -> List[str]:
     """Get unique list of all rooms from timetable."""
-    slots = session.exec(select(TimetableSlot)).all()
+    query = select(TimetableSlot)
+    if user_id is not None:
+        query = query.where(
+            or_(TimetableSlot.uploaded_by.is_(None), TimetableSlot.uploaded_by == user_id)
+        )
+    slots = session.exec(query).all()
     rooms = {slot.room for slot in slots if slot.room}
     return sorted(rooms)
 
 
-def get_occupied_rooms_at(session: Session, day: str, query_time: time) -> List[Dict[str, Any]]:
+def get_occupied_rooms_at(
+    session: Session, day: str, query_time: time, user_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
     """
     Get rooms occupied at a specific day and time.
     Returns list of {room, course_code, start_time, end_time}.
     """
-    slots = session.exec(
-        select(TimetableSlot).where(TimetableSlot.day == day)
-    ).all()
+    query = select(TimetableSlot).where(TimetableSlot.day == day)
+    if user_id is not None:
+        query = query.where(
+            or_(TimetableSlot.uploaded_by.is_(None), TimetableSlot.uploaded_by == user_id)
+        )
+    slots = session.exec(query).all()
 
     occupied = []
     for slot in slots:
@@ -60,7 +72,8 @@ def get_occupied_rooms_at(session: Session, day: str, query_time: time) -> List[
 def get_vacant_rooms(
     session: Session,
     day: str,
-    query_time: time
+    query_time: time,
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Get vacant and occupied rooms for a given day and time.
@@ -68,8 +81,8 @@ def get_vacant_rooms(
     Returns an empty result with ``has_timetable: False`` when no timetable has
     been uploaded yet, instead of raising.
     """
-    all_rooms = get_all_rooms(session)
-    occupied = get_occupied_rooms_at(session, day, query_time)
+    all_rooms = get_all_rooms(session, user_id=user_id)
+    occupied = get_occupied_rooms_at(session, day, query_time, user_id=user_id)
     occupied_rooms = {o["room"] for o in occupied}
     vacant = [r for r in all_rooms if r not in occupied_rooms]
 
@@ -110,7 +123,7 @@ def get_vacant_rooms(
     }
 
 
-def get_vacant_rooms_live(session: Session) -> Dict[str, Any]:
+def get_vacant_rooms_live(session: Session, user_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Get vacant rooms right now (live mode).
     Uses server system clock in configured timezone.
@@ -118,10 +131,12 @@ def get_vacant_rooms_live(session: Session) -> Dict[str, Any]:
     now = datetime.now(TZ)
     day = DAYS_ORDER[now.weekday()]
     query_time = now.time()
-    return get_vacant_rooms(session, day, query_time)
+    return get_vacant_rooms(session, day, query_time, user_id=user_id)
 
 
-def get_vacant_rooms_manual(session: Session, day: str, hour: str) -> Dict[str, Any]:
+def get_vacant_rooms_manual(
+    session: Session, day: str, hour: str, user_id: Optional[int] = None
+) -> Dict[str, Any]:
     """
     Get vacant rooms for a manual day and hour override.
     hour format: "HH:MM" (24h)
@@ -140,4 +155,4 @@ def get_vacant_rooms_manual(session: Session, day: str, hour: str) -> Dict[str, 
         # input, so chaining the underlying error adds no diagnostic value.
         raise ValueError(f"Invalid time format: {hour}. Use HH:MM (24h)") from None
 
-    return get_vacant_rooms(session, day, query_time)
+    return get_vacant_rooms(session, day, query_time, user_id=user_id)

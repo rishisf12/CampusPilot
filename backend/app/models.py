@@ -175,6 +175,10 @@ class TimetableSlot(SQLModel, table=True):
         default=None,
         foreign_key="academic.course_offering.id",
     )
+    #: Who uploaded the row. ``None`` is an admin upload - the public index
+    #: every account reads. A user id is an individual's own upload, shown in
+    #: their account only.
+    uploaded_by: Optional[int] = Field(default=None, foreign_key="core.user.id", index=True)
 
 
 class ReinforcementPattern(SQLModel, table=True):
@@ -482,6 +486,10 @@ class TimetableUpload(SQLModel, table=True):
     size_bytes: Optional[int] = Field(default=None)
     #: Set explicitly on insert; ``None`` for rows written by older code.
     uploaded_at: Optional[datetime] = Field(default=None, sa_column=Column("uploaded_at", DateTime, nullable=True))
+    #: Who uploaded the file. ``None`` is an admin upload - its preview is
+    #: public. A user id is an individual's upload, previewed in their account
+    #: only.
+    uploaded_by: Optional[int] = Field(default=None, foreign_key="core.user.id", index=True)
 
 
 class MidSemSchedule(SQLModel, table=True):

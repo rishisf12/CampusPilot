@@ -3,6 +3,7 @@ import logging
 from datetime import date
 from typing import Dict, List, Optional
 
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from core.config import settings
@@ -61,7 +62,7 @@ def classes_to_attend(present: int, absent: int, target: float = 75.0) -> int:
     return max(0, int(result) + (1 if result > int(result) else 0))
 
 
-def sync_courses_from_timetable(session: Session) -> int:
+def sync_courses_from_timetable(session: Session, owner: Optional[int] = None) -> int:
     """
     Create/refresh ``Course`` rows from the uploaded weekly timetable.
 
@@ -75,12 +76,18 @@ def sync_courses_from_timetable(session: Session) -> int:
     timetable (e.g. Saturday sem-1 "Extra" classes shared by CSE, ECE, ME, SM,
     DS), the course is simply ensured to exist; filtering is handled by the
     ``course_offering`` / ``timetable_slot_branch`` lookups in ``get_subjects()``.
+
+    When ``owner`` is given, only that scope's slots (public plus the owner's
+    personal rows) are considered - an admin's upload syncs every public slot,
+    an individual's upload syncs only their own.
     """
     from collections import defaultdict
-    from sqlmodel import select
     from models import Course, TimetableSlot
 
-    slots = session.exec(select(TimetableSlot)).all()
+    query = select(TimetableSlot)
+    if owner is not None:
+        query = query.where(or_(TimetableSlot.uploaded_by.is_(None), TimetableSlot.uploaded_by == owner))
+    slots = session.exec(query).all()
 
     # Collect unique course codes from slots
     codes_in_timetable: set[str] = {
@@ -162,9 +169,12 @@ def get_subjects(
     # ---- 1. Collect relevant course codes from timetable slots ----
     relevant_codes: set[str] = set()
 
-    slots = session.exec(
-        select(TimetableSlot).where(TimetableSlot.semester == semester)
-    ).all()
+    slots_query = select(TimetableSlot).where(TimetableSlot.semester == semester)
+    if user_id is not None:
+        slots_query = slots_query.where(
+            or_(TimetableSlot.uploaded_by.is_(None), TimetableSlot.uploaded_by == user_id)
+        )
+    slots = session.exec(slots_query).all()
 
     for slot in slots:
         code = (slot.course_code or "").strip().upper()
@@ -223,7 +233,12 @@ def get_subjects(
     # branch-filtered ones) so a course's instructor is found even when the
     # row is listed under a different section of the same branch.
     instructor_map: Dict[str, str] = {}
-    all_slots = session.exec(select(TimetableSlot)).all()
+    instructor_query = select(TimetableSlot)
+    if user_id is not None:
+        instructor_query = instructor_query.where(
+            or_(TimetableSlot.uploaded_by.is_(None), TimetableSlot.uploaded_by == user_id)
+        )
+    all_slots = session.exec(instructor_query).all()
     for slot in all_slots:
         code = (slot.course_code or "").strip().upper()
         inst = (slot.instructor or "").strip()

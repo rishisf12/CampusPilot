@@ -23,6 +23,32 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Timetable"])
 
 
+def _is_admin(user: User) -> bool:
+    """Whether the signed-in user may upload for everybody."""
+    return (user.role or "student") == "admin"
+
+
+def _upload_owner(user: User) -> Optional[int]:
+    """
+    Whose data an upload writes.
+
+    An admin's upload carries no owner - it is the public index every account
+    reads. An individual's upload is stamped with their id and stays personal.
+    """
+    return None if _is_admin(user) else user.id
+
+
+def _delete_scope(model, owner: Optional[int]):
+    """
+    Where clause clearing exactly one upload scope in ``model``.
+
+    ``owner=None`` targets the public (admin) rows - an admin replacing the
+    index must not sweep away what individuals uploaded to their own accounts.
+    A user id targets that one account's rows only.
+    """
+    return model.uploaded_by.is_(None) if owner is None else model.uploaded_by == owner
+
+
 class SlotEdit(BaseModel):
     day: str | None = None
     start_time: str | None = None
@@ -50,13 +76,19 @@ class SlotResponse(BaseModel):
 async def upload_timetable(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    user: User = Depends(get_current_user),
 ):
     """
     Upload master timetable PDF, CSV, or Excel (list format).
     Parses and stores all slots in TimetableSlot.
-    Returns parse report.
+
+    Scope follows the uploader: an admin's upload carries no owner and is the
+    public timetable every account reads; an individual's upload is stamped with
+    their id and stays personal. Reads (options, slots) return the public rows
+    plus the viewer's own personal rows, so nobody ever sees another
+    individual's upload.
     """
+    owner = _upload_owner(user)
     validate_upload(file, "master timetable PDF/CSV/Excel")
     saved_path = save_upload(file, "timetable")
 
@@ -79,29 +111,32 @@ async def upload_timetable(
         logger.warning("Timetable upload produced no slots: %s", result["warnings"][:3])
         raise HTTPException(status_code=400, detail=detail)
 
-    # Replace the stored slots now that the new ones are known to be usable.
-    session.exec(delete(TimetableSlot))
+    # Replace only this scope's slots now that the new ones are known to be
+    # usable - an admin replaces the public index, an individual replaces only
+    # their own account's copy.
+    session.exec(delete(TimetableSlot).where(_delete_scope(TimetableSlot, owner)))
 
     # Insert parsed slots
     inserted = 0
     for slot_data in result["slots"]:
-        slot = TimetableSlot(**slot_data)
+        slot = TimetableSlot(uploaded_by=owner, **slot_data)
         session.add(slot)
         inserted += 1
 
     session.commit()
 
     # Attendance is driven by the timetable, so refresh the course list now.
-    new_courses = sync_courses_from_timetable(session)
+    new_courses = sync_courses_from_timetable(session, owner=owner)
 
     # Remember the file so the UI can preview it. Only the newest is referenced.
-    session.exec(delete(TimetableUpload))
+    session.exec(delete(TimetableUpload).where(_delete_scope(TimetableUpload, owner)))
     session.add(
         TimetableUpload(
             filename=saved_path.name,
             original_name=file.filename,
             size_bytes=saved_path.stat().st_size,
             uploaded_at=datetime.now(),
+            uploaded_by=owner,
         )
     )
     session.commit()
@@ -184,14 +219,18 @@ async def debug_parse_timetable(
 @router.get("/options")
 def timetable_options(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Branch / semester / course options discovered in the uploaded timetable.
 
     The profile dropdowns use this so branch choices reflect the real timetable.
     """
-    slots = session.exec(select(TimetableSlot)).all()
+    slots = session.exec(
+        select(TimetableSlot).where(
+            or_(TimetableSlot.uploaded_by.is_(None), TimetableSlot.uploaded_by == user.id)
+        )
+    ).all()
 
     branches = OrderedDict()
     for slot in slots:
@@ -225,11 +264,20 @@ def clear_timetable(
     return
 
 
-def _latest_timetable_upload(session: Session) -> Optional[TimetableUpload]:
-    """The newest recorded class-timetable upload, or ``None``."""
-    return session.exec(
-        select(TimetableUpload).order_by(TimetableUpload.id.desc())
-    ).first()
+def _latest_timetable_upload(session: Session, user_id: Optional[int] = None) -> Optional[TimetableUpload]:
+    """
+    The newest recorded class-timetable upload, or ``None``.
+
+    Returns the public (admin) upload plus the viewer's own personal upload,
+    so a student who uploaded their own file sees it instead of the public one.
+    """
+    query = select(TimetableUpload)
+    if user_id is not None:
+        query = query.where(
+            or_(TimetableUpload.uploaded_by.is_(None), TimetableUpload.uploaded_by == user_id)
+        )
+    query = query.order_by(TimetableUpload.id.desc())
+    return session.exec(query).first()
 
 
 def _resolve_upload_path(filename: str):
@@ -252,7 +300,7 @@ def _resolve_upload_path(filename: str):
 @router.get("/uploads/latest")
 def latest_timetable_upload(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Metadata for the newest class-timetable file, for the preview button.
@@ -260,7 +308,7 @@ def latest_timetable_upload(
     Returns ``{"available": false}`` rather than 404 when nothing has been
     uploaded, so the UI can simply hide the button.
     """
-    record = _latest_timetable_upload(session)
+    record = _latest_timetable_upload(session, user_id=user.id)
     if record is None:
         return {"available": False}
 
@@ -282,10 +330,10 @@ def latest_timetable_upload(
 @router.get("/uploads/preview")
 def preview_timetable_upload(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """Stream the newest uploaded class timetable, inline, for preview."""
-    record = _latest_timetable_upload(session)
+    record = _latest_timetable_upload(session, user_id=user.id)
     if record is None:
         raise HTTPException(status_code=404, detail="No class timetable has been uploaded")
 
@@ -332,10 +380,14 @@ def edit_slot(
 @router.get("/slots", response_model=List[SlotResponse])
 def list_slots(
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """List all timetable slots (for debugging)."""
-    slots = session.exec(select(TimetableSlot)).all()
+    slots = session.exec(
+        select(TimetableSlot).where(
+            or_(TimetableSlot.uploaded_by.is_(None), TimetableSlot.uploaded_by == user.id)
+        )
+    ).all()
     # `SlotResponse` declares times as strings, so format them explicitly
     # rather than handing back `datetime.time` objects.
     return [

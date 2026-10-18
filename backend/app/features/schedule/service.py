@@ -2,6 +2,7 @@
 import logging
 from datetime import datetime, time
 from typing import List, Optional, Dict, Any
+from sqlalchemy import or_
 from sqlmodel import Session, select
 from zoneinfo import ZoneInfo
 
@@ -70,8 +71,13 @@ def get_relevant_slots(session: Session, profile: UserProfile) -> List[Timetable
     profile_family = branch_family(filters.get("branch"))
     profile_programme = (filters.get("programme") or "").upper()
 
-    # Base query: same semester
+    # Base query: same semester, scoped to public slots plus the user's own
+    # personal uploads so nobody sees another individual's timetable.
     query = select(TimetableSlot).where(TimetableSlot.semester == profile.semester)
+    if profile.user_id is not None:
+        query = query.where(
+            or_(TimetableSlot.uploaded_by.is_(None), TimetableSlot.uploaded_by == profile.user_id)
+        )
 
     slots = session.exec(query).all()
 
