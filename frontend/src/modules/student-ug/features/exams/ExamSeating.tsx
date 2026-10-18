@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react';
-import { AlertTriangle, CalendarDays, CheckCircle2, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { CalendarDays, CheckCircle2, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, Input, Select, Table, Tabs } from '@/components/ui';
 import { authApi, examApi } from '@/api';
 import { BRANCH_OPTIONS } from '@shared/constants';
@@ -78,20 +78,6 @@ interface LookupResult {
   exams: ExamRow[];
   profileFiltered: boolean;
   profile: { semester?: number | string; branch?: string } | null;
-}
-
-interface ClashCourse {
-  course_code: string;
-  rooms: string[];
-  is_extra?: boolean;
-}
-
-interface Clash {
-  date: string;
-  day?: string | null;
-  start_time: string;
-  end_time: string;
-  courses: ClashCourse[];
 }
 
 interface ExamSeatingProps {
@@ -426,155 +412,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
           onLoad={loadSeating}
         />
       )}
-
-      {/* Clash check sits at the bottom of the Exam section */}
-      <ExamClashCard />
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Personal exam clash check                                            */
-/* ------------------------------------------------------------------ */
-
-interface ClashData {
-  clashes?: Clash[];
-  exam_count?: number;
-}
-
-/**
- * "Am I double-booked?"
- *
- * Compares only the exams this student actually sits and reports the ones that
- * share a date and an overlapping time - typically an extra or back-log course
- * scheduled against a regular one. A large exam split across several halls is
- * one exam, not a clash.
- */
-function ExamClashCard() {
-  const profileVersion = useProfileVersion();
-  const [data, setData] = useState<ClashData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setData(await examApi.clashes());
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to check clashes');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Re-check whenever the profile changes (branch, semester or electives).
-  useEffect(() => {
-    load();
-  }, [load, profileVersion]);
-
-  if (loading) {
-    return (
-      <Card
-        className="flex items-center justify-center gap-3 py-5 text-sm"
-        style={{ color: 'var(--cp-muted)' }}
-      >
-        <Spinner size={16} className="text-primary-500" />
-        Checking your exam schedule for clashes…
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--cp-text)' }}>
-          Exam clash check
-        </h3>
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-        <Button
-          type="button"
-          onClick={load}
-          variant="ghost"
-          size="sm"
-          icon={<RefreshCw size={14} strokeWidth={2} />}
-          className="mt-2"
-        >
-          Try again
-        </Button>
-      </Card>
-    );
-  }
-
-  const clashes = data?.clashes || [];
-  const examCount = data?.exam_count || 0;
-
-  return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <div>
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
-            Exam clash check
-          </h3>
-          <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
-            Compares your {examCount} exam{examCount === 1 ? '' : 's'} for overlapping times.
-          </p>
-        </div>
-        <Button
-          type="button"
-          onClick={load}
-          variant="ghost"
-          size="sm"
-          icon={<RefreshCw size={14} strokeWidth={2} />}
-        >
-          Re-check
-        </Button>
-      </div>
-
-      {clashes.length === 0 ? (
-        <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm flex items-center gap-2">
-          <CheckCircle2 size={16} strokeWidth={2} aria-hidden className="shrink-0" />
-          No clashes - none of your exams overlap.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-sm text-danger-700 flex items-center gap-2">
-            <AlertTriangle size={16} strokeWidth={2} aria-hidden className="shrink-0" />
-            {clashes.length} clash{clashes.length === 1 ? '' : 'es'} found. You cannot sit both
-            papers in each pair.
-          </p>
-          {clashes.map((clash, index) => (
-            <div
-              key={`${clash.date}-${clash.start_time}-${index}`}
-              className="p-3 rounded-lg border border-danger-200 bg-danger-50"
-            >
-              <p className="text-xs font-semibold text-danger-800">
-                {formatDate(clash.date)}
-                {clash.day ? ` (${clash.day})` : ''} · {formatTime(clash.start_time)} -{' '}
-                {formatTime(clash.end_time)}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {clash.courses.map((course, position) => (
-                  <span
-                    key={`${course.course_code}-${position}`}
-                    className="flex items-center gap-2"
-                  >
-                    {position > 0 && <span className="text-xs font-bold text-danger-600">vs</span>}
-                    <Badge tone="danger" className="text-xs">
-                      <span className="font-mono font-semibold">{course.course_code}</span>
-                      {course.rooms.length > 0 && <span> @ {course.rooms.join(', ')}</span>}
-                      {course.is_extra && (
-                        <span className="ml-1.5 text-[10px] font-semibold">EXTRA</span>
-                      )}
-                    </Badge>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
   );
 }
 
