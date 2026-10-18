@@ -8,6 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlmodel import Session, delete, select
 
 from core.database import get_session

@@ -84,10 +84,22 @@ def test_admin_users_list_and_role_validation(anon_client, admin_headers, studen
     assert bad.status_code == 400
 
 
-def test_timetable_upload_needs_admin(anon_client, student_headers):
-    files = {"file": ("t.csv", io.BytesIO(b"day,start,end,room,code\nMon,10:00,11:00,R1,C1\n"), "text/csv")}
+def test_timetable_upload_individual_allowed(anon_client, student_headers):
+    """
+    Class-timetable uploads are no longer admin-only.
+
+    Anonymous callers still get 401. A signed-in account gets past the
+    permission gate - an unreadable file now fails validation (400), and the
+    scoping of what it does upload follows the exam uploads.
+    """
+    # An empty file cannot be read: past the gate now, refused by validation.
+    files = {"file": ("t.csv", io.BytesIO(b""), "text/csv")}
     assert anon_client.post("/timetable/upload", files=files).status_code == 401
-    assert anon_client.post("/timetable/upload", files=files, headers=student_headers).status_code == 403
+    assert anon_client.post("/timetable/upload", files=files, headers=student_headers).status_code == 400
+
+
+def test_timetable_destructive_ops_need_admin(anon_client, student_headers):
+    """Clearing the timetable stays admin-only even though uploads do not."""
     assert anon_client.delete("/timetable/").status_code == 401
     assert anon_client.delete("/timetable/", headers=student_headers).status_code == 403
 
