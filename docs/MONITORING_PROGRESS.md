@@ -17,7 +17,7 @@
 | 4 | Android Health + Security | ✅ Done | 2026-10-08 | 2026-10-08 | Rule engine evaluators for A_A_HEALTH and C_A_SECURITY, data collectors, scan endpoint integration, all tests pass |
 | 5 | Feedback Analysis | ✅ Done | 2026-10-08 | 2026-10-08 | VADER sentiment, keyword topics, crash/release correlation, Feedback endpoint uses analyse(), all tests pass |
 | 6 | History Dashboard | ✅ Done | 2026-10-08 | 2026-10-08 | Enhanced history endpoint with date ranges, period comparison, release markers, academic calendar, CSV export, all tests pass |
-| 7 | Stage 2 LLM Summaries | ✅ Done | 2026-10-08 | 2026-10-08 | Pydantic schemas, Ollama client, LLM-enhanced scan service, reconciliation pass, all tests pass |
+| 7 | Stage 2 LLM Summaries | ✅ Done | 2026-10-08 | 2026-10-08 | Pydantic schemas, provider-agnostic LLM client, LLM-enhanced scan service, reconciliation pass, all tests pass |
 | 8 | Alerting + Profiles + Hardening + Docs | ✅ Done | 2026-10-08 | 2026-10-08 | Alertmanager + 27 rules, Apprise, docker-compose lite/full, security checklist, roadmap, testing plan, all tests pass |
 
 ---
@@ -46,7 +46,7 @@ The following monitoring infrastructure is **already built and tested** (verifie
 ### Infrastructure
 - [x] `docker-compose.yml` with `monitoring` (lite) and `monitoring-full` profiles
 - [x] Prometheus + node_exporter + cAdvisor + blackbox_exporter configs validated
-- [x] `opencode.json` with local Ollama provider, 8 agents, per-agent tool allowlists
+- [x] scan-runner config with an OpenAI-compatible provider, 8 agents, per-agent tool allowlists
 - [x] `SCAN-AGENT.md` with system prompt, JSON schema, reconciliation logic, thresholds
 
 ### Tests
@@ -138,7 +138,7 @@ The following monitoring infrastructure is **already built and tested** (verifie
 | 3 | Academic calendar source | Phase 6 history overlay | User |
 | 4 | Rollup inline vs worker | Phase 1 pg_cron/APScheduler | Keep inline for now |
 | 5 | GlitchTip on 4 GB | Phase 2 C-W/A-A crashes | Prometheus-only for lite |
-| 6 | Model choice confirmed | Phase 7 LLM | `qwen3:8b` default |
+| 6 | Model choice confirmed | Phase 7 LLM | operator-set via `LLM_MODEL` |
 | 7 | Frontend Scan button enablement | Phase 3 UI | `SCAN_ENABLED` flag |
 
 ---
@@ -195,7 +195,7 @@ The following monitoring infrastructure is **already built and tested** (verifie
 
 ### ✅ Completed
 1. **Pydantic schemas** (`schemas.py`): Strict `ScanResult` schema matching SCAN-AGENT.md contract with `Metric`, `Finding`, `Action`, `Recommendation`, `Confidence`, `Status` models
-2. **Ollama client** (`llm_client.py`): Async client for local Ollama with health check, structured output via JSON schema, model config
+2. **LLM client** (`llm_client.py`): Async client for any OpenAI-compatible endpoint with health check, structured output via JSON schema, model config
 3. **LLM-enhanced scan service** (`scan_service.py`): 
    - Stage 1 rule evaluator (thresholds.py) for authoritative status + findings
    - Stage 2 LLM enhancement for summary, root_causes, actions, confidence

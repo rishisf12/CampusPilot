@@ -68,9 +68,10 @@
 ```yaml
 # prompts/eval.yaml
 providers:
-  - id: ollama:qwen3:8b
+  - id: openai:chat:<model>
     config:
-      baseURL: http://localhost:11434/v1
+      baseURL: <LLM_BASE_URL>
+      apiKey: <LLM_API_KEY>
 
 prompts:
   - file: prompts/scan-web-health.txt
@@ -214,7 +215,9 @@ jobs:
       - uses: actions/setup-node@v4
       - run: npx promptfoo eval -c prompts/eval.yaml
         env:
-          OLLAMA_BASE_URL: http://localhost:11434/v1
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
 ```
 
 ---
@@ -229,7 +232,7 @@ jobs:
 | **Monthly** | Promptfoo full eval | CI | Report |
 | **Monthly** | Backup restore test | Ops | Log |
 | **Quarterly** | Chaos engineering drill | Ops | Runbook |
-| **Quarterly** | Chaos: kill backend/postgres/ollama | Ops | Incident sim |
+| **Quarterly** | Chaos: kill backend/postgres/LLM endpoint | Ops | Incident sim |
 | **Quarterly** | Promptfoo full regression | CI | Report |
 | **Semi-annual** | Security audit (OWASP ASVS) | Sec | Checklist |
 | **Annual** | DPDP compliance review | Legal | Report |
@@ -242,7 +245,7 @@ jobs:
 |----------|-----------|----------|-----|-----|
 | Backend crash | `ApiDown` alert | Auto-restart (docker) | < 30s | 0 |
 | Postgres crash | `DatabaseUnreachable` | WAL replay + restart | < 5m | < 1m |
-| Ollama OOM | Scan status = error | Fallback to Stage 1 | < 1m | 0 |
+| LLM endpoint down/timeout | Scan status = error | Fallback to Stage 1 | < 1m | 0 |
 | Disk full | `HostDiskWillFillSoon` | Alert + manual cleanup | < 30m | 0 |
 | Prometheus OOM | `PrometheusDown` | Restart + reduce retention | < 5m | 0 |
 | Scan worker deadlock | Queue depth > 10 | Kill + restart worker | < 2m | 0 |
@@ -282,7 +285,7 @@ docker compose up -d backend
 | `prometheus_tsdb_head_samples_appended_total` rate drop | 5m | Check scrape targets |
 | `campuspilot_rollup_lag_minutes` > 120 | 5m | Check rollup worker |
 | `campuspilot_scan_queue_depth` > 10 | 5m | Scale worker |
-| `ollama_up` == 0 | 5m | Restart ollama |
+| LLM endpoint health check fails | 5m | Restart / repoint the endpoint |
 | `campuspilot_scan_status{status="error"}` > 0 | 1m | Check scan logs |
 
 ---
@@ -307,7 +310,7 @@ docker compose up -d backend
 | PostgreSQL | 16 | 16 | Alpine |
 | Prometheus | 2.54 | 2.54 | |
 | Grafana | 11.1 | 11.1 | |
-| Ollama | latest | latest | qwen3:4b / qwen3:30b-a3b |
+| LLM endpoint | any | any | OpenAI-compatible; set via `LLM_BASE_URL` |
 | VictoriaLogs | - | 1.10 | Full only |
 | Alertmanager | 0.27 | 0.27 | |
 | Apprise (notify) | latest | latest | |

@@ -13,7 +13,7 @@
 | 4 | Android Health + Security Scans | 2 days | ✅ Done |
 | 5 | Feedback NLP Pipeline | 1 day | ✅ Done |
 | 6 | History Dashboard | 2 days | ✅ Done |
-| 7 | Stage 2 LLM (Ollama) | 3 days | ✅ Done |
+| 7 | Stage 2 LLM narrative | 3 days | ✅ Done |
 | 8 | Alerting + Profiles + Hardening + Docs | 3 days | 🔄 In Progress |
 
 **Total: ~19 days** (completed: 16 days)
@@ -111,20 +111,18 @@
 | prometheus | 1 GB | 15d retention |
 | victoria-logs | 4 GB | 30d logs |
 | grafana | 1 GB | Dashboards |
-| ollama | 10 GB | qwen3:30b-a3b (~18 GB disk) |
 | alertmanager | 256 MB | |
 | alerting (Apprise) | 256 MB | |
 | cAdvisor | 1 GB | Container metrics |
 | blackbox-exporter | 256 MB | Synthetic checks |
-| ollama | 10 GB | qwen3:30b-a3b |
-| **Total** | **~22 GB** | Fits 16 GB with swap |
+| **Total** | **~12 GB** | Fits 16 GB with room to spare |
 
 **Lite Profile (4 GB) - drop:**
 - victoria-logs → remove
 - Grafana → remove
 - cAdvisor → remove
 - blackbox-exporter → remove
-- ollama → qwen3:4b (2 GB)
+- no local model → Stage 2 off by default, or point `LLM_BASE_URL` at a hosted endpoint
 - **Total: ~3.5 GB** ✅
 
 ---
@@ -153,9 +151,10 @@
 ```yaml
 # prompts/eval.yaml
 providers:
-  - id: ollama:qwen3:8b
+  - id: openai:chat:<model>
     config:
-      baseURL: http://localhost:11434/v1
+      baseURL: <LLM_BASE_URL>
+      apiKey: <LLM_API_KEY>
 
 prompts:
   - file: prompts/scan-web-health.txt
@@ -186,7 +185,7 @@ tests:
 ### Chaos Engineering (Quarterly)
 - [ ] Kill backend pod → verify auto-restart + no data loss
 - [ ] Kill postgres → verify WAL replay + connection retry
-- [ ] Kill ollama → scan falls back to Stage 1 only
+- [ ] Kill the LLM endpoint → scan falls back to Stage 1 only
 - [ ] Fill disk → verify `HostDiskWillFillSoon` alert
 - [ ] Kill network → verify graceful degradation
 
@@ -195,9 +194,9 @@ tests:
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| Ollama model hallucination | Medium | High | Reconciliation pass (2%), Stage 1 authoritative |
+| LLM model hallucination | Medium | High | Reconciliation pass (2%), Stage 1 authoritative |
 | Prompt injection in feedback | Medium | High | `<untrusted-data>` wrapping, tool allowlists |
-| Ollama OOM on 4 GB box | High | High | `keep_alive=0`, qwen3:4b fallback |
+| LLM endpoint unreachable | Medium | Low | Degrade to Stage 1 (rule engine); no fabricated verdicts |
 | Prometheus OOM on 4 GB | Medium | High | Retention 15d, size 2GB, drop cadvisor |
 | Alert fatigue | Medium | Medium | Only 27 rules, severity-based routing |
 | Data breach via monitoring | Low | Critical | Read-only role, HMAC pseudonymization, no raw PII |

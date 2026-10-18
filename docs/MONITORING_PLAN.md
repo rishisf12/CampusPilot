@@ -55,7 +55,7 @@
 1. **PostgreSQL is the production database** — SQLite only for fast unit tests
 2. **No Android app exists** — React Native project not in this repo; Android subsections ship with "awaiting first data"
 3. **Single VPS deployment** — `docker-compose.yml` with `monitoring` (lite) and `monitoring-full` profiles
-4. **Local LLM only** — Ollama on same host, no API keys, no egress
+4. **Configurable LLM endpoint** — self-hosted or hosted, chosen via `LLM_BASE_URL`; off by default
 5. **Monitoring schema is separate** — reads from main DB but never writes to core tables
 6. **Feedback Responses feeds Feedback Analysis** — existing table reused, no changes to it
 
@@ -201,16 +201,16 @@
 
 | Task | Details |
 |------|---------|
-| 7.1 | Ollama service in docker-compose (MIT), models: `qwen3:8b` (lite), `qwen3:30b-a3b` (full), `phi-3.5-mini` (fallback) |
-| 7.2 | `opencode.json` with local Ollama provider, 8 agents (one per subsection), per-agent tool allowlists |
+| 7.1 | LLM endpoint configured via `LLM_BASE_URL` (self-hosted or hosted), model via `LLM_MODEL`; no bundled inference service |
+| 7.2 | Scan-runner config with an OpenAI-compatible provider, 8 agents (one per subsection), per-agent tool allowlists |
 | 7.3 | 8 system prompts (one per subsection) — load from `SCAN-AGENT.md` |
 | 7.4 | JSON schema validation (Pydantic) + reconciliation pass (already designed) |
-| 7.5 | Stage 2 flow: if Ollama available → LLM summary; else → Stage 1 template text |
-| 7.6 | Model loading: `keep_alive=0` (unload after each scan) to fit 4 GB |
+| 7.5 | Stage 2 flow: if the LLM endpoint is reachable → LLM summary; else → Stage 1 template text |
+| 7.6 | Self-hosted model sizing: keep the weights inside the box budget; a hosted endpoint needs no local RAM |
 | 7.7 | Promptfoo regression suite: accuracy, hallucination rate, prompt-injection resistance |
 | 7.8 | Garak (Apache-2.0) for red-team testing (full profile only) |
 
-**Deliverables:** `opencode.json`, 8 prompts + schemas, Ollama integration, Promptfoo suite
+**Deliverables:** scan-runner config, 8 prompts + schemas, LLM-endpoint integration, Promptfoo suite
 
 ---
 
@@ -237,7 +237,7 @@
 | Profile | RAM | CPU | Disk | PostgreSQL Tuning |
 |---------|-----|-----|------|-------------------|
 | **MINIMAL (2 GB)** | 2 GB | 1 vCPU | 20 GB | `shared_buffers=128MB`, `work_mem=4MB`, `max_connections=50`, no LLM, no Grafana, Prometheus 7d retention, Uptime Kuma, rule scans only |
-| **STANDARD (4 GB)** | 4 GB | 2 vCPU | 40 GB | `shared_buffers=256MB`, `work_mem=8MB`, `max_connections=100`, `qwen3:8b` Q4 loaded on-demand (`keep_alive=0`), Prometheus 15d, VictoriaLogs 7d, GlitchTip optional |
+| **STANDARD (4 GB)** | 4 GB | 2 vCPU | 40 GB | `shared_buffers=256MB`, `work_mem=8MB`, `max_connections=100`, optional self-hosted LLM endpoint (`qwen3:8b` Q4, loaded on demand) or a hosted endpoint, Prometheus 15d, VictoriaLogs 7d, GlitchTip optional |
 | **OPTIONAL (8 GB+)** | 8-16 GB | 4-6 vCPU | 80-160 GB | `shared_buffers=1-2GB`, `work_mem=16-32MB`, `max_connections=200`, `qwen3:30b-a3b`, Loki, Umami, Superset, ZAP full, MobSF, BERTopic |
 
 ---
@@ -246,7 +246,7 @@
 
 | Tool | Category | SPDX | Profile | Why Truly Free | RAM | Risk |
 |------|----------|------|---------|----------------|-----|------|
-| Ollama | LLM runtime | MIT | Standard | MIT server + Apache-2.0 model weights | 1.6-2 GB | Model pulls |
+| LLM endpoint | LLM runtime | varies | Standard | Any OpenAI-compatible server; self-hosted or hosted | 0 (hosted) / 1.6-2 GB (self-hosted) | Hosted: cost + egress |
 | qwen3:8b / 30b-a3b | Model | Apache-2.0 | Std/Full | OSI-approved weights, no use restrictions | 5/18 GB disk | Large disk |
 | opencode | Agent runner | MIT | All | MIT, localhost HTTP only | ~50 MB | None |
 | Prometheus | Metrics | Apache-2.0 | All | Apache-2.0, no enterprise split | 250 MB | Retention math |
@@ -327,7 +327,7 @@
 | 3 | Academic calendar source? | History dashboard overlay | Ask user |
 | 4 | Rollup inline vs worker? | Single replica vs future scaling | Keep inline for now |
 | 5 | GlitchTip on 4 GB? | 500 MB RAM vs Prometheus-only | Prometheus-only for lite |
-| 6 | Model choice confirmed? | `qwen3:8b` Apache-2.0 vs `phi-3.5-mini` MIT | `qwen3:8b` default |
+| 6 | Model choice confirmed? | Set via `LLM_MODEL`; `qwen3:8b` (Apache-2.0) or `phi-3.5-mini` (MIT) if self-hosting | Decided by the operator, not baked in |
 
 ---
 

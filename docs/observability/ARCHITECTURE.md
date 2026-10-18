@@ -18,7 +18,7 @@
 > | Web + Android monitoring UI | **Built.** Admin sub-tabs; Feedback Responses untouched |
 > | VADER sentiment + topic mix for §D | **Built** |
 > | AI scan runner, reconciliation pass, RQ queue | **Design only.** Tables and read path exist; nothing writes to them yet |
-> | Ollama / local model server | **Design only** |
+> | LLM endpoint (OpenAI-compatible) | **Design only** |
 > | Android instrumentation SDK | **Not started.** No Android project exists in this repository |
 >
 > Everything remains free and self-hosted. Nothing below requires an API key,
@@ -141,7 +141,7 @@ The single most important design rule: **the LLM never computes anything.**
                                       │  tool calls, JSON only
                                       ▼
                         ┌────────────────────────────┐
-                        │  opencode → Ollama (local) │  ← no API key, no internet
+                        │  scan runner → LLM endpoint │  ← OpenAI-compatible
                         └─────────────┬──────────────┘
                                       │  JSON
                                       ▼
@@ -182,7 +182,7 @@ check before you install them — see §2.1 for the one-liner that checks everyt
 
 | Tool | Category | SPDX | Subsections | Tier | Why truly free | Risk |
 |---|---|---|---|---|---|---|
-| **Ollama** | LLM runtime | MIT | all 8 scans | core | Ships the weights inference itself; MIT covers server + bundled model licenses | Large model pulls; RAM-hungry. Pin model versions. |
+| **LLM endpoint** | LLM runtime | varies | all 8 scans | core | Any OpenAI-compatible server - self-hosted or hosted; §2.4 covers model licences | Hosted endpoints may charge per token and see your data |
 | **Qwen3 8B / Qwen3-30B-A3B** | Model | Apache-2.0 | all 8 | core | Apache-2.0 weights, OSI-approved, no use restrictions | 30B-A3B needs ~18 GB disk, only ~3B active so CPU is OK |
 | **opencode** | Agent runner | MIT | all 8 | core | MIT; runs the model over localhost HTTP | None material |
 | **Pydantic** | Schema validation | MIT | all 8 | core | MIT | None |
@@ -252,6 +252,9 @@ trivy image --severity HIGH,CRITICAL --exit-code 1 <image>
 
 ### 2.4 Models — licences
 
+Stage 2 talks to whatever OpenAI-compatible endpoint `LLM_BASE_URL` names -
+hosted or self-hosted. If you self-host, these are the OSI-approved weights:
+
 | Model | SPDX | Use |
 |---|---|---|
 | `qwen3:8b` | Apache-2.0 | **Lite default.** ~5 GB, good JSON, acceptable prose. |
@@ -263,11 +266,11 @@ trivy image --severity HIGH,CRITICAL --exit-code 1 <image>
 | `gemma*` | Gemma Terms of Use | **Excluded** — not OSI, use restrictions. |
 | `nemotron*` | NVIDIA Open Model License | **Excluded** — not OSI. |
 
-**CPU-only expectation:** 8B Q4_K_M on 4 modern cores ≈ **4–7 tok/s**. A scan that
-makes 12 tool calls and writes 800 tokens of JSON takes **2–4 minutes**. Acceptable
-because scans are on-demand. On 16 GB, `qwen3:30b-a3b` ≈ **10–20 tok/s**, so ~40 s
-per scan. This is exactly why on-demand is the right product decision here — a
-cron-driven scanner would be unaffordable on CPU.
+**Self-hosted CPU expectation:** 8B Q4_K_M on 4 modern cores ≈ **4–7 tok/s**. A
+scan that makes 12 tool calls and writes 800 tokens of JSON takes **2–4 minutes**.
+Acceptable because scans are on-demand. A hosted endpoint returns the same object
+in seconds. This is exactly why on-demand is the right product decision here — a
+cron-driven scanner would be unaffordable on a CPU-hosted model.
 
 ---
 
@@ -511,7 +514,7 @@ services:
       SCAN_CONCURRENCY: "1"        # worker-level: one job at a time
       SCAN_TIMEOUT_S: "240"        # hard wall, rq kills it
       SCAN_MAX_PER_HOUR: "12"      # abuse + runaway-loop guard
-    depends_on: [redis, ollama]
+    depends_on: [redis]
 ```
 
 - **Concurrency 1** via `--concurrency 1` (not an env var someone can forget).
@@ -519,7 +522,7 @@ services:
   `BEGIN IMMEDIATE` transaction. RQ's queue is the first gate; this is the
   second, in case two workers ever run.
 - **Timeouts** at three layers: nginx `proxy_read_timeout 300s` → RQ
-  `SCAN_TIMEOUT_S` → the Ollama client. Whichever fires first wins; a scan that
+  `SCAN_TIMEOUT_S` → the LLM client. Whichever fires first wins; a scan that
   exceeds any of them is stored as `status: "error"` with the reason, never as a
   fabricated Healthy.
 - **Per-tool timeout** of 5 s (Prometheus) and 5 s (SQLite). A hung Prometheus
@@ -548,7 +551,6 @@ persistence, and a second dependency tree to solve problems you do not have.
 | Component | RAM | Note |
 |---|---|---|
 | backend + frontend (existing) | ~350 MB | |
-| `ollama` + `qwen3:8b` Q4 | ~1600 MB | the big one |
 | prometheus | ~250 MB | 15-day retention |
 | victoria-logs | ~400 MB | 7-day retention |
 | grafana + sqlite datasource | ~350 MB | |
@@ -557,16 +559,12 @@ persistence, and a second dependency tree to solve problems you do not have.
 | blackbox + node_exporter + cadvisor | ~150 MB | |
 | redis | ~50 MB | |
 | trivy + osv-scanner | ~250 MB | |
-| **total** | **~4.1 GB** | ⚠️ over budget |
+| **total** | **~2.5 GB** | fits, no local model bundled |
 
-**Lite must drop something.** Two honest options:
-
-- **(a) Drop Uptime Kuma, use Blackbox + Prometheus alone** for uptime and SSL.
-  Saves 180 MB and removes a Node service. You lose Kuma's UI, which you barely
-  used anyway since Grafana renders the data. → **~3.9 GB, fits.**
-- **(b) Use `qwen3:4b`** instead of 8B. Saves ~700 MB but noticeably worse JSON.
-
-Recommend **(a)**, with Kuma promoted to the full profile.
+**No local model is bundled.** Stage 2 talks to whatever endpoint `LLM_BASE_URL`
+names, so a self-hosted model is optional rather than part of the baseline
+footprint; leave `LLM_PROVIDER=off` (the default) to run rule-engine scans only.
+Uptime Kuma stays in the lite profile.
 
 Also for lite: **no GlitchTip web** (use Prometheus request metrics only),
 **Semgrep CE off by default** (run on release tags, not on a schedule),
@@ -575,12 +573,12 @@ Also for lite: **no GlitchTip web** (use Prometheus request metrics only),
 ### 7.2 Full — 16 GB / 6 vCPU / 160 GB SSD
 
 Adds: PostgreSQL 16 + Superset, Umami, Loki (instead of VictoriaLogs),
-ZAP full scan, MobSF, BERTopic + Sentence-Transformers, `qwen3:30b-a3b`
-(~18 GB disk, ~1600 MB RAM), GlitchTip for both platforms, OTel collector,
-Falco.
+ZAP full scan, MobSF, BERTopic + Sentence-Transformers, GlitchTip for both
+platforms, OTel collector, Falco, and optionally a self-hosted LLM endpoint
+(`LLM_BASE_URL`).
 
 Expect **~9–10 GB** steady state. That leaves headroom, which matters because
-BERTopic + a 8B model spiking at once is the realistic worst case.
+BERTopic and a self-hosted model spiking at once is the realistic worst case.
 
 ### 7.3 Retention (disk is the real budget)
 
@@ -690,12 +688,14 @@ Mitigations, in order of importance:
 | `github.com` container registry | image pulls | none | on |
 | `play.googleapis.com` | purchase verification | purchase token | **off** |
 | `smtp.gmail.com` | app email (existing) | yes — student emails | on (existing) |
-| Ollama | model inference | **your metrics and logs** | on — **loopback/Docker-internal only** |
+| LLM endpoint | model inference | **your metrics and logs** (prompts) | on — set via `LLM_BASE_URL` |
 
-Last row deserves emphasis: with a local model, your metrics and user text never
-leave the VPS. That is the entire privacy argument for this architecture, and
-it is only true if the tools container has no route to the internet. Enforce it in
-the compose network, not in a comment.
+Last row deserves emphasis: with a **self-hosted** endpoint your metrics and user
+text never leave the VPS - the strongest privacy posture - and it is only true if
+the tools container has no route to the internet. A hosted endpoint
+(`LLM_BASE_URL` pointing off-host) does send the metric bundle to the provider.
+Pick deliberately, and enforce the network boundary in the compose file, not in a
+comment.
 
 ---
 
@@ -714,7 +714,7 @@ AI commentary:
 This alone gives you §A and §B. **Most of the value, no LLM required.**
 
 **Phase 2 — the scans**
-5. Ollama + opencode on localhost, Pydantic schema, reconciliation pass.
+5. An LLM endpoint (self-hosted or hosted) + the scan runner, Pydantic schema, reconciliation pass.
 6. `promql_*` + `db_stats` + `event_aggregate` tools.
 7. One scan (A-W Health) end to end. Tune the model and prompt here, not across
    all eight at once.
@@ -737,7 +737,7 @@ This alone gives you §A and §B. **Most of the value, no LLM required.**
 | File | What |
 |---|---|
 | `docs/observability/ARCHITECTURE.md` | this document |
-| `docs/observability/opencode.json` | full local-Ollama config with MCP wiring |
+| `docs/observability/opencode.json` | full scan-runner config with MCP wiring |
 | `docs/observability/SCAN-AGENT.md` | system prompt, JSON Schema, reconciliation logic |
 | `docs/observability/TOOL-MATRIX.md` | §3 as a standalone matrix (for code-gen) |
 

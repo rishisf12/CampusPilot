@@ -119,8 +119,8 @@
 - [ ] **Per-tool timeout** - 5s Prometheus, 5s SQL
 
 ### 5.3 LLM Safety
-- [ ] **Local Ollama only** - no API keys, no egress
-- [ ] **CPU-only models** - qwen3:8b (lite), qwen3:30b-a3b (full)
+- [ ] **Explicit endpoint only** - no hard-coded provider; the target is set via `LLM_BASE_URL`
+- [ ] **Credentials from env** - `LLM_API_KEY` / `GROQ_API_KEY` read from env, never logged or committed
 - [ ] **Structured output** - Pydantic + JSON schema validation
 - [ ] **Reconciliation pass** - re-query every cited metric (2% tolerance)
 - [ ] **Closed action enum** - 12 actions, no free text
@@ -144,7 +144,7 @@
 - [ ] **Rate limiting at nginx** - 100 req/s per IP
 
 ### 6.3 Supply Chain
-- [ ] **Pinned base images** - `postgres:16-alpine`, `ollama/ollama:latest`
+- [ ] **Pinned base images** - e.g. `postgres:16-alpine`; pin by digest where possible
 - [ ] **Trivy scans** - in CI on every PR
 - [ ] **Gitleaks** - secret scanning in CI
 - [ ] **Semgrep CE** - SAST in CI
