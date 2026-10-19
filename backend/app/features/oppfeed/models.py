@@ -85,6 +85,7 @@ class Opportunity(SQLModel, table=True):
         sa.Index("ix_oppfeed_opportunity_reg_deadline", "registration_deadline"),
         sa.Index("ix_oppfeed_opportunity_source_domain", "source_domain"),
         sa.Index("ix_oppfeed_opportunity_created_at", "created_at"),
+        {"schema": "core"},
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -202,6 +203,7 @@ class AgentRun(SQLModel, table=True):
     __table_args__ = (
         sa.Index("ix_oppfeed_agent_run_status", "status"),
         sa.Index("ix_oppfeed_agent_run_started_at", "started_at"),
+        {"schema": "core"},
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -246,10 +248,11 @@ class RunStep(SQLModel, table=True):
     __table_args__ = (
         sa.Index("ix_oppfeed_run_step_run_id", "run_id"),
         sa.Index("ix_oppfeed_run_step_status", "status"),
+        {"schema": "core"},
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    run_id: str = Field(index=True, max_length=100, foreign_key="oppfeed_agent_run.run_id")
+    run_id: str = Field(index=True, max_length=100, foreign_key="core.oppfeed_agent_run.run_id")
     step_name: str = Field(max_length=100)
     status: StepStatus = Field(
         default=StepStatus.PENDING,
@@ -278,6 +281,7 @@ class RunStep(SQLModel, table=True):
 
 class AgentSettings(SQLModel, table=True):
     __tablename__ = "oppfeed_agent_settings"
+    __table_args__ = ({"schema": "core"},)
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -313,7 +317,10 @@ class AgentSettings(SQLModel, table=True):
 
 class SourceRule(SQLModel, table=True):
     __tablename__ = "oppfeed_source_rule"
-    __table_args__ = (sa.Index("ix_oppfeed_source_rule_domain", "domain", unique=True),)
+    __table_args__ = (
+        sa.Index("ix_oppfeed_source_rule_domain", "domain", unique=True),
+        {"schema": "core"},
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     domain: str = Field(index=True, unique=True, max_length=200)
@@ -328,7 +335,10 @@ class SourceRule(SQLModel, table=True):
 
 class SearchQuery(SQLModel, table=True):
     __tablename__ = "oppfeed_search_query"
-    __table_args__ = (sa.Index("ix_oppfeed_search_query_enabled", "enabled"),)
+    __table_args__ = (
+        sa.Index("ix_oppfeed_search_query_enabled", "enabled"),
+        {"schema": "core"},
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     query: str = Field(max_length=500)
@@ -351,8 +361,9 @@ class Feedback(SQLModel, table=True):
     __table_args__ = (
         sa.Index("ix_oppfeed_feedback_opportunity_id", "opportunity_id"),
         sa.ForeignKeyConstraint(
-            ["opportunity_id"], ["oppfeed_opportunity.id"], ondelete="CASCADE"
+            ["opportunity_id"], ["core.oppfeed_opportunity.id"], ondelete="CASCADE"
         ),
+        {"schema": "core"},
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -391,6 +402,7 @@ class LLMCache(SQLModel, table=True):
     __table_args__ = (
         sa.Index("ix_oppfeed_llm_cache_key", "cache_key", unique=True),
         sa.Index("ix_oppfeed_llm_cache_expires", "expires_at"),
+        {"schema": "core"},
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -413,6 +425,7 @@ class LLMUsage(SQLModel, table=True):
     __table_args__ = (
         sa.Index("ix_oppfeed_llm_usage_run_id", "run_id"),
         sa.Index("ix_oppfeed_llm_usage_created", "created_at"),
+        {"schema": "core"},
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)

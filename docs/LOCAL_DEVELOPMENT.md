@@ -97,6 +97,27 @@ This starts:
 - **node-exporter** (port 9100)
 - **alertmanager** (port 9093)
 - **rollup** (background worker)
+- **OppFeed** (bundled in backend — enable via `.env`: `ENABLE_AGENT=true`, `ENABLE_SCHEDULER=true`)
+
+### OppFeed (Opportunity Discovery)
+
+The OppFeed agent is bundled in the backend. Enable it in `.env`:
+
+```ini
+ENABLE_AGENT=true
+ENABLE_SCHEDULER=true
+ENABLE_VISION=false
+ENABLE_BANNER_GEN=false
+ENABLE_AUDIO_SUMMARY=false
+NVIDIA_NIM_API_KEY=your-nvidia-nim-key
+OPENROUTER_API_KEY=your-openrouter-key
+OLLAMA_BASE_URL=http://ollama:11434/v1
+OPENAI_API_KEY=your-openai-key
+```
+
+Admin UI: http://localhost:8002 (OppFeed tab: Dashboard, Agent Runs, Opportunities, Settings, LLM Status)
+Faculty feed: /faculty/oppfeed (requires faculty role)
+
 
 ### 4. Verify
 
@@ -381,6 +402,17 @@ TELEMETRY_ENABLED=false
 METRICS_ENABLED=true
 ROLLUP_INLINE=true
 SCAN_ENABLED=false
+
+# OppFeed Agent (opportunity discovery & publishing)
+ENABLE_AGENT=false
+ENABLE_SCHEDULER=false
+ENABLE_VISION=false
+ENABLE_BANNER_GEN=false
+ENABLE_AUDIO_SUMMARY=false
+NVIDIA_NIM_API_KEY=
+OPENROUTER_API_KEY=
+OLLAMA_BASE_URL=http://ollama:11434/v1
+OPENAI_API_KEY=
 ```
 
 ---
