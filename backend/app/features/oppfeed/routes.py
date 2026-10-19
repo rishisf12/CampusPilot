@@ -20,7 +20,7 @@ from .models import (
     AgentSettings,
     SourceRule,
     SearchQuery,
-    Feedback,
+    OppFeedFeedback,
     OpportunityStatus,
     RunStatus,
 )
@@ -928,22 +928,22 @@ async def admin_test_llm(
 
 
 # ---------------------------------------------------------------------------
-# Admin: Feedback
+# Admin: OppFeedFeedback
 # ---------------------------------------------------------------------------
 
-@admin_router.get("/opportunities/{opp_id}/feedback", response_model=List[FeedbackResponse])
+@admin_router.get("/opportunities/{opp_id}/OppFeedFeedback", response_model=List[FeedbackResponse])
 async def admin_list_feedback(
     opp_id: int,
     session: Session = Depends(get_session),
     admin: User = Depends(get_current_admin),
 ):
-    """List feedback for an opportunity."""
+    """List OppFeedFeedback for an opportunity."""
     opp = session.get(Opportunity, opp_id)
     if not opp:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
     feedback_list = session.exec(
-        select(Feedback).where(Feedback.opportunity_id == opp_id).order_by(Feedback.created_at.desc())
+        select(OppFeedFeedback).where(OppFeedFeedback.opportunity_id == opp_id).order_by(OppFeedFeedback.created_at.desc())
     ).all()
 
     return [

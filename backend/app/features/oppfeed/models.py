@@ -171,7 +171,7 @@ class Opportunity(SQLModel, table=True):
     created_by_run_id: Optional[str] = Field(default=None, index=True, max_length=100)
 
     # Relationships
-    feedback: List["Feedback"] = Relationship(back_populates="opportunity")
+    OppFeedFeedback: List["OppFeedFeedback"] = Relationship(back_populates="opportunity")
 
     # Timestamps
     created_at: Optional[datetime] = Field(
@@ -353,10 +353,10 @@ class SearchQuery(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# Feedback
+# OppFeedFeedback
 # ---------------------------------------------------------------------------
 
-class Feedback(SQLModel, table=True):
+class OppFeedFeedback(SQLModel, table=True):
     __tablename__ = "oppfeed_feedback"
     __table_args__ = (
         sa.Index("ix_oppfeed_feedback_opportunity_id", "opportunity_id"),
@@ -380,7 +380,7 @@ class Feedback(SQLModel, table=True):
     applied_as_instruction: bool = Field(default=False)
 
     # Relationships
-    opportunity: Optional[Opportunity] = Relationship(back_populates="feedback")
+    opportunity: Optional[Opportunity] = Relationship(back_populates="OppFeedFeedback")
 
     # Timestamps
     created_at: Optional[datetime] = Field(
@@ -456,7 +456,7 @@ __all__ = [
     "AgentSettings",
     "SourceRule",
     "SearchQuery",
-    "Feedback",
+    "OppFeedFeedback",
     "LLMCache",
     "LLMUsage",
     "OpportunityStatus",
