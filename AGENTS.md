@@ -274,3 +274,49 @@ VITE_DEV_BACKEND=http://127.0.0.1:8000   # Must use 127.0.0.1, not localhost (Wi
 - `docs/PHASE_WISE_TASK_LIST.md` — Phase-wise task breakdown
 - `CONTRIBUTING.md` — Original contributing guide
 - `START_BACKEND_GUIDE.md` — Backend startup guide
+
+---
+
+## OppFeed Integration
+
+OppFeed (autonomous internship/job discovery & publishing) is integrated into CampusPilot as a backend feature module plus admin and faculty frontend screens.
+
+### Backend
+- **Models**: `backend/app/features/oppfeed/models.py` — 9 tables (Opportunity, AgentRun, RunStep, AgentSettings, SourceRule, SearchQuery, OppFeedFeedback, LLMCache, LLMUsage), all in `core` schema
+- **Routes**: `backend/app/features/oppfeed/routes.py` — 23 endpoints:
+  - `GET/POST /admin/oppfeed/opportunities` — manage opportunities (admin only)
+  - `GET/POST/PATCH /admin/oppfeed/runs` — trigger & view agent runs (admin only)
+  - `GET/PATCH /admin/oppfeed/settings` — agent configuration (admin only)
+  - `GET/POST/PATCH/DELETE /admin/oppfeed/source-rules` — allow/deny domains (admin only)
+  - `GET/POST/PATCH/DELETE /admin/oppfeed/search-queries` — search queries (admin only)
+  - `GET /admin/oppfeed/llm-status` — LLM provider health (admin only)
+  - `GET /admin/oppfeed/opportunities/{id}/feedback` — feedback (admin only)
+  - `GET /faculty/oppfeed` — paginated opportunity feed (faculty/student)
+  - `GET /faculty/oppfeed/filters` — filter options (faculty/student)
+  - `GET /faculty/oppfeed/{slug}` — opportunity detail (faculty/student)
+- **Agent**: `backend/app/features/oppfeed/agent/` — LangGraph pipeline for discovery/verification
+- **Migration**: `alembic/versions/20261018_0016_oppfeed_models.py`
+- **Seed**: `backend/app/features/oppfeed/seed.py` — idempotent dev data
+
+### Frontend
+- **Admin**: `frontend/src/modules/admin/features/oppfeed/` — Dashboard, Agent Runs, Agent Run Detail, Opportunities Manager, Agent Settings, LLM Status
+- **Faculty**: `frontend/src/modules/faculty/features/oppfeed/` — OppFeedList (paginated cards with filter)
+- **API client**: `frontend/src/api.ts` — `oppfeedApi` with 23 methods
+- **Types**: `frontend/src/shared/types/api.ts` — 30+ OppFeed interfaces
+
+### Auth
+CampusPilot auth is the single source of truth. All OppFeed routes use `get_current_admin` (admin) or `get_current_user` (faculty/student). No separate OppFeed auth, user table, or JWT.
+
+### Environment Variables
+Add to `.env`:
+```
+ENABLE_AGENT=false
+ENABLE_SCHEDULER=false
+ENABLE_VISION=false
+ENABLE_BANNER_GEN=false
+ENABLE_AUDIO_SUMMARY=false
+NVIDIA_NIM_API_KEY=
+OPENROUTER_API_KEY=
+OLLAMA_BASE_URL=http://ollama:11434/v1
+OPENAI_API_KEY=
+```

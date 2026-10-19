@@ -236,10 +236,30 @@ Buffer (Oct 29-Nov 2): Buffer for integration issues
 
 | Phase | Focus | Timeline |
 |-------|-------|----------|
-| 9 | Android SDK distribution + Play Console | Q1 2027 |
-| 10 | Web beacon (JS SDK) + CDN | Q1 2027 |
-| 11 | Multi-tenant (other campuses) | Q2 2027 |
-| 12 | ML-based anomaly detection (local) | Q3 2027 |
+| 9 | OppFeed Integration (internship/job discovery & publishing) | Q4 2026 |
+| 10 | Android SDK distribution + Play Console | Q1 2027 |
+| 11 | Web beacon (JS SDK) + CDN | Q1 2027 |
+| 12 | Multi-tenant (other campuses) | Q2 2027 |
+| 13 | ML-based anomaly detection (local) | Q3 2027 |
+
+### Phase 9: OppFeed Integration
+
+OppFeed is an autonomous agent that discovers, verifies, and publishes internship/job opportunities for students. Integrated into CampusPilot as:
+
+**Backend** (`backend/app/features/oppfeed/`):
+- 9 SQLModel tables (Opportunity, AgentRun, RunStep, AgentSettings, SourceRule, SearchQuery, OppFeedFeedback, LLMCache, LLMUsage)
+- 23 REST endpoints: admin CRUD + faculty feed
+- LangGraph agent pipeline with LLM failover chain (NVIDIA NIM → OpenCode CLI → OpenRouter → Ollama → Mock)
+- APScheduler for daily runs (02:00–04:00 IST)
+- Alembic migration `016_oppfeed_models` + idempotent seed script
+
+**Frontend**:
+- Admin screens: Dashboard, Agent Runs, Opportunities Manager, Agent Settings, LLM Status
+- Faculty screen: Opportunity feed with filters (type, location, work mode, search)
+- Full TypeScript types and API client
+
+**Auth**: CampusPilot JWT dominates — no separate OppFeed auth. Admin routes require admin role; faculty routes require any signed-in user.
+
 
 ---
 *Roadmap version: 1.0 | Last updated: 2026-10-08 | Next review: 2026-11-02*
