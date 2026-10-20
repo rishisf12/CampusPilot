@@ -67,12 +67,18 @@ Read-only inventory frozen (verified 2026-10-20):
 - `backend/app/llms/__init__.py` — free-only provider router; a paid provider name is refused even with a working key in env.
 - Suite-wide invariant hardened: **every Postgres connection starts core-first** (`search_path=core,academic,social,telemetry,public` in `engine_kwargs`), ending the pooled-connection search-path accidents; `test_mcp_core.py` 10 tests.
 
-### Phase 2 — Monitoring MCP & in-app collectors — DONE (commit `bc32586`)
+### Phase 2 — Monitoring MCP & in-app collectors — DONE (commit `bc32586`; re-run `5d98fdd`)
 - `backend/app/observability/host.py` — psutil host metrics in-process (replaces node-exporter + cAdvisor): deltas, first-sample None, reboot-safe counters, per-metric failure isolation. `psutil` also added to `backend/requirements.txt` (was silently missing and crashed `features/health` in clean installs).
 - `backend/app/observability/uptime.py` — reader-derived uptime from `health_metric` sample coverage (replaces blackbox): gap counting, bootstrap anchoring, None-vs-0 honesty.
 - `backend/app/mcp/monitoring/` — tools `health_latest`, `health_uptime_pct`, `daily_active_users` on the Phase 1 registry.
 - `thresholds.py` source labels repointed to the actual stores (`health_metric`, `psutil`); A-W collector derives uptime from coverage; telemetry Mirrors kept green — 778 passed / 2 known pre-existing (documented, Phase 10-gated).
 - Parity rows 1–3 and 6–8: implemented, 7-day gate running (table below).
+
+**Re-run verification gate (closes the Phase 0–2 re-run):** full suite
+against Postgres finished **785 passed / 2 failed**, the 2 failures being the
+documented pre-existing `test_postgres_migration.py` alembic drift (Phase 10
+gate). New re-run tests all green: `test_mcp_core.py` 16, `test_mcp_monitoring.py`,
+`test_observability.py`, `test_monitoring.py` combined 158. Phase 3 unlocked.
 
 ### Phase 3 — Egress gate: redaction & pseudonymization — PENDING (next)
 Owns prompt tasks 1 + 2 and the egress-gate core (architecture rule 2).
