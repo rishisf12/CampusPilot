@@ -1,9 +1,8 @@
-"""OppFeed OppFeedFeedback service — CampusPilot integration.
+"""OppFeed feedback service — CampusPilot integration.
 
 Aggregation, guideline rebuild, few-shot integration.
 Uses CampusPilot Session and merged models.
 """
-from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
@@ -11,18 +10,19 @@ from sqlmodel import Session, select
 from features.oppfeed.models import (
     Opportunity,
     OpportunityStatus,
+    OpportunityType,
     OppFeedFeedback,
 )
-from features.oppfeed.schemas import FeedbackCreateRequest, FeedbackResponse
+from features.oppfeed.schemas import FeedbackCreateRequest
 
 
 class FeedbackService:
-    """Service for OppFeedFeedback business logic."""
+    """Service for reviewer-feedback business logic."""
 
     def get_feedback_for_opportunity(
         self, db: Session, opportunity_id: int
     ) -> List[OppFeedFeedback]:
-        """Get all OppFeedFeedback for an opportunity."""
+        """Get all feedback for an opportunity, newest first."""
         return list(
             db.exec(
                 select(OppFeedFeedback)
@@ -37,25 +37,25 @@ class FeedbackService:
         opportunity_id: int,
         payload: FeedbackCreateRequest,
     ) -> OppFeedFeedback:
-        """Create OppFeedFeedback for an opportunity."""
+        """Create feedback for an opportunity."""
         opp = db.get(Opportunity, opportunity_id)
         if not opp:
             raise ValueError("Opportunity not found")
 
-        OppFeedFeedback = OppFeedFeedback(
+        record = OppFeedFeedback(
             opportunity_id=opportunity_id,
             thumbs_up=payload.thumbs_up,
             rating=payload.rating,
             tags=payload.tags or [],
             comment=payload.comment,
         )
-        db.add(OppFeedFeedback)
+        db.add(record)
         db.commit()
-        db.refresh(OppFeedFeedback)
-        return OppFeedFeedback
+        db.refresh(record)
+        return record
 
     def aggregate_tags(self, db: Session) -> Dict[str, int]:
-        """Aggregate all OppFeedFeedback tags into counts."""
+        """Aggregate all feedback tags into counts."""
         results = list(db.exec(select(OppFeedFeedback)).all())
         tag_counts: Dict[str, int] = {}
         for fb in results:
@@ -64,11 +64,11 @@ class FeedbackService:
         return tag_counts
 
     def rebuild_guidelines(self, db: Session) -> str:
-        """Rebuild agent guidelines from all OppFeedFeedback."""
+        """Rebuild agent guidelines from all feedback."""
         tag_counts = self.aggregate_tags(db)
         if not tag_counts:
             return ""
-        lines = ["## Agent Guidelines (Auto-generated from Reviewer OppFeedFeedback)", ""]
+        lines = ["## Agent Guidelines (Auto-generated from Reviewer Feedback)", ""]
         for tag, count in sorted(tag_counts.items(), key=lambda x: -x[1]):
             lines.append(f"- **{tag}** ({count} reports)")
         return "\n".join(lines)
@@ -80,8 +80,9 @@ class FeedbackService:
         stmt = select(Opportunity).where(Opportunity.status == OpportunityStatus.APPROVED)
         if opportunity_type:
             try:
-                from features.oppfeed.models import OpportunityType
-                stmt = stmt.where(Opportunity.opportunity_type == OpportunityType(opportunity_type))
+                stmt = stmt.where(
+                    Opportunity.opportunity_type == OpportunityType(opportunity_type)
+                )
             except ValueError:
                 pass
         stmt = stmt.order_by(Opportunity.confidence_score.desc().nullslast()).limit(limit)

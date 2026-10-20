@@ -10,7 +10,27 @@ from sqlmodel import Session, select
 
 from core.database import engine
 from features.oppfeed.models import AgentRun, RunStatus
-from features.oppfeed.agent.graph import AgentPipeline
+
+# The agent package (and the scraping stack it pulls in) is imported lazily,
+# inside the function that actually runs it. Scheduling the job must not
+# require the optional scraping libraries to be installed.
+
+
+def _load_pipeline():
+    """Import the agent pipeline on demand.
+
+    Raises with a clear message when the optional agent dependencies are
+    missing, rather than an opaque ImportError at application start-up.
+    """
+    try:
+        from features.oppfeed.agent.graph import AgentPipeline
+    except ImportError as exc:
+        raise ImportError(
+            "The OppFeed agent needs its optional scraping dependencies. "
+            "Install them with: pip install -r requirements.txt "
+            f"(original error: {exc})"
+        ) from exc
+    return AgentPipeline
 
 
 def run_daily_agent_job() -> None:
@@ -47,7 +67,7 @@ def run_daily_agent_job() -> None:
     # Execute the pipeline after the session is closed
     # The pipeline manages its own sessions per stage
     try:
-        pipeline = AgentPipeline()
+        pipeline = _load_pipeline()()
         pipeline.run(run_id=run.run_id, mode="scheduled")
     except Exception as e:
         print(f"Pipeline execution failed: {e}")

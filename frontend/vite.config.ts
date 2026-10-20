@@ -18,7 +18,7 @@ import path from 'path';
  * `VITE_DEV_BACKEND=http://localhost:8002` when using the Docker stack. Keep
  * the IP literal in that case too, for the same reason.
  */
-const BACKEND = process.env.VITE_DEV_BACKEND || 'http://127.0.0.1:8001';
+const BACKEND = process.env.VITE_DEV_BACKEND || 'http://127.0.0.1:8000';
 
 /**
  * Backend path prefixes proxied to FastAPI.
@@ -75,6 +75,11 @@ const proxied = [
   '/admin/remote-config',
   '/admin/security',
   '/admin/users',
+  // OppFeed: the admin surface (dashboard, runs, settings, opportunities) and
+  // the faculty-facing opportunity feed. Listed explicitly because
+  // test_proxy_coverage asserts exact set equality with the backend's routers.
+  '/admin/oppfeed',
+  '/faculty/oppfeed',
 ];
 
 export default defineConfig({

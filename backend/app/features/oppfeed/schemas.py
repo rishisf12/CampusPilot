@@ -423,11 +423,11 @@ class LLMTestResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# OppFeedFeedback
+# Feedback
 # ---------------------------------------------------------------------------
 
 class FeedbackResponse(BaseModel):
-    """OppFeedFeedback detail."""
+    """Reviewer feedback on an opportunity."""
 
     id: int
     opportunity_id: int
@@ -442,7 +442,7 @@ class FeedbackResponse(BaseModel):
 
 
 class FeedbackCreateRequest(BaseModel):
-    """Create OppFeedFeedback on an opportunity."""
+    """Create reviewer feedback on an opportunity."""
 
     thumbs_up: Optional[bool] = None
     rating: Optional[int] = Field(default=None, ge=1, le=5)

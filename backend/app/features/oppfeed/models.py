@@ -353,7 +353,7 @@ class SearchQuery(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# OppFeedFeedback
+# Feedback
 # ---------------------------------------------------------------------------
 
 class OppFeedFeedback(SQLModel, table=True):

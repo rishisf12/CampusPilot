@@ -99,6 +99,11 @@ class BranchChangeResponse(BaseModel):
 
 
 def _to_response(profile: UserProfile) -> ProfileResponse:
+    # `branch` is nullable in the database (a student may not have picked one
+    # yet) but the response model declares it as a required string. Passing the
+    # raw NULL through made Pydantic raise a ValidationError, and the endpoint
+    # answered 500 for the whole profile screen. Coerce it here so the
+    # response keeps its "always a string" contract without failing.
     return ProfileResponse(
         id=profile.id,
         user_id=profile.user_id,
@@ -107,7 +112,7 @@ def _to_response(profile: UserProfile) -> ProfileResponse:
         phone=profile.phone,
         programme=profile.programme,
         semester=profile.semester,
-        branch=profile.branch,
+        branch=profile.branch or "",
         section=profile.section,
         elective_codes=list(profile.elective_codes or []),
         attendance_target=profile.attendance_target,

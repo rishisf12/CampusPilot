@@ -279,6 +279,12 @@
       "environment": {
         "DATABASE_URL": "${DATABASE_URL:-postgresql://campuspilot:campuspilot@localhost:5432/campuspilot}"
       }
+    },
+    "shell": {
+      "type": "local",
+      "command": ["python", "C:\\\\Users\\\\Appex\\\\.config\\\\opencode\\\\mcp_servers\\\\shell_server.py"],
+      "enabled": true,
+      "timeout": 30000
     }
   }
 }

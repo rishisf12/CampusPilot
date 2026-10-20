@@ -78,6 +78,11 @@ duckduckgo-search
 beautifulsoup4
 # lxml for fast parsing
 lxml[html_clean]
+# lxml.html.clean moved to its own distribution in lxml 5.x. It is listed
+# explicitly (not only as the [html_clean] extra) so that installing over an
+# existing lxml still pulls it in — otherwise `import trafilatura` fails with
+# "lxml.html.clean module is now a separate project lxml_html_clean".
+lxml_html_clean
 # trafilatura for article extraction
 trafilatura
 # Playwright for browser-based fetching (PlaywrightFetcher)

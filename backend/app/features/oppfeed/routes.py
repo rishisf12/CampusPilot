@@ -4,7 +4,7 @@ Admin endpoints: /admin/oppfeed/*  (require admin role)
 Faculty endpoints: /faculty/oppfeed/*  (require authenticated user)
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -54,7 +54,12 @@ from .schemas import (
     RunFilterParams,
     PaginationParams,
 )
-from .agent.graph import AgentPipeline
+
+# NOTE: the agent package is imported lazily, inside the handler that needs it.
+# Importing it at module level would pull in the scraping stack
+# (trafilatura -> justext -> lxml.html.clean), and a missing optional scraping
+# library must not stop the whole API from booting — the agent is off by
+# default (ENABLE_AGENT=false) and is only needed when a run is triggered.
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +79,10 @@ def _to_card(opp: Opportunity) -> OpportunityCard:
     """Convert Opportunity model to OpportunityCard for feed."""
     days_left = None
     if opp.registration_deadline:
-        delta = opp.registration_deadline - datetime.now()
+        # The column is timezone-aware, so the "now" it is compared against must
+        # be too: subtracting a naive local time from an aware UTC value raises
+        # TypeError, which surfaced as a 500 on the whole faculty feed.
+        delta = opp.registration_deadline - datetime.now(timezone.utc)
         days_left = max(0, delta.days)
     return OpportunityCard(
         slug=opp.slug,
@@ -115,7 +123,7 @@ def _to_detail(opp: Opportunity) -> OpportunityDetail:
     """Convert Opportunity model to OpportunityDetail for faculty view."""
     days_left = None
     if opp.registration_deadline:
-        delta = opp.registration_deadline - datetime.now()
+        delta = opp.registration_deadline - datetime.now(timezone.utc)
         days_left = max(0, delta.days)
     return OpportunityDetail(
         slug=opp.slug,
@@ -416,7 +424,7 @@ async def admin_update_opportunity(
         if hasattr(opp, field):
             setattr(opp, field, value)
 
-    opp.updated_at = datetime.now()
+    opp.updated_at = datetime.now(timezone.utc)
     session.add(opp)
     session.commit()
     session.refresh(opp)
@@ -450,7 +458,7 @@ async def admin_bulk_action(
                     detail=f"Opportunity {opp.id} must be approved before publishing",
                 )
             opp.status = OpportunityStatus.PUBLISHED
-            opp.published_at = datetime.now()
+            opp.published_at = datetime.now(timezone.utc)
         elif action == "schedule":
             if not payload.scheduled_publish_at:
                 raise HTTPException(status_code=400, detail="scheduled_publish_at required")
@@ -464,7 +472,7 @@ async def admin_bulk_action(
         else:
             raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
 
-        opp.updated_at = datetime.now()
+        opp.updated_at = datetime.now(timezone.utc)
         session.add(opp)
 
     session.commit()
@@ -494,7 +502,7 @@ async def admin_transition_state(
         if opp.status != OpportunityStatus.APPROVED:
             raise HTTPException(status_code=400, detail="Must be approved before publishing")
         opp.status = OpportunityStatus.PUBLISHED
-        opp.published_at = datetime.now()
+        opp.published_at = datetime.now(timezone.utc)
     elif action == "schedule":
         if not payload.scheduled_publish_at:
             raise HTTPException(status_code=400, detail="scheduled_publish_at required")
@@ -505,7 +513,7 @@ async def admin_transition_state(
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
 
-    opp.updated_at = datetime.now()
+    opp.updated_at = datetime.now(timezone.utc)
     session.add(opp)
     session.commit()
     session.refresh(opp)
@@ -681,7 +689,7 @@ async def admin_update_settings(
         if hasattr(settings, field):
             setattr(settings, field, value)
 
-    settings.updated_at = datetime.now()
+    settings.updated_at = datetime.now(timezone.utc)
     session.add(settings)
     session.commit()
     session.refresh(settings)
@@ -928,16 +936,19 @@ async def admin_test_llm(
 
 
 # ---------------------------------------------------------------------------
-# Admin: OppFeedFeedback
+# Admin: Feedback
 # ---------------------------------------------------------------------------
 
-@admin_router.get("/opportunities/{opp_id}/OppFeedFeedback", response_model=List[FeedbackResponse])
+# The path segment is "feedback", not the model class name: the frontend
+# client (frontend/src/api.ts -> oppfeedApi.listFeedback) calls
+# /admin/oppfeed/opportunities/{id}/feedback.
+@admin_router.get("/opportunities/{opp_id}/feedback", response_model=List[FeedbackResponse])
 async def admin_list_feedback(
     opp_id: int,
     session: Session = Depends(get_session),
     admin: User = Depends(get_current_admin),
 ):
-    """List OppFeedFeedback for an opportunity."""
+    """List reviewer feedback for an opportunity."""
     opp = session.get(Opportunity, opp_id)
     if not opp:
         raise HTTPException(status_code=404, detail="Opportunity not found")
@@ -970,3 +981,4 @@ async def admin_list_feedback(
 router = APIRouter()
 router.include_router(admin_router)
 router.include_router(faculty_router)
+
