@@ -27,6 +27,11 @@ from mcp.core import redact as _redaction
 
 logger = logging.getLogger(__name__)
 
+#: The per-run salt lives with the redactor (it is the redactor's input), and
+#: is re-exported here because the Stage 2 egress and the tools of one scan
+#: must share it - pseudonyms have to line up between tool rows and prompts.
+salt_for = _redaction.salt_for
+
 #: A hung tool must not hold the scan worker. Mirrors SCAN-AGENT.md rule 2.
 TOOL_TIMEOUT_S = 5.0
 
@@ -136,64 +141,6 @@ class ToolRegistry:
         return sorted(self._tools)
 
 
-#: One salt per scan run: tools called under the same `scan_id` share it, so
-#: identical identifiers pseudonymize identically *within* a run (the model can
-#: count recurrences) while different runs stay unlinkable. Cleared when large
-#: - scan ids are per-run, so the map is bounded by runs, not by calls.
-_RUN_SALTS: dict[str, str] = {}
-
-
-def _salt_for(scan_id: str) -> str:
-    salt = _RUN_SALTS.get(scan_id)
-    if salt is None:
-        if len(_RUN_SALTS) >= 4_096:
-            _RUN_SALTS.clear()
-        salt = uuid.uuid4().hex
-        _RUN_SALTS[scan_id] = salt
-    return salt
-
-
-#: Public alias: the Stage 2 LLM egress shares one scan's salt with its tools,
-#: so pseudonyms line up between tool output and prompt text.
-salt_for = _salt_for
-
-_redaction_verified: bool | None = None
-
-
-def redaction_wired() -> bool:
-    """Tripwire: is the egress gate actually inside `run_tool`?
-
-    The egress rule has no second enforcement point downstream of the scan
-    consumer, so if a refactor ever silently removed the `_egress` call from
-    `run_tool`, tool output would go straight to the model unredacted. This
-    inspects `run_tool`'s own source once per process and caches the answer -
-    not proof of correctness, but a loud tripwire against exactly the kind of
-    regression that hides in an otherwise-green test suite.
-    """
-    global _redaction_verified
-    if _redaction_verified is None:
-        import inspect
-
-        src = inspect.getsource(run_tool)
-        _redaction_verified = (
-            "_egress(result" in src and "_redaction.redact_value(" in inspect.getsource(_egress)
-        )
-    return _redaction_verified
-
-
-def assert_redaction_wired() -> None:
-    """Refuse loudly if the egress gate is not in `run_tool`'s path.
-
-    Called by telemetry LLM jobs (via `llms.resolve_for_job`) before anything
-    is sent: the raised `ToolError` is the "no request sent" refusal.
-    """
-    if not redaction_wired():
-        raise ToolError(
-            "egress gate not wired into run_tool - refusing telemetry job "
-            "(no request sent); inspect mcp.core.registry run_tool"
-        )
-
-
 def _egress(result: ToolResult, salt: str) -> tuple[ToolResult, dict[str, Any]]:
     """The single egress point: redact + pseudonymize + cap rows (anonymization optics).
 
@@ -213,6 +160,66 @@ def _egress(result: ToolResult, salt: str) -> tuple[ToolResult, dict[str, Any]]:
         "truncated": truncated,
     }
     return result, meta
+
+
+#: Cached answer of the tripwire below - the source of `run_tool` cannot change
+#: while the process runs, so the check is done once.
+_redaction_verified: bool | None = None
+
+
+def redaction_wired() -> bool:
+    """Is the egress gate actually inside `run_tool`?
+
+    Two properties, both checked here because both can be broken silently:
+
+    1. **The wiring** - `run_tool` still calls `_egress`, and `_egress` still
+       calls the redactor. A refactor that dropped either would let tool
+       output go straight to the model unredacted. This reads the functions'
+       own source once per process: not proof of correctness, but a loud
+       tripwire against exactly the kind of regression that hides in an
+       otherwise-green test suite.
+    2. **The behaviour** - the egress path really masks a canary string. A
+       regex change that stopped matching would pass the wiring check and
+       still leak.
+
+    The session-based canary in `mcp.core.jobs.egress_selfcheck` proves the
+    same thing end to end (through `run_tool` itself, with its audit write);
+    this one is the cheap, sessionless pre-flight for callers that only have
+    a config.
+    """
+    global _redaction_verified
+    if _redaction_verified is None:
+        import inspect
+
+        try:
+            src_run = inspect.getsource(run_tool)
+            src_egress = inspect.getsource(_egress)
+        except (OSError, TypeError):  # pragma: no cover - source not available
+            _redaction_verified = False
+        else:
+            wired = "_egress(" in src_run and "redact_value(" in src_egress
+            canary, count = _redaction.redact_value(
+                {"note": "canary.check@example.invalid"}, "probe"
+            )
+            _redaction_verified = bool(
+                wired
+                and count > 0
+                and "canary.check@example.invalid" not in str(canary)
+            )
+    return _redaction_verified
+
+
+def assert_redaction_wired() -> None:
+    """Refuse loudly if the egress gate is not in `run_tool`'s path.
+
+    Called by telemetry LLM jobs (via `llms.resolve_for_job`) before anything
+    is sent: the raised `ToolError` is the "no request sent" refusal.
+    """
+    if not redaction_wired():
+        raise ToolError(
+            "egress gate not wired into run_tool - refusing telemetry job "
+            "(no request sent); inspect mcp.core.registry run_tool"
+        )
 
 
 def run_tool(
@@ -259,7 +266,7 @@ def run_tool(
             # call as failed.
             held_pool = False
             raise ToolTimeout(f"tool {name!r} exceeded {timeout_s}s budget") from None
-        result, egress_meta = _egress(result, _salt_for(resolved_scan_id))
+        result, egress_meta = _egress(result, _redaction.salt_for(resolved_scan_id))
         value, rows, metric_key = result.data, result.row_count, result.metric_key
         ok = True
         return result
@@ -275,7 +282,7 @@ def run_tool(
         audit_args: dict[str, Any] = dict(args or {})
         if egress_meta is not None:
             audit_args["egress"] = egress_meta
-        _audit(
+        write_audit(
             session,
             scan_id=resolved_scan_id,
             tool=name,
@@ -288,23 +295,29 @@ def run_tool(
         )
 
 
-def _audit(
+def write_audit(
     session: Session,
     *,
     scan_id: str,
     tool: str,
-    args: dict[str, Any],
-    metric_key: str | None,
-    row_count: int,
-    duration_ms: int,
-    ok: bool,
-    error: str | None,
+    args: dict[str, Any] | None = None,
+    metric_key: str | None = None,
+    row_count: int = 0,
+    duration_ms: int = 0,
+    ok: bool = True,
+    error: str | None = None,
+    sent_to: str | None = None,
+    redactions_applied: int = 0,
+    bytes_out: int = 0,
+    redaction_salt: str | None = None,
 ) -> None:
-    """Write the audit row, then commit. Written even when the tool refused.
+    """Write one audit row and commit.
 
-    `args` is deliberately reduced to JSON-safe values: a caller passing a
-    datetime or any other object must not be able to crash the audit trail —
-    the row has to exist for the reconciler's read-only claim to stand.
+    The single writer of `telemetry.tool_call_audit`, shared by tool calls
+    (`run_tool`) and outbound LLM requests (`mcp.core.llm`). `args` is
+    deliberately reduced to JSON-safe values: a caller passing a datetime or
+    any other object must not be able to crash the audit trail — the row has
+    to exist for the reconciler's read-only claim to stand.
     """
     import json
 
@@ -312,12 +325,16 @@ def _audit(
         ToolCallAudit(
             scan_id=scan_id,
             tool=tool,
-            args=json.loads(json.dumps(args, default=str)),
+            args=json.loads(json.dumps(args or {}, default=str)),
             metric_key=metric_key,
             row_count=row_count,
             duration_ms=duration_ms,
             ok=ok,
             error=error,
+            sent_to=sent_to,
+            redactions_applied=redactions_applied,
+            bytes_out=bytes_out,
+            redaction_salt=redaction_salt,
         )
     )
     session.commit()

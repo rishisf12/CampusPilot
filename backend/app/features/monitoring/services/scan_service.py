@@ -881,27 +881,28 @@ def _write_llm_audit_row(
     """
     from core.database import session_scope
 
+    from mcp.core.registry import write_audit
+
     log = logging.getLogger(__name__)
     try:
         with session_scope() as session:
-            session.add(
-                ToolCallAudit(
-                    scan_id=scan_id,
-                    tool="llm.stage2_narrative",
-                    args={
-                        "job_kind": "telemetry",
-                        "model": config.model,
-                        "subsection": subsection,
-                    },
-                    row_count=1,
-                    duration_ms=duration_ms,
-                    ok=ok,
-                    error=error,
-                    sent_to=config.provider,
-                    redactions_applied=redactions,
-                    bytes_out=len(payload),
-                    redaction_salt=salt_for(scan_id),
-                )
+            write_audit(
+                session,
+                scan_id=scan_id,
+                tool="llm.stage2_narrative",
+                args={
+                    "job_kind": "telemetry",
+                    "model": config.model,
+                    "subsection": subsection,
+                },
+                row_count=1,
+                duration_ms=duration_ms,
+                ok=ok,
+                error=error,
+                sent_to=config.provider,
+                redactions_applied=redactions,
+                bytes_out=len(payload),
+                redaction_salt=salt_for(scan_id),
             )
     except Exception:
         log.exception("failed to write the LLM egress audit row for scan %s", scan_id)

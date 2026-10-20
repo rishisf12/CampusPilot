@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import uuid
 from typing import Any
 
 #: Bracket placeholders used in free text. Fixed strings: the model reading a
@@ -93,6 +94,8 @@ _TEXT_PATTERNS: tuple[tuple[re.Pattern[str], Any], ...] = (
 
 def redact(text: str) -> str:
     """Mask every recognisable PII shape in `text`. See module docstring."""
+    if not text:
+        return text
     for pattern, repl in _TEXT_PATTERNS:
         text = pattern.sub(repl, text)
     return text
@@ -146,6 +149,23 @@ def pseudonymize_id(value: Any, salt: str) -> str:
     """
     digest = hashlib.sha256(f"{salt}:{str(value)}".encode()).hexdigest()[:8]
     return f"{ID_PREFIX}{digest}"
+
+
+#: One salt per run: shared by every call and every LLM request of that run,
+#: so the model can count recurrences within a scan, and unlinkable across
+#: runs. Bounded by runs, not by calls.
+_RUN_SALTS: dict[str, str] = {}
+
+
+def salt_for(run_id: str) -> str:
+    """The salt for a run — minted on first use, reused for the rest of it."""
+    salt = _RUN_SALTS.get(run_id)
+    if salt is None:
+        if len(_RUN_SALTS) >= 4_096:
+            _RUN_SALTS.clear()
+        salt = uuid.uuid4().hex
+        _RUN_SALTS[run_id] = salt
+    return salt
 
 
 def _is_secret_key(key: str) -> bool:

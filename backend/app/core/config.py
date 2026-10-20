@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from functools import lru_cache
 
 
@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     #: NIM, OpenRouter). The client code path is identical; only the base URL,
     #: model and key change. Default stays off so a fresh install never waits
     #: on a model.
+    #: Which named free provider the LLM-backed features may use: "off" (no
+    #: LLM at all), or one of `llms.ALLOWED_PROVIDERS` (nvidia_nim,
+    #: openrouter, ollama). The *named* provider is validated against that
+    #: allowlist - a paid provider name is a configuration error caught at
+    #: startup, not a runtime surprise. `llm_base_url`/`llm_api_key` stay as
+    #: plumbing for the generic OpenAI-compatible Stage-2 client.
     llm_provider: str = Field(default="off", alias="LLM_PROVIDER")
     #: API key for hosted providers (Groq, HF, NIM...). Empty means no auth
     #: header is sent, which is correct for a server that needs none. Never
@@ -136,6 +142,27 @@ class Settings(BaseSettings):
     #: Developer API credentials, and until then every purchase is honestly
     #: labelled unverified rather than quietly assumed good.
     enable_store_verify: bool = Field(default=False, alias="ENABLE_STORE_VERIFY")
+
+    @field_validator("llm_provider")
+    @classmethod
+    def _provider_must_be_free(cls, value: str) -> str:
+        """Refuse a provider that is not on the free allowlist.
+
+        Checked at startup, not at first use: a paid provider name should
+        fail the deployment loudly, before any request is built.
+        """
+        from llms import ALLOWED_PROVIDERS, NO_LLM
+
+        normalized = (value or "").strip().lower()
+        if normalized in (NO_LLM, *ALLOWED_PROVIDERS):
+            return normalized
+        raise ValueError(
+            f"LLM_PROVIDER={value!r} is not permitted. Use 'off' or one of "
+            f"{sorted(ALLOWED_PROVIDERS)} - only free providers are shipped. "
+            "The historic 'openai-compatible' value is no longer accepted: it "
+            "could point anywhere, which is exactly what the allowlist exists "
+            "to prevent."
+        )
 
     def require_monitoring_pepper(self) -> str:
         """Return the pepper, refusing the default outside tests.

@@ -22,7 +22,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Text, UniqueConstraint, func
 # Aliased, not imported as `Enum`: a bare `Enum` here would shadow `enum.Enum`
 # from line 22, and every `class X(str, Enum)` below would then be built on
 # SQLAlchemy's *type* rather than the stdlib enum. SQLAlchemy's isinstance
@@ -426,17 +426,18 @@ class ToolCallAudit(SQLModel, table=True):
         default=None,
         sa_column=Column("at", DateTime, nullable=False, server_default=func.now()),
     )
-    # -- Phase 4: LLM egress auditing ---------------------------------------
-    # Rows written by tool calls leave these NULL; outbound LLM requests write
-    # their own row (tool name `llm.*`) and fill every one. Together they are
-    # the "every outbound request is audited" rule: sent_to names the provider
-    # that consumed what, redactions_applied counts the masks the egress gate
-    # applied, bytes_out is the redacted payload size on the wire, and
-    # redaction_salt is the per-run salt those pseudonyms were derived from.
-    sent_to: Optional[str] = Field(default=None, sa_column=Column("sent_to", String(255), nullable=True))
-    redactions_applied: Optional[int] = Field(default=None, sa_column=Column("redactions_applied", Integer, nullable=True))
-    bytes_out: Optional[int] = Field(default=None, sa_column=Column("bytes_out", Integer, nullable=True))
-    redaction_salt: Optional[str] = Field(default=None, sa_column=Column("redaction_salt", String(64), nullable=True))
+    #: Which provider consumed this request (Phase 4). Null for pure tool
+    #: calls; set on every outbound LLM request, so "what left the building"
+    #: is answerable from one table.
+    sent_to: Optional[str] = Field(default=None, index=True)
+    #: How many redactions the egress gate applied to this payload. Zero for
+    #: tool calls and for LLM requests that carried nothing maskable.
+    redactions_applied: int = 0
+    #: Size of the outbound payload in bytes (the redacted one - never the raw).
+    bytes_out: int = 0
+    #: The run's salt, kept so a reviewer can reproduce a pseudonym mapping
+    #: from the audit trail alone.
+    redaction_salt: Optional[str] = Field(default=None)
 
 
 # =============================================================================

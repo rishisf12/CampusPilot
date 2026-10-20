@@ -26,6 +26,19 @@ def _get_settings():
             raise ValueError(f"Environment variable {name} is required")
         return val
 
+    def _str_required_any(*names: str) -> str:
+        """First non-empty value among `names` - the accepted key aliases.
+
+        `NVIDIA_API_KEY` is the canonical name; `NVIDIA_NIM_API_KEY` is
+        accepted as an alias so one credential serves this stack and the
+        agent tooling's allowlist resolver (which reads both).
+        """
+        for name in names:
+            val = os.environ.get(name, "")
+            if val:
+                return val
+        raise ValueError(f"Environment variable {' or '.join(names)} is required")
+
     def _int(name: str, default: int = 30) -> int:
         try:
             return int(os.environ.get(name, default))
@@ -39,7 +52,7 @@ def _get_settings():
             return default
 
     return type("NVIDIASettings", (), {
-        "NVIDIA_API_KEY": _str_required("NVIDIA_API_KEY"),
+        "NVIDIA_API_KEY": _str_required_any("NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"),
         "NVIDIA_MODEL": _str("NVIDIA_MODEL", "nemotron"),
         "NVIDIA_FAST_MODEL": _str("NVIDIA_FAST_MODEL", "nemotron"),
         "LLM_TIMEOUT_S": _int("LLM_TIMEOUT_S", 60),

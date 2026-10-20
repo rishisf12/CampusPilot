@@ -1,6 +1,6 @@
 """LLM bundle (see `docs/MCP_MIGRATION_PLAN.md`, bundle rule 7).
 
-Exactly one place decides which language model a feature may use. Two rules:
+Exactly one place decides which language model a feature may use. Three rules:
 
 1. **Free only.** The allowlist below is every permitted provider. Anything else
    — including an explicitly configured OpenAI/Anthropic key in the environment —
@@ -18,11 +18,21 @@ Exactly one place decides which language model a feature may use. Two rules:
 
    Adding an LLM-backed feature means adding one file here and one line in that
    map — not touching any provider config elsewhere.
+
+3. **One provider stack, not two.** `get_client()` hands back the *existing*
+   OppFeed provider clients (`NVIDIAClient`, `OpenRouterClient`) — the same
+   HTTP plumbing, base URLs, headers and error handling the discovery agent
+   already uses. Agent tooling never writes its own provider client.
+
+Key names are unified here: NVIDIA's key is read from `NVIDIA_API_KEY` (what
+the reusable OppFeed clients read) with `NVIDIA_NIM_API_KEY` accepted as an
+alias, so one credential serves both stacks.
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Any
 
 #: Provider -> connection template. Free/open-source providers only (owner
 #: directive 6); this mapping IS the allowlist, re-used everywhere via
@@ -43,6 +53,9 @@ _PREFERENCE = ("nvidia_nim", "openrouter", "ollama")
 #: only allowed out after the egress gate has verified itself (see
 #: `resolve_for_job`); `public_data` jobs (OppFeed) touch public pages only.
 JOB_KINDS = frozenset({"telemetry", "public_data"})
+
+#: A valid configuration meaning "no LLM at all" - not a provider.
+NO_LLM = "off"
 
 
 class LLMConfigError(RuntimeError):
@@ -72,6 +85,10 @@ def resolve(provider: str | None = None, model: str | None = None) -> ResolvedLL
     either `NVIDIA_API_KEY` (what the reusable OppFeed clients read) or
     `NVIDIA_NIM_API_KEY` (this module's historic name); `NVIDIA_API_KEY` wins.
     """
+    if provider is not None and provider.lower() == NO_LLM:
+        raise LLMConfigError(
+            "LLM is disabled (provider 'off'); nothing to resolve"
+        )
     if provider is not None and provider not in _PROVIDERS:
         raise LLMConfigError(
             f"provider {provider!r} is not on the free allowlist "
@@ -122,6 +139,41 @@ def resolve_for_job(
     return resolve(provider, model)
 
 
+def get_client(provider: str) -> Any:
+    """The reusable OppFeed provider client for an allowlisted provider.
+
+    Deliberately the *same* client classes the discovery agent uses, so there
+    is exactly one HTTP implementation per provider in this codebase. The
+    import is local: loading the OppFeed agent package is not free, and most
+    processes never need a provider client at all.
+    """
+    if provider not in ALLOWED_PROVIDERS:
+        raise LLMConfigError(
+            f"provider {provider!r} is not on the free allowlist "
+            f"({sorted(ALLOWED_PROVIDERS)})"
+        )
+    modules = {
+        "nvidia_nim": "features.oppfeed.agent.llm.nvidia_nim_client",
+        "openrouter": "features.oppfeed.agent.llm.openrouter_client",
+    }
+    if provider not in modules:
+        # ollama - local, no hosted key, and no client in this stack yet.
+        raise LLMConfigError(
+            "provider 'ollama' has no reusable client in this stack yet; "
+            "point the agent tooling at nvidia_nim or openrouter"
+        )
+    import importlib
+
+    module = importlib.import_module(modules[provider])
+    client_cls = getattr(module, "NVIDIAClient" if provider == "nvidia_nim" else "OpenRouterClient")
+    try:
+        return client_cls()
+    except ValueError as exc:  # the clients raise when their key env var is unset
+        raise LLMConfigError(
+            f"provider {provider!r} is not configured: {exc}"
+        ) from exc
+
+
 def __getattr__(name: str):
     """Lazy re-exports of the reusable OppFeed provider clients (Phase 4).
 
@@ -135,6 +187,9 @@ def __getattr__(name: str):
         "NVIDIAClient": "features.oppfeed.agent.llm.nvidia_nim_client",
         "OpenRouterClient": "features.oppfeed.agent.llm.openrouter_client",
         "MockLLMClient": "features.oppfeed.agent.llm.mock_client",
+        "LLMClient": "features.oppfeed.agent.llm.base",
+        "LLMResponse": "features.oppfeed.agent.llm.base",
+        "ProviderHealth": "features.oppfeed.agent.llm.base",
     }
     if name in lazy:
         import importlib
