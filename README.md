@@ -385,6 +385,23 @@ its answer is returned. A number a scan cites is checked against that audit
 trail: if no tool produced it, the scan fails and is recorded as `error` —
 never as `healthy`.
 
+### Proposals, not actions
+
+A scan may recommend a remediation, but the model never performs one. The
+reactor owns a closed catalogue of the eleven allowed actions, and each one
+maps to a deterministic playbook — the steps, how to verify it, how to undo
+it, and whether a human must carry it out. A rollback, a credential
+rotation, a rate limit or a store contact is recorded as *advice* for an
+operator, never performed by the system.
+
+- An action outside the catalogue is rejected, audited as a rejection, and
+  leaves no work item behind.
+- The same suggestion twice is one work item, not two: proposals are keyed
+  on scan, action and target.
+- Every proposal invocation is written to `telemetry.tool_call_audit` with
+  its state (`proposed`, `executed` or `rejected`), next to the tool calls
+  and model requests that led to it.
+
 ### Turning it on
 
 Nothing is on by default. The dashboards say *"no data yet"* rather than showing

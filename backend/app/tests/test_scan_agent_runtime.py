@@ -356,6 +356,63 @@ def test_runtime_writes_audit_rows_for_every_tool_it_ran(db_session):
     assert all(row.scan_id == "scan-agent-audit" for row in rows)
 
 
+def test_runtime_turns_recommendations_into_proposals_not_actions(db_session):
+    """The reactor records the suggestion; nothing acts on it."""
+    from features.monitoring.domain.models import ReactorProposal
+
+    async def recommending(messages):
+        payload = json.loads(messages[1]["content"])
+        output = payload["tool_output"][0]
+        value = _first_number(output["data"])
+        return {
+            "status": "warning",
+            "summary": "One endpoint is slower than the healthy band allows.",
+            "findings": [
+                {
+                    "title": "Slow endpoint",
+                    "severity": "warning",
+                    "evidence": [
+                        {
+                            "metric": output["metric_key"],
+                            "value": value,
+                            "unit": "ms",
+                            "window": "7d",
+                            "source": output["tool"],
+                        }
+                    ],
+                }
+            ],
+            "root_causes": ["The feedback endpoint runs an unbounded query."],
+            "recommended_actions": [
+                {
+                    "action": "investigate_endpoint",
+                    "priority": 1,
+                    "detail": "p95 is 900 ms on /api/feedback",
+                    "evidence_refs": ["/api/feedback"],
+                }
+            ],
+            "confidence": {"level": "medium"},
+        }
+
+    result = asyncio_run(
+        run_scan(
+            db_session,
+            subsection="A_W_HEALTH",
+            scan_id="scan-agent-proposal",
+            chat=recommending,
+        )
+    )
+    assert result.status == Status.WARNING
+
+    proposals = db_session.exec(select(ReactorProposal)).all()
+    assert len(proposals) == 1
+    assert proposals[0].action == "investigate_endpoint"
+    assert proposals[0].state == "proposed"
+    # Advisory: the procedure tells a human what to do, and it does not do it.
+    assert proposals[0].procedure["requires_operator"] is True
+    assert proposals[0].procedure["steps"]
+
+
 def asyncio_run(coro):
     """`asyncio.run` without an event loop of our own."""
     import asyncio

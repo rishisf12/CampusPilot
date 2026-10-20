@@ -442,6 +442,64 @@ class ToolCallAudit(SQLModel, table=True):
     #: The run's salt, kept so a reviewer can reproduce a pseudonym mapping
     #: from the audit trail alone.
     redaction_salt: Optional[str] = Field(default=None)
+    #: Where a proposal got to: `proposed` (recorded, waiting for a human),
+    #: `executed` (the procedure ran), `rejected` (refused - the action was
+    #: not on the closed enum, or the target was not usable). Null for
+    #: ordinary tool calls and LLM requests.
+    proposal_state: Optional[str] = Field(default=None, index=True)
+    #: The proposal row this audit line belongs to.
+    proposal_id: Optional[int] = Field(default=None, index=True)
+
+
+class ReactorProposal(SQLModel, table=True):
+    """One proposed action, and what the reactor did with it.
+
+    The model's suggestions never execute themselves: the reactor maps the
+    action onto a whitelisted, deterministic procedure and records the result
+    here. The unique key makes a re-proposal idempotent - the same finding
+    proposed twice in the same scan is one work item, not two.
+    """
+
+    __tablename__ = "reactor_proposal"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "scan_id", "action", "target_key", name="uq_reactor_proposal"
+        ),
+        {"schema": "telemetry"},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    scan_id: str = Field(index=True)
+    #: The action, as the closed enum's value. Nothing else is ever stored.
+    action: str = Field(index=True)
+    #: Hashed target: bounded, and the same target in two scans is the same
+    #: work item.
+    target_key: str = Field(index=True)
+    #: The redacted target, for the operator to read.
+    target: str = Field(default="", sa_column=Column("target", Text, nullable=False, default=""))
+    #: proposed | executed | rejected
+    state: str = Field(default="proposed", index=True)
+    #: The model's rationale, redacted.
+    detail: str = Field(default="", sa_column=Column("detail", Text, nullable=False, default=""))
+    #: The deterministic procedure payload: steps, how to verify, how to undo.
+    procedure: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON, nullable=False, default=dict)
+    )
+    created_at: datetime = Field(
+        default=None,
+        sa_column=Column("created_at", DateTime, nullable=False, server_default=func.now()),
+    )
+    updated_at: datetime = Field(
+        default=None,
+        sa_column=Column(
+            "updated_at",
+            DateTime,
+            nullable=False,
+            server_default=func.now(),
+            onupdate=func.now(),
+        ),
+    )
 
 
 # =============================================================================

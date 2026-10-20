@@ -264,6 +264,7 @@ async def run_scan(
     temperature: float = 0.2,
     chat: ChatFn | None = None,
     store: bool = True,
+    propose_actions: bool = True,
 ) -> ScanResult:
     """Run one subsection's scan and return its reconciled verdict.
 
@@ -271,6 +272,11 @@ async def run_scan(
     transport. When it is None the egress-gated gateway is used, with the
     job kind `telemetry` - which means the gate is checked before anything
     is sent.
+
+    `propose_actions` records the verdict's recommendations as work items
+    through the reactor. That is a proposal, not an action: the reactor
+    refuses anything outside its closed catalogue and never changes
+    production.
     """
     if subsection not in SUBSECTION_TOOLS:
         raise ValueError(f"unknown subsection {subsection!r}")
@@ -341,6 +347,16 @@ async def run_scan(
         )
     elif tools_failed:
         result.confidence.tools_failed = list(result.confidence.tools_failed) + tools_failed
+
+    if propose_actions and result.status != Status.ERROR:
+        # Propose, never act: the reactor records the suggestions as work
+        # items for a human. Nothing here changes production.
+        try:
+            from mcp.reactor import propose_from_result
+
+            propose_from_result(session, result, scan_id=scan_id)
+        except Exception as exc:  # noqa: BLE001 - a proposal must not lose the verdict
+            logger.warning("could not record proposals for %s: %s", scan_id, exc)
 
     if store:
         _store(

@@ -312,6 +312,8 @@ def write_audit(
     redactions_applied: int = 0,
     bytes_out: int = 0,
     redaction_salt: str | None = None,
+    proposal_state: str | None = None,
+    proposal_id: int | None = None,
 ) -> None:
     """Write one audit row and commit.
 
@@ -342,6 +344,8 @@ def write_audit(
             redactions_applied=redactions_applied,
             bytes_out=bytes_out,
             redaction_salt=redaction_salt,
+            proposal_state=proposal_state,
+            proposal_id=proposal_id,
         )
     )
     session.commit()
