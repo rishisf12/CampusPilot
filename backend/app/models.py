@@ -490,6 +490,11 @@ class TimetableUpload(SQLModel, table=True):
     #: public. A user id is an individual's upload, previewed in their account
     #: only.
     uploaded_by: Optional[int] = Field(default=None, foreign_key="core.user.id", index=True)
+    #: The academic term the upload belongs to. Added by the
+    #: academic-core migration and used to group uploads by term;
+    #: the model had fallen behind the database, which still
+    #: carries the column and its rows.
+    term_id: Optional[int] = Field(default=None, foreign_key="academic.academic_term.id", index=True)
 
 
 class MidSemSchedule(SQLModel, table=True):

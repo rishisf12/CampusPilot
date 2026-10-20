@@ -94,5 +94,15 @@ def downgrade() -> None:
             op.execute(f"REVOKE SELECT ON {table} FROM monitoring_ro")
     op.execute("REVOKE USAGE ON ALL SEQUENCES IN SCHEMA public FROM monitoring_ro")
 
-    # Drop role
-    op.execute("DROP ROLE IF EXISTS monitoring_ro")
+    # The role itself is left in place.
+    #
+    # Roles are cluster-wide in PostgreSQL, not per-database: another
+    # database in the same cluster (the development one, a scratch one) may
+    # still hold grants from this role, and PostgreSQL refuses to drop a role
+    # that still owns objects - which aborts the whole migration
+    # transaction. Revoking this database's grants is the meaningful part of
+    # the downgrade; the empty role is harmless, and the next upgrade's
+    # "create it if it is missing" finds it there.
+    op.get_context().impl.static_output(
+        "monitoring_ro kept (cluster-wide role; grants revoked)"
+    )

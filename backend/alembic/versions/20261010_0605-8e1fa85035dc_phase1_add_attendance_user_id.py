@@ -50,9 +50,24 @@ def upgrade() -> None:
     )
 
 
+def _drop_index_if_present(index_name: str, table_name: str, schema: str | None = None) -> None:
+    """Drop an index only when the database still has it.
+
+    A later migration may have dropped the column the index belonged to
+    (and the index with it), and a downgrade must not fail because of it.
+    """
+    import sqlalchemy as sa
+
+    bind = op.get_bind()
+    if schema:
+        bind.execute(sa.text(f'DROP INDEX IF EXISTS "{schema}"."{index_name}"'))
+    else:
+        bind.execute(sa.text(f'DROP INDEX IF EXISTS "{index_name}"'))
+
+
 def downgrade() -> None:
-    op.drop_index('ix_attendance_record_user_id', table_name='attendance_record')
-    op.drop_index('uq_attendance_user_course_date', table_name='attendance_record')
+    _drop_index_if_present('ix_attendance_record_user_id', 'attendance_record')
+    _drop_index_if_present('uq_attendance_user_course_date', 'attendance_record')
     op.drop_constraint('fk_attendance_record_user_id_user', 'attendance_record', type_='foreignkey')
     op.alter_column('attendance_record', 'user_id', nullable=True)
     op.drop_column('attendance_record', 'user_id')

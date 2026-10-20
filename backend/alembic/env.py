@@ -121,7 +121,17 @@ def _assert_metadata_complete() -> None:
     # that drops the table for good.
     _RETIRED_TABLES = {"moderation_queue"}
 
-    missing = existing - known_unqualified - _RETIRED_TABLES
+    # Migration bookkeeping. Migration 021 records the table moves it makes, so
+    # its downgrade can undo exactly those moves instead of guessing - and
+    # two tables can share a name in different schemas (`core.security_event`
+    # and `telemetry.security_event`), which guessing cannot tell apart. The
+    # log is dropped by 021's own downgrade.
+    _MIGRATION_TABLES = {
+        "schema_move_log",
+        "telemetry.schema_move_log",
+    }
+
+    missing = existing - known_unqualified - _RETIRED_TABLES - _MIGRATION_TABLES
     if missing:
         raise RuntimeError(
             "These tables exist in the database but not in SQLModel.metadata: "

@@ -17,6 +17,33 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _alter(table: str, column: str, target_type: str, using: str) -> None:
+    """Alter a column where the table actually is.
+
+    The tables live in schemas (`telemetry.security_event`,
+    `academic.exam_upload`, ...), so an unqualified ALTER only finds them
+    when the search path happens to point at the right schema.
+    """
+    import sqlalchemy as sa
+
+    bind = op.get_bind()
+    rows = bind.execute(
+        sa.text(
+            "SELECT table_schema FROM information_schema.columns "
+            "WHERE table_name = :table AND column_name = :column "
+            "ORDER BY table_schema"
+        ),
+        {"table": table, "column": column},
+    ).all()
+    if not rows:
+        return
+    for (schema,) in rows:
+        op.execute(
+            f'ALTER TABLE "{schema}"."{table}" ALTER COLUMN "{column}" '
+            f"TYPE {target_type} USING {column}::{using}"
+        )
+
+
 def upgrade() -> None:
     # Create enum types
     op.execute("CREATE TYPE user_role AS ENUM ('student', 'admin')")
@@ -30,40 +57,40 @@ def upgrade() -> None:
 
     # Migrate columns to enum types
     # user.role
-    op.execute("ALTER TABLE \"user\" ALTER COLUMN role TYPE user_role USING role::user_role")
+    _alter("user", "role", "user_role", "user_role")
 
     # join_request.status
-    op.execute("ALTER TABLE join_request ALTER COLUMN status TYPE join_request_status USING status::join_request_status")
+    _alter("join_request", "status", "join_request_status", "join_request_status")
 
     # exam_upload.kind
-    op.execute("ALTER TABLE exam_upload ALTER COLUMN kind TYPE exam_upload_kind USING kind::exam_upload_kind")
+    _alter("exam_upload", "kind", "exam_upload_kind", "exam_upload_kind")
 
     # purchase.kind
-    op.execute("ALTER TABLE purchase ALTER COLUMN kind TYPE purchase_kind USING kind::purchase_kind")
+    _alter("purchase", "kind", "purchase_kind", "purchase_kind")
 
     # crash_report.kind
-    op.execute("ALTER TABLE crash_report ALTER COLUMN kind TYPE crash_report_kind USING kind::crash_report_kind")
+    _alter("crash_report", "kind", "crash_report_kind", "crash_report_kind")
 
     # security_event.kind
-    op.execute("ALTER TABLE security_event ALTER COLUMN kind TYPE security_event_kind USING kind::security_event_kind")
+    _alter("security_event", "kind", "security_event_kind", "security_event_kind")
 
     # scan_result.status
-    op.execute("ALTER TABLE scan_result ALTER COLUMN status TYPE scan_result_status USING status::scan_result_status")
+    _alter("scan_result", "status", "scan_result_status", "scan_result_status")
 
     # hackathon.source
-    op.execute("ALTER TABLE hackathon ALTER COLUMN source TYPE hackathon_source USING source::hackathon_source")
+    _alter("hackathon", "source", "hackathon_source", "hackathon_source")
 
 
 def downgrade() -> None:
     # Revert columns to varchar
-    op.execute("ALTER TABLE hackathon ALTER COLUMN source TYPE VARCHAR USING source::VARCHAR")
-    op.execute("ALTER TABLE scan_result ALTER COLUMN status TYPE VARCHAR USING status::VARCHAR")
-    op.execute("ALTER TABLE security_event ALTER COLUMN kind TYPE VARCHAR USING kind::VARCHAR")
-    op.execute("ALTER TABLE crash_report ALTER COLUMN kind TYPE VARCHAR USING kind::VARCHAR")
-    op.execute("ALTER TABLE purchase ALTER COLUMN kind TYPE VARCHAR USING kind::VARCHAR")
-    op.execute("ALTER TABLE exam_upload ALTER COLUMN kind TYPE VARCHAR USING kind::VARCHAR")
-    op.execute("ALTER TABLE join_request ALTER COLUMN status TYPE VARCHAR USING status::VARCHAR")
-    op.execute("ALTER TABLE \"user\" ALTER COLUMN role TYPE VARCHAR USING role::VARCHAR")
+    _alter("hackathon", "source", "VARCHAR", "text")
+    _alter("scan_result", "status", "VARCHAR", "text")
+    _alter("security_event", "kind", "VARCHAR", "text")
+    _alter("crash_report", "kind", "VARCHAR", "text")
+    _alter("purchase", "kind", "VARCHAR", "text")
+    _alter("exam_upload", "kind", "VARCHAR", "text")
+    _alter("join_request", "status", "VARCHAR", "text")
+    _alter("user", "role", "VARCHAR", "text")
 
     # Drop enum types
     op.execute("DROP TYPE IF EXISTS hackathon_source")

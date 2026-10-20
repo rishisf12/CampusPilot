@@ -124,16 +124,21 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("reactor_proposal", schema="telemetry")
+    # The table may already be gone: migration 021 creates it on a database
+    # the history never covered, and drops it again on the way down.
+    op.execute("DROP TABLE IF EXISTS telemetry.reactor_proposal CASCADE")
     schema = _table_schema()
     if schema is None:
         return
-    op.drop_index(
-        "ix_tool_call_audit_proposal_id", table_name=_TABLE, schema=schema
-    )
-    op.drop_index(
-        "ix_tool_call_audit_proposal_state", table_name=_TABLE, schema=schema
-    )
+    # The index names are not fixed: migration 021 renames them to the
+    # schema-qualified names the models declare. Drop whichever exists.
+    for name in (
+        "ix_tool_call_audit_proposal_state",
+        "ix_tool_call_audit_proposal_id",
+        f"ix_{schema}_tool_call_audit_proposal_state",
+        f"ix_{schema}_tool_call_audit_proposal_id",
+    ):
+        op.execute(f'DROP INDEX IF EXISTS "{schema}"."{name}"')
     if "proposal_id" in _existing_columns(schema):
         op.drop_column(_TABLE, "proposal_id", schema=schema)
     if "proposal_state" in _existing_columns(schema):

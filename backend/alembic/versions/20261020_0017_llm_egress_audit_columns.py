@@ -116,7 +116,13 @@ def downgrade() -> None:
     if schema is None:
         return
     existing = _existing_columns(schema)
-    op.drop_index("ix_tool_call_audit_sent_to", table_name=_TABLE, schema=schema)
+    # The index may have been renamed by migration 021 to the
+    # schema-qualified name the models declare - drop whichever exists.
+    for name in (
+        "ix_tool_call_audit_sent_to",
+        f"ix_{schema}_tool_call_audit_sent_to",
+    ):
+        op.execute(f'DROP INDEX IF EXISTS "{schema}"."{name}"')
     for column in ("redaction_salt", "bytes_out", "redactions_applied", "sent_to"):
         if column in existing:
             op.drop_column(_TABLE, column, schema=schema)

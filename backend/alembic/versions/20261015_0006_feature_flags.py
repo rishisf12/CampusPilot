@@ -52,9 +52,24 @@ def upgrade() -> None:
     op.create_index('ix_flag_target_flag_id', 'flag_target', ['flag_id'], schema='core')
 
 
+def _drop_index_if_present(index_name: str, table_name: str, schema: str | None = None) -> None:
+    """Drop an index only when the database still has it.
+
+    A later migration may have dropped the column the index belonged to
+    (and the index with it), and a downgrade must not fail because of it.
+    """
+    import sqlalchemy as sa
+
+    bind = op.get_bind()
+    if schema:
+        bind.execute(sa.text(f'DROP INDEX IF EXISTS "{schema}"."{index_name}"'))
+    else:
+        bind.execute(sa.text(f'DROP INDEX IF EXISTS "{index_name}"'))
+
+
 def downgrade() -> None:
-    op.drop_index('ix_flag_target_flag_id', table_name='flag_target', schema='core')
+    _drop_index_if_present('ix_flag_target_flag_id', 'flag_target', schema='core')
     op.drop_table('flag_target', schema='core')
-    op.drop_index('ix_feature_flag_enabled', table_name='feature_flag', schema='core')
-    op.drop_index('ix_feature_flag_key', table_name='feature_flag', schema='core')
+    _drop_index_if_present('ix_feature_flag_enabled', 'feature_flag', schema='core')
+    _drop_index_if_present('ix_feature_flag_key', 'feature_flag', schema='core')
     op.drop_table('feature_flag', schema='core')

@@ -26,6 +26,23 @@ def upgrade() -> None:
     op.execute(sa.text('CREATE INDEX IF NOT EXISTS ix_user_permissions ON core.user USING GIN (permissions)'))
 
 
+def _drop_index_if_present(index_name: str, table_name: str, schema: str | None = None) -> None:
+    """Drop an index only when the database still has it.
+
+    A later migration may have dropped the column the index belonged to
+    (and the index with it), and a downgrade must not fail because of it.
+    """
+    import sqlalchemy as sa
+
+    bind = op.get_bind()
+    if schema:
+        bind.execute(sa.text(f'DROP INDEX IF EXISTS "{schema}"."{index_name}"'))
+    else:
+        bind.execute(sa.text(f'DROP INDEX IF EXISTS "{index_name}"'))
+
+
 def downgrade() -> None:
-    op.drop_index('ix_user_permissions', table_name='user', schema='core')
-    op.drop_column('user', 'permissions', schema='core')
+    _drop_index_if_present('ix_user_permissions', 'user', schema='core')
+    # Migration 022 dropped this column with the model that dropped it, so
+    # the downgrade must not insist on dropping it again.
+    op.execute('ALTER TABLE core."user" DROP COLUMN IF EXISTS permissions')

@@ -355,6 +355,60 @@ Implemented:
 ### Phase 10 — Legacy removal (v1 parity gate, UNCHANGED) — GATED
 Directive 1. All 7 monitoring containers deleted + 3 volumes in ONE commit, only after the parity table below passes for a full 7-day parity week, and only while preflight keeps guarding the edge. Rollback = revert commit.
 
+**Preparation (done) — the migration history now produces a usable database.**
+The gate was not the only thing standing between this repository and a
+deployment that works. A database built purely from the Alembic history was
+**not usable by the app**: the older migrations created the monitoring,
+academic and social tables *unqualified*, so they landed in the search
+path's first schema while the models declare them in `telemetry`, `academic`
+and `social` — and the app queries `telemetry.health_metric` by name. Every
+existing deployment only worked because it had been created by `create_all`,
+which makes the schema-qualified tables. A fresh install was broken.
+
+- **Migration `021_reconcile_schema_placement`** makes the history and the
+  models agree: a table the models declare in a schema is **moved** into it
+  (the rows come with it), a table the history never created is created from
+  the model metadata, the columns the models gained are added, the enum
+  columns are aligned with the types the models declare (the app writes a
+  string where the database had a native enum, and Postgres refused it), and
+  the foreign keys are re-pointed at where their references now live (a moved
+  table keeps its keys pointing at the old copy, and every insert failed).
+  Two tables can share a name in two schemas — the application has
+  `core.security_event` and the monitoring bundle has
+  `telemetry.security_event` — so nothing is matched by name alone, and the
+  moves are recorded in a small log table so the downgrade can undo exactly
+  those moves.
+- **Migration `022_align_columns`** closes the column-level drift: 29
+  columns were `NOT NULL` in the database while the model allowed null (the
+  app writes a null there and Postgres refuses it — a failure that only shows
+  up on the write path), and `core.user.permissions` is a column the model
+  dropped and nothing reads.
+- **The old downgrades were made tolerant.** A downgrade has to survive a
+  database that has moved on: the index drops, the table drops and the column
+  drops now ask first. The `monitoring_ro` role is no longer dropped (roles
+  are cluster-wide, and dropping one another database still uses aborts the
+  whole migration transaction).
+- **`test_alembic_round_trip` passes for the first time** — the migration is
+  usable in both directions, twice over, as the test requires.
+- **`test_alembic_metadata_matches_models` was rewritten.** Alembic's
+  `compare_metadata` cannot be used on this project: the application's
+  connections set a custom `search_path`, so its reflection collapses the
+  schemas and reports tables that are perfectly in place as unqualified
+  leftovers — hundreds of phantom differences. The test now walks the schemas
+  the models declare and compares what matters (tables, columns, type
+  affinity, nullability, indexes by their columns, and no unexpected tables).
+  The drift is **zero**.
+- The `security_event.kind` enum type is now named `security_event_kind` in
+  the model, matching the type the history created (the helper's own
+  docstring said it should).
+
+What is still open for Phase 10: the parity week itself, rows 9 and 10 of
+the parity table (alert routing and the dashboards), and the index *names* —
+the history's `ix_event_ts` against the models' `ix_telemetry_event_ts`. The
+names differ in behaviour not at all, and renaming them would break the
+downgrade of every migration that drops an index by its old name; the
+baseline squash is the right place to settle it.
+
 ---
 
 ## Parity checklist (the Phase 10 deletion gate)

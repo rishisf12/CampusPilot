@@ -275,23 +275,140 @@ def test_alembic_round_trip(require_postgres):
 
 
 def test_alembic_metadata_matches_models(require_postgres):
-    """No pending autogenerate diff.
+    """The database and the models must agree, schema by schema.
 
-    If this fails, someone edited models.py without writing a migration, and
-    production and the model definitions have drifted.
+    If this fails, someone edited a model without writing a migration, and
+    the database and the model definitions have drifted.
+
+    The comparison is done here rather than with Alembic's
+    ``compare_metadata`` because that one cannot be used on this project: the
+    application's connections set a custom ``search_path``, so its reflection
+    collapses the schemas and reports tables that are perfectly in place as
+    unqualified leftovers - hundreds of phantom differences that say nothing
+    about the database. This walks the schemas the models declare instead,
+    and compares what actually matters:
+
+    - every model table exists in the schema the model declares;
+    - every model column exists, with the same type affinity and the same
+      nullability (a column the database forbids to be null while the model
+      allows it is a write that will fail at runtime);
+    - every model index exists (matched by its columns - the history named
+      them "ix_event_ts" where the models say "ix_telemetry_event_ts", and a
+      naming difference is not a difference in behaviour);
+    - and the schemas hold no table the models do not declare, apart from
+      the bookkeeping ones.
     """
-    from alembic.autogenerate import compare_metadata
-    from alembic.migration import MigrationContext
+    import importlib
+    import pathlib
 
-    from core.database import engine
+    import sqlalchemy as sa
     from sqlmodel import SQLModel
 
+    from core.database import engine
+
+    app_root = pathlib.Path(__file__).resolve().parents[1]
+    for path in sorted(app_root.rglob("models.py")):
+        module = str(path.relative_to(app_root)).replace("\\", ".")[: -len(".py")]
+        try:
+            importlib.import_module(module)
+        except Exception:  # noqa: BLE001 - a module without models is fine
+            pass
+
+    def affinity(type_) -> str:
+        """The type family, by the rendered name.
+
+        SQLModel's AutoString renders as VARCHAR but is not a String
+        subclass, so isinstance() would call it a different type from the
+        VARCHAR(50) the database reports.
+        """
+        name = str(type_).upper()
+        for prefix, family in (
+            ("TIMESTAMP", "datetime"),
+            ("TIMETZ", "datetime"),
+            ("DATETIME", "datetime"),
+            ("VARCHAR", "string"),
+            ("CHARACTER", "string"),
+            ("CHAR", "string"),
+            ("TEXT", "string"),
+            ("BOOLEAN", "bool"),
+            ("JSONB", "json"),
+            ("JSON", "json"),
+            ("BIGINT", "int"),
+            ("SMALLINT", "int"),
+            ("INTEGER", "int"),
+            ("SERIAL", "int"),
+            ("NUMERIC", "numeric"),
+            ("DECIMAL", "numeric"),
+            ("DOUBLE", "float"),
+            ("REAL", "float"),
+            ("FLOAT", "float"),
+            ("DATE", "date"),
+            ("TIME", "time"),
+            ("ENUM", "enum"),
+        ):
+            if name.startswith(prefix):
+                return family
+        return name.split("(")[0].lower()
+
+    #: Tables that are allowed to exist without the models declaring them.
+    expected_extras = {
+        "alembic_version",  # Alembic's own bookkeeping
+        "schema_move_log",  # migration 021's record of the moves it made
+        "moderation_queue",  # a retired feature, dropped by migration 013
+    }
+
+    problems: list[str] = []
     with engine.connect() as conn:
-        ctx = MigrationContext.configure(conn, opts={"compare_type": True})
-        diff = compare_metadata(ctx, SQLModel.metadata)
-    # Filter out the alembic_version bookkeeping table.
-    real = [d for d in diff if not any("alembic_version" in str(t) for t in getattr(d, "compare", ()))]
-    assert not real, f"models and migrations have drifted: {real}"
+        inspector = sa.inspect(conn)
+        schemas = {
+            table.schema
+            for table in SQLModel.metadata.sorted_tables
+            if table.schema
+        }
+        for schema in sorted(schemas):
+            model_tables = {
+                table.name: table
+                for table in SQLModel.metadata.sorted_tables
+                if table.schema == schema
+            }
+            db_tables = set(inspector.get_table_names(schema=schema))
+            for name, table in sorted(model_tables.items()):
+                if name not in db_tables:
+                    problems.append(f"missing table {schema}.{name}")
+                    continue
+                db_columns = {
+                    column["name"]: column
+                    for column in inspector.get_columns(name, schema=schema)
+                }
+                for column in table.columns:
+                    db_column = db_columns.get(column.name)
+                    if db_column is None:
+                        problems.append(f"missing column {schema}.{name}.{column.name}")
+                        continue
+                    if affinity(column.type) != affinity(db_column["type"]):
+                        problems.append(
+                            f"type {schema}.{name}.{column.name}: "
+                            f"model {column.type}, database {db_column['type']}"
+                        )
+                    if bool(column.nullable) != bool(db_column["nullable"]):
+                        problems.append(
+                            f"nullability {schema}.{name}.{column.name}: "
+                            f"model {column.nullable}, database {db_column['nullable']}"
+                        )
+                for extra in sorted(set(db_columns) - {c.name for c in table.columns}):
+                    problems.append(f"extra column {schema}.{name}.{extra}")
+                db_indexes = {
+                    tuple(index["column_names"])
+                    for index in inspector.get_indexes(name, schema=schema)
+                }
+                for index in table.indexes:
+                    if tuple(c.name for c in index.columns) not in db_indexes:
+                        problems.append(f"missing index {schema}.{name}.{index.name}")
+            for name in sorted(db_tables - set(model_tables)):
+                if name not in expected_extras:
+                    problems.append(f"unexpected table {schema}.{name}")
+
+    assert not problems, "models and migrations have drifted:\n" + "\n".join(problems)
 
 
 # ---------------------------------------------------------------------------

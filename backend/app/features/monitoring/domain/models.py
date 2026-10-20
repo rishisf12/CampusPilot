@@ -45,7 +45,11 @@ def _enum_by_value(python_enum: type[Enum]):
     and `scan_result.status` are plain `str` on the Python side, so they already
     bind their value.
     """
-    return SAEnum(python_enum, values_callable=lambda members: [m.value for m in members])
+    return SAEnum(
+        python_enum,
+        name="security_event_kind",
+        values_callable=lambda members: [m.value for m in members],
+    )
 
 
 class SecurityEventKind(str, Enum):

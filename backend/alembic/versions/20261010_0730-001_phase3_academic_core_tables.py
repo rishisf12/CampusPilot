@@ -154,14 +154,29 @@ def upgrade() -> None:
     op.create_index('ix_timetable_upload_term_id', 'timetable_upload', ['term_id'], schema='academic')
 
 
+def _drop_index_if_present(index_name: str, table_name: str, schema: str | None = None) -> None:
+    """Drop an index only when the database still has it.
+
+    A later migration may have dropped the column the index belonged to
+    (and the index with it), and a downgrade must not fail because of it.
+    """
+    import sqlalchemy as sa
+
+    bind = op.get_bind()
+    if schema:
+        bind.execute(sa.text(f'DROP INDEX IF EXISTS "{schema}"."{index_name}"'))
+    else:
+        bind.execute(sa.text(f'DROP INDEX IF EXISTS "{index_name}"'))
+
+
 def downgrade() -> None:
-    op.drop_index('ix_timetable_upload_term_id', table_name='timetable_upload', schema='academic')
+    _drop_index_if_present('ix_timetable_upload_term_id', 'timetable_upload', schema='academic')
     op.drop_constraint('fk_timetable_upload_term', 'timetable_upload', schema='academic', type_='foreignkey')
     op.drop_column('timetable_upload', 'term_id', schema='academic')
 
     op.drop_constraint('uq_timetable_slot_branch', 'timetable_slot_branch', schema='academic')
-    op.drop_index('ix_timetable_slot_branch_branch_id', table_name='timetable_slot_branch', schema='academic')
-    op.drop_index('ix_timetable_slot_branch_slot_id', table_name='timetable_slot_branch', schema='academic')
+    _drop_index_if_present('ix_timetable_slot_branch_branch_id', 'timetable_slot_branch', schema='academic')
+    _drop_index_if_present('ix_timetable_slot_branch_slot_id', 'timetable_slot_branch', schema='academic')
     op.drop_constraint('fk_timetable_slot_branch_branch', 'timetable_slot_branch', schema='academic', type_='foreignkey')
     op.drop_constraint('fk_timetable_slot_branch_slot', 'timetable_slot_branch', schema='academic', type_='foreignkey')
     op.drop_table('timetable_slot_branch', schema='academic')
@@ -173,9 +188,9 @@ def downgrade() -> None:
     op.execute(sa.text('DROP INDEX IF EXISTS academic.ix_academic_timetable_slot_day'))
     op.execute(sa.text('DROP INDEX IF EXISTS academic.ix_academic_timetable_slot_course_code'))
 
-    op.drop_index('ix_course_offering_branch_id', table_name='course_offering', schema='academic')
-    op.drop_index('ix_course_offering_term_id', table_name='course_offering', schema='academic')
-    op.drop_index('ix_course_offering_course_id', table_name='course_offering', schema='academic')
+    _drop_index_if_present('ix_course_offering_branch_id', 'course_offering', schema='academic')
+    _drop_index_if_present('ix_course_offering_term_id', 'course_offering', schema='academic')
+    _drop_index_if_present('ix_course_offering_course_id', 'course_offering', schema='academic')
     op.drop_constraint('fk_course_offering_branch', 'course_offering', schema='academic', type_='foreignkey')
     op.drop_constraint('fk_course_offering_term', 'course_offering', schema='academic', type_='foreignkey')
     op.drop_constraint('fk_course_offering_course', 'course_offering', schema='academic', type_='foreignkey')
@@ -183,5 +198,5 @@ def downgrade() -> None:
 
     op.drop_table('branch', schema='academic')
 
-    op.drop_index('ix_academic_term_is_current', table_name='academic_term', schema='academic')
+    _drop_index_if_present('ix_academic_term_is_current', 'academic_term', schema='academic')
     op.drop_table('academic_term', schema='academic')
