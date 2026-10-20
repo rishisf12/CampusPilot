@@ -67,59 +67,59 @@ def evaluate_a_w_health(
         missing.append("http_p95_ms")
     else:
         if http_p95_ms > 2000:
-            findings.append(Finding("HTTP p95 latency critical", "critical", "http_p95_ms", http_p95_ms, "ms", 2000, "current", "prometheus"))
+            findings.append(Finding("HTTP p95 latency critical", "critical", "http_p95_ms", http_p95_ms, "ms", 2000, "current", "health_metric"))
             root_causes.append("Backend saturation or slow downstream dependency")
             actions.append("investigate_endpoint")
         elif http_p95_ms > 1000:
-            findings.append(Finding("HTTP p95 latency elevated", "warning", "http_p95_ms", http_p95_ms, "ms", 1000, "current", "prometheus"))
+            findings.append(Finding("HTTP p95 latency elevated", "warning", "http_p95_ms", http_p95_ms, "ms", 1000, "current", "health_metric"))
             root_causes.append("Possible load increase or query regression")
             actions.append("investigate_endpoint")
         elif http_p95_ms > 500:
-            findings.append(Finding("HTTP p95 latency above healthy", "info", "http_p95_ms", http_p95_ms, "ms", 500, "current", "prometheus"))
+            findings.append(Finding("HTTP p95 latency above healthy", "info", "http_p95_ms", http_p95_ms, "ms", 500, "current", "health_metric"))
 
     # HTTP 5xx rate
     if http_5xx_pct is None:
         missing.append("http_5xx_pct")
     else:
         if http_5xx_pct > 5.0:
-            findings.append(Finding("HTTP 5xx rate critical", "critical", "http_5xx_pct", http_5xx_pct, "%", 5.0, "current", "prometheus"))
+            findings.append(Finding("HTTP 5xx rate critical", "critical", "http_5xx_pct", http_5xx_pct, "%", 5.0, "current", "health_metric"))
             root_causes.append("Unhandled exceptions or upstream failures")
             actions.append("investigate_endpoint")
         elif http_5xx_pct > 2.0:
-            findings.append(Finding("HTTP 5xx rate elevated", "warning", "http_5xx_pct", http_5xx_pct, "%", 2.0, "current", "prometheus"))
+            findings.append(Finding("HTTP 5xx rate elevated", "warning", "http_5xx_pct", http_5xx_pct, "%", 2.0, "current", "health_metric"))
         elif http_5xx_pct > 0.5:
-            findings.append(Finding("HTTP 5xx rate above healthy", "info", "http_5xx_pct", http_5xx_pct, "%", 0.5, "current", "prometheus"))
+            findings.append(Finding("HTTP 5xx rate above healthy", "info", "http_5xx_pct", http_5xx_pct, "%", 0.5, "current", "health_metric"))
 
     # Uptime
     if uptime_pct is None:
         missing.append("uptime_pct")
     else:
         if uptime_pct < 99.0:
-            findings.append(Finding("Uptime critical", "critical", "uptime_pct", uptime_pct, "%", 99.0, "current", "uptime_kuma"))
+            findings.append(Finding("Uptime critical", "critical", "uptime_pct", uptime_pct, "%", 99.0, "current", "health_metric"))
             root_causes.append("Service downtime or health check failures")
             actions.append("investigate_endpoint")
         elif uptime_pct < 99.9:
-            findings.append(Finding("Uptime below target", "warning", "uptime_pct", uptime_pct, "%", 99.9, "current", "uptime_kuma"))
+            findings.append(Finding("Uptime below target", "warning", "uptime_pct", uptime_pct, "%", 99.9, "current", "health_metric"))
 
     # System resources
     if cpu_pct is not None and cpu_pct > 85:
-        findings.append(Finding("CPU usage high", "warning", "cpu_pct", cpu_pct, "%", 85, "current", "node_exporter"))
+        findings.append(Finding("CPU usage high", "warning", "cpu_pct", cpu_pct, "%", 85, "current", "psutil"))
         root_causes.append("Sustained high load or inefficient queries")
         actions.append("scale_worker")
 
     if ram_pct is not None and ram_pct > 90:
-        findings.append(Finding("RAM usage critical", "critical", "ram_pct", ram_pct, "%", 90, "current", "node_exporter"))
+        findings.append(Finding("RAM usage critical", "critical", "ram_pct", ram_pct, "%", 90, "current", "psutil"))
         root_causes.append("Memory leak or insufficient capacity")
         actions.append("scale_worker")
 
     if disk_pct is not None and disk_pct > 85:
-        findings.append(Finding("Disk usage high", "warning", "disk_pct", disk_pct, "%", 85, "current", "node_exporter"))
+        findings.append(Finding("Disk usage high", "warning", "disk_pct", disk_pct, "%", 85, "current", "psutil"))
         root_causes.append("Log growth or missing retention")
         actions.append("investigate_data_pipeline")
 
     # DB query latency
     if db_query_p95_ms is not None and db_query_p95_ms > 500:
-        findings.append(Finding("DB query p95 high", "warning", "db_query_p95_ms", db_query_p95_ms, "ms", 500, "current", "prometheus"))
+        findings.append(Finding("DB query p95 high", "warning", "db_query_p95_ms", db_query_p95_ms, "ms", 500, "current", "health_metric"))
         root_causes.append("Missing indexes or connection pool exhaustion")
         actions.append("investigate_endpoint")
 

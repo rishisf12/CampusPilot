@@ -76,6 +76,7 @@ from features.monitoring.services.llm_client import (
     resolve_llm_config,
     LLMError,
 )
+from observability.uptime import coverage_pct
 from core.config import get_settings
 
 
@@ -99,7 +100,7 @@ def _reconcile_findings(
         for ev in finding.evidence:
 
             # Skip non-numeric or already-verified metrics
-            if ev.source in ("crash_report", "security_event", "feedback", "session", "purchase", "ssl_check", "uptime_kuma"):
+            if ev.source in ("crash_report", "security_event", "feedback", "session", "purchase", "ssl_check", "health_metric", "psutil"):
                 # These are already verified at collection time
                 continue
 
@@ -132,6 +133,15 @@ def _collect_a_w_health_data(session: Session, start: datetime, end: datetime, p
         ).order_by(HealthMetric.ts.desc()).limit(1)
     ).first()
 
+    # Uptime is never read off a row: rows can only be written while the API
+    # is up, so a stored figure would read 100% through every outage. Instead
+    # it is derived from sample coverage at read time (observability/uptime.py)
+    # - the gaps in the table are the downtime. An explicit row value (only
+    # ever pushed externally) wins when coverage is unknowable in this window.
+    uptime_pct = coverage_pct(session, platform=platform, start=start, end=end)
+    if uptime_pct is None and latest is not None:
+        uptime_pct = latest.uptime_pct
+
     # Every key is always present, None when unknown.
     #
     # This used to return `{}` when there was no sample yet, and
@@ -142,7 +152,7 @@ def _collect_a_w_health_data(session: Session, start: datetime, end: datetime, p
     return {
         "http_p95_ms": latest.response_time_p95_ms if latest else None,
         "http_5xx_pct": latest.http_5xx_pct if latest else None,
-        "uptime_pct": latest.uptime_pct if latest else None,
+        "uptime_pct": uptime_pct,
         "cpu_pct": latest.cpu_pct if latest else None,
         "ram_pct": latest.ram_pct if latest else None,
         "disk_pct": latest.disk_pct if latest else None,

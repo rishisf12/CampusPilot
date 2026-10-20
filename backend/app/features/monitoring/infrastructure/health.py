@@ -14,18 +14,21 @@ therefore records the previous cumulative reading and reports the change since.
 NULL on purpose, which is what `HealthMetric`'s nullable columns and
 `evaluate_a_w_health`'s `missing_data` list are designed for:
 
-* `uptime_pct` - needs an *external* prober. This process cannot record the
-  intervals during which it was not running: there is no row to hold them, so a
-  self-reported figure would read a perfect 100% through every outage. The
-  thresholds module attributes this metric to `uptime_kuma` for that reason.
-* `cpu_pct` / `ram_pct` / `disk_pct` - host-level, attributed to
-  `node_exporter` in the thresholds module. Reading them here would duplicate
-  the host agent and report the app container's view as the host's.
+* `uptime_pct` - an *external* prober would be needed to record the intervals
+  during which this process was not running: there is no row to hold them, so
+  a self-reported 100% would lie through every outage. Uptime is instead
+  computed at read time from sample coverage (`observability/uptime.py`),
+  which is how rows keep reporting NULL without leaving the metric unknown.
+* host resource metrics (`cpu_pct`, `ram_pct`, `disk_pct`, network bytes)
+  come from psutil inside this process, via `observability/host.py`: a value
+  psutil cannot measure stays None, and the network counters need a previous
+  sample to be a delta, so the first sample after a restart reports NULL.
 * `crash_free_rate_pct` / `anr_rate_pct` - marked Android-only on the model.
   Web crash information comes from the `crash` telemetry events instead.
 
 Percentages are None rather than 0.0 when there was no traffic in the window:
-"no requests" and "no errors" are different facts, and only one of them is goodnews.
+"no requests" and "no errors" are different facts, and only one of them is
+good news.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from sqlmodel import Session, delete, select
 from core.config import settings
 from features.monitoring.domain.models import HealthMetric
 from features.monitoring.infrastructure import metrics as M
+from observability.host import sample_host
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +281,10 @@ def sample_once(db: Session, platform: str = PLATFORM) -> HealthMetric:
 
     active, idle = _db_connections(db)
 
+    # Host resources: read in-process (observability/host.py). Anything psutil
+    # cannot measure arrives as None and stays None on the row.
+    host = sample_host()
+
     row = HealthMetric(
         ts=_now_utc(),
         platform=platform,
@@ -291,6 +299,11 @@ def sample_once(db: Session, platform: str = PLATFORM) -> HealthMetric:
         db_slow_queries_count=int(slow) if db_total > 0 else None,
         db_connections_active=active,
         db_connections_idle=idle,
+        cpu_pct=host["cpu_pct"],
+        ram_pct=host["ram_pct"],
+        disk_pct=host["disk_pct"],
+        network_rx_bytes=host["network_rx_bytes"],
+        network_tx_bytes=host["network_tx_bytes"],
     )
     db.add(row)
     db.commit()
@@ -366,4 +379,9 @@ def run_now() -> dict[str, Any]:
             "db_slow_queries_count": row.db_slow_queries_count,
             "db_connections_active": row.db_connections_active,
             "db_connections_idle": row.db_connections_idle,
+            "cpu_pct": row.cpu_pct,
+            "ram_pct": row.ram_pct,
+            "disk_pct": row.disk_pct,
+            "network_rx_bytes": row.network_rx_bytes,
+            "network_tx_bytes": row.network_tx_bytes,
         }

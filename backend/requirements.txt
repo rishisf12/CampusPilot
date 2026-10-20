@@ -24,6 +24,14 @@ email-validator
 # endpoints" numbers in the Health subsection come out of these instruments.
 prometheus-client
 
+# --- Observability: host metrics ---------------------------------------------
+# psutil is BSD-3-Clause and reads the /proc counters in-process. It replaces
+# the node-exporter and cAdvisor containers (docs/MCP_MIGRATION_PLAN.md, parity
+# row 7): one pip package instead of two daemons to run, scrape and secure.
+# Already used by features/health/service.py; previously missing here, which
+# silently broke that module in any clean install or Docker build.
+psutil
+
 # --- Observability: scan queue ----------------------------------------------
 # RQ is BSD-3-Clause and deliberately small (~2k lines). A scan is a linear,
 # expensive, on-request job; BullMQ would mean running a Node service purely as a

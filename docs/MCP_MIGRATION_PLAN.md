@@ -165,21 +165,40 @@ Read-only inventory above; parity checklist defined below. Zero modifications.
 
 ## 3. Parity checklist (the Phase 6 deletion gate)
 
+Status values: `pending` → `implemented (MCP settled, 7-day gate running)` →
+`verified`. A row only becomes `verified` when its MCP reproduces the old
+behavior AND the `test_monitoring.py` suite passes against the new source for
+7 consecutive days.
+
 | # | Requirement | Current owner | MCP owner | Status |
 |---|-------------|---------------|-----------|--------|
-| 1 | p95 latency finding | thresholds.py | monitoring MLP | pending |
-| 2 | HTTP 5xx-rate finding | thresholds.py | monitoring MCP | pending |
-| 3 | DB query p95 finding | thresholds.py | monitoring MCP | pending |
+| 1 | p95 latency finding | thresholds.py | health_metric (in-app histogram deltas) | implemented (Phase 2) — gate running |
+| 2 | HTTP 5xx-rate finding | thresholds.py | health_metric (in-app HTTP mix) | implemented (Phase 2) — gate running |
+| 3 | DB query p95 finding | thresholds.py | health_metric (in-app histogram deltas) | implemented (Phase 2) — gate running |
 | 4 | 8 subsection ScanResult verdicts | telemetry.scan_result | analyst MCP | pending |
 | 5 | Incident transitions | telemetry.status_transition | monitoring MCP | pending |
-| 6 | Tool-call audit + reconciliation | telemetry.tool_call_audit | mcp/core | pending |
-| 7 | Host CPU/RAM/disk/net | node_exporter + cadvisor | psutil writer | pending |
-| 8 | Uptime probes | blackbox-exporter | self-report + scheduler | pending |
+| 6 | Tool-call audit + reconciliation | telemetry.tool_call_audit | mcp/core (Phase 1) | implemented (Phase 1) — gate running |
+| 7 | Host CPU/RAM/disk/net | node_exporter + cadvisor | psutil via observability/host | implemented (Phase 2) — gate running |
+| 8 | Uptime probes | blackbox-exporter | reader-derived coverage (observability/uptime) | implemented (Phase 2) — gate running |
 | 9 | Alert routing + silencing | alertmanager | alerting MCP + SMTP | pending |
 | 10 | Dashboards | grafana | admin UI | pending |
 
 A row may only be checked when its MCP reproduces the old behavior AND the
 `test_monitoring.py` suite passes against the new source for 7 consecutive days.
+
+Implementation notes for the implemented rows (Phase 2, verified by tests):
+
+- Rows 1–3 were already fed by the in-app instruments (`health.sample_once`
+  writes `telemetry.health_metric` from `prometheus_client` deltas) — Phase 2
+  repointed the `thresholds.py` Finding source labels from `prometheus` / the
+  external exporters (`node_exporter`, `uptime_kuma`) to the actual stores:
+  `health_metric` and `psutil`.
+- Row 7 is `observability/host.py`: psutil read in-process, per-metric failure
+  isolation, network bytes as deltas with a reboot-safe floor of 0.
+- Row 8 is `observability/uptime.py`: uptime is computed at read time from
+  sample coverage (anchored to the platform's oldest surviving sample);
+  rows keep `uptime_pct` NULL by design, the A_W collector no longer needs an
+  external prober to fill it.
 
 ---
 

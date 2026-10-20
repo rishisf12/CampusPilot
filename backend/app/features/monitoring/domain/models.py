@@ -457,7 +457,8 @@ class HealthMetric(SQLModel, table=True):
     http_4xx_pct: Optional[float] = Field(default=None)
     http_5xx_pct: Optional[float] = Field(default=None)
 
-    # System resources (host-level, from node_exporter)
+    # System resources (host-level, read in-process from psutil by
+    # observability.host — replaces the node-exporter/cAdvisor scrape)
     cpu_pct: Optional[float] = Field(default=None)
     ram_pct: Optional[float] = Field(default=None)
     disk_pct: Optional[float] = Field(default=None)
