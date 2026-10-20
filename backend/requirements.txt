@@ -78,6 +78,12 @@ duckduckgo-search
 beautifulsoup4
 # lxml for fast parsing
 lxml
+# trafilatura for article extraction
+trafilatura
+# Playwright for browser-based fetching (PlaywrightFetcher)
+playwright
+# robotstxt for robots.txt parsing
+robotstxt
 # Newspaper3k for article extraction (optional, may need system deps: libxml2, libxslt)
 # newspaper3k
 # Rate limiting for LLM providers
