@@ -14,37 +14,30 @@ existing.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import timedelta
+from typing import Any
 
 from sqlmodel import Session, select
 
 from features.monitoring.domain.models import HealthMetric
 from features.monitoring.services import queries as mqueries
 from mcp.core.registry import ToolError, ToolRegistry, ToolResult, ToolSpec
+from mcp.monitoring.aggregates import register_aggregates
+from mcp.monitoring.common import (
+    MAX_DAU_WINDOW_DAYS,
+    MAX_UPTIME_WINDOW_HOURS,
+    PLATFORMS,
+    utc_now_naive as _utc_now_naive,
+    validated_platform as _validated,
+)
 from observability.uptime import coverage_pct
 
-#: `HealthMetric.platform` carries exactly these labels. Refusing anything
-#: else beats answering a typo'd platform with an empty result that reads
-#: like "no data yet".
-PLATFORMS = frozenset({"web", "android"})
-
-#: Widest defensible windows: uptime cannot outlive retention
-#: (`health_retention_days=90`), and a year of DAU is the ceiling anyone asks
-#: for once.
-MAX_UPTIME_WINDOW_HOURS = 24 * 90
-MAX_DAU_WINDOW_DAYS = 365
-
-
-def _validated(platform: str) -> str:
-    if platform not in PLATFORMS:
-        raise ToolError(f"platform {platform!r} not in {sorted(PLATFORMS)}")
-    return platform
-
-
-def _utc_now_naive() -> datetime:
-    """Naive-UTC, matching how `health_metric.ts` is written."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+__all__ = [
+    "MAX_DAU_WINDOW_DAYS",
+    "MAX_UPTIME_WINDOW_HOURS",
+    "PLATFORMS",
+    "REGISTRY",
+]
 
 
 def _row_to_dict(row: HealthMetric) -> dict[str, Any]:
@@ -136,3 +129,6 @@ REGISTRY.register(
     ),
     daily_active_users,
 )
+
+# Phase 5: the curated aggregate tools - counts and summaries only.
+register_aggregates(REGISTRY)

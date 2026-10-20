@@ -360,6 +360,31 @@ each with four subsections, plus a scan-history tab across both.
 | Security | Integrity signals (root / emulator / tamper) and auth events, by kind |
 | Feedback | Volume, VADER sentiment distribution, topic mix, reply rate |
 
+### The scan agent's tools
+
+The AI scan never reads rows. It asks a small, curated set of read-only
+tools, and each one answers with **counts and summaries only** — the "never
+returns" column is the contract, and the egress gate enforces it even if a
+tool slips.
+
+| Tool | Parameters | Answers | Never returns |
+|---|---|---|---|
+| `health_latest` | `platform` | The newest health sample for a platform | Anything but the sample's own measurements |
+| `health_uptime_pct` | `platform`, `window_hours` | Reader-derived availability for the window | The raw sample series |
+| `daily_active_users` | `platform`, `window_days` | Distinct signed-in visitors in the window | Session ids, user ids |
+| `telemetry_health` | `platform`, `days` | Uptime, latency, 5xx and host averages | Per-sample rows |
+| `p95_latency_window` | `platform`, `hours`, `top_n` | The slowest endpoints and their p95/p99 | Request or response bodies, query strings |
+| `crash_clusters` | `platform`, `days`, `max_n` | Crash fingerprints, counts, affected versions | Messages, stack traces, session ids |
+| `failed_logins_by_hour` | `platform`, `hours` | Failed logins per hour and distinct source counts | IP addresses, user ids, raw events |
+| `feedback_themes_top5` | `days`, `top_n` | Top feedback topics and the sentiment balance | Message text, complaint bodies |
+| `security_signals` | `days` | Signal counts by kind, blocked ratio, open CVEs by severity | Rule details, IPs, user agents |
+
+Every call is scoped to the scan subsection that may ask for it, times out
+after five seconds, and writes a row to `telemetry.tool_call_audit` before
+its answer is returned. A number a scan cites is checked against that audit
+trail: if no tool produced it, the scan fails and is recorded as `error` —
+never as `healthy`.
+
 ### Turning it on
 
 Nothing is on by default. The dashboards say *"no data yet"* rather than showing

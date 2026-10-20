@@ -418,6 +418,10 @@ class ToolCallAudit(SQLModel, table=True):
     args: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False, default=dict))
     #: Key the reconciler looks a finding's `metric` up against.
     metric_key: Optional[str] = Field(default=None, index=True)
+    #: What the tool actually returned, JSON-encoded. The reconciler compares a
+    #: cited number against this: a finding that cites a number no tool
+    #: produced is a fabricated finding, and this is where that is caught.
+    metric_value: Optional[Any] = Field(default=None, sa_column=Column(JSON, nullable=True))
     row_count: int = 0
     duration_ms: int = 0
     ok: bool = Field(default=True, index=True)

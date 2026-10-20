@@ -288,6 +288,7 @@ def run_tool(
             tool=name,
             args=audit_args,
             metric_key=metric_key,
+            metric_value=result.data if ok else None,
             row_count=rows,
             duration_ms=duration_ms,
             ok=ok,
@@ -302,6 +303,7 @@ def write_audit(
     tool: str,
     args: dict[str, Any] | None = None,
     metric_key: str | None = None,
+    metric_value: Any = None,
     row_count: int = 0,
     duration_ms: int = 0,
     ok: bool = True,
@@ -317,7 +319,9 @@ def write_audit(
     (`run_tool`) and outbound LLM requests (`mcp.core.llm`). `args` is
     deliberately reduced to JSON-safe values: a caller passing a datetime or
     any other object must not be able to crash the audit trail — the row has
-    to exist for the reconciler's read-only claim to stand.
+    to exist for the reconciler's read-only claim to stand. The same
+    reduction applies to `metric_value`, which carries the tool's actual
+    answer for the reconciler to check the model's numbers against.
     """
     import json
 
@@ -327,6 +331,9 @@ def write_audit(
             tool=tool,
             args=json.loads(json.dumps(args or {}, default=str)),
             metric_key=metric_key,
+            metric_value=json.loads(json.dumps(metric_value, default=str))
+            if metric_value is not None
+            else None,
             row_count=row_count,
             duration_ms=duration_ms,
             ok=ok,
