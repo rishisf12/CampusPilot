@@ -102,7 +102,7 @@ Implemented exactly as specified, two notes for Phase 4:
 - `EGRESS_ROW_CAP = 50` truncates list-typed data at the same wiring point;
   `ToolResult.row_count` still carries the tool's own count for reconciliation.
 
-### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — DONE (commit `2515c7c`)
+### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — DONE (commits `2515c7c` + `5f90f57`)
 Owns prompt tasks 4 (incl. reuse of the OppFeed LLM client) + architecture rules 1, 2, 10.
 
 - Config (`app/core/config.py`, no hard-coding): `llm_provider ∈ {nvidia_nim, openrouter, ollama}` + `llm_model`. Reconcile with the existing generic `llm_provider`/"openai-compatible" settings: `llm_base_url`/`llm_api_key` stay as plumbing, but the *named* provider must be on `ALLOWED_PROVIDERS = {nvidia_nim, openrouter, ollama}`; `off` remains a valid "no LLM" value. The NVIDIA env key is unified with OppFeed's (`NVIDIA_API_KEY` accepted, `NVIDIA_NIM_API_KEY` as alias) per the Phase 0 re-run finding.
@@ -112,18 +112,54 @@ Owns prompt tasks 4 (incl. reuse of the OppFeed LLM client) + architecture rules
 
 Verify: provider-outside-allowlist → config rejected; telemetry job with redaction unwired → startup error, zero network attempts; audit rows present with the new columns; e2e request capture contains no planted PII.
 
-All four verify items are pinned in `tests/test_llm_egress.py` (9 tests). Notes:
-- The redaction-wiring self-check is a source-inspection tripwire in
-  `mcp/core/registry.py` (`redaction_wired`/`assert_redaction_wired`): it reads
-  `run_tool`'s own source once per process, so deleting the `_egress` call
-  turns every telemetry job into a loud refusal — green suite, loud failure.
-- `llm.stage2_narrative` audit rows share the scan's salt (`salt_for`), so the
-  pseudonyms inside a prompt reconcile against the tool rows of the same scan.
-- `openai-compatible` as `LLM_PROVIDER` is refused; `LLM_BASE_URL`/`LLM_API_KEY`
-  remain plumbing overrides on top of an allowlisted resolution.
-- Reuse rule in code: `llms/` lazily re-exports the OppFeed provider clients
-  (`NVIDIAClient`, `OpenRouterClient`, `MockLLMClient`) via PEP 562 - features
-  import through `llms/`, never from a provider SDK.
+Implemented (converged from two parallel drafts of this phase — see the
+commit message for the merge):
+- `llms/` is the single allowlist surface: `ALLOWED_PROVIDERS`, `JOB_KINDS`,
+  `resolve()` (NVIDIA's key read as `NVIDIA_API_KEY` with `NVIDIA_NIM_API_KEY`
+  as alias, per the Phase 0 re-run finding; a *named* provider with no key
+  says so instead of falling through to a surprise provider),
+  `resolve_for_job()` (job-kind gate) and `get_client()`, which hands back the
+  *existing* OppFeed `NVIDIAClient` / `OpenRouterClient` — one HTTP
+  implementation per provider, not two. The OppFeed client reads the alias
+  too, so one credential serves both stacks.
+- `Settings.llm_provider` is validated at startup: `off` plus the allowlist.
+  The historic `openai-compatible` value is refused by name — it could point
+  anywhere, which is what the allowlist exists to prevent. `llm_base_url` /
+  `llm_api_key` stay as plumbing for the generic Stage-2 client.
+- **The live Stage-2 path is gated at the wire** (`features/monitoring/services/scan_service.py`):
+  collected telemetry is walked through `redact_value` (pseudonymizing
+  id-keyed fields) before the prompt is assembled, the assembled prompt is
+  swept again through `redact_counted`, the bytes are measured on what
+  actually goes out, and one `llm.stage2_narrative` audit row is written
+  whatever the outcome — including when the endpoint is down. A refusal
+  re-raises instead of degrading quietly, so an operator who named an
+  off-allowlist provider sees "no request sent".
+- `mcp/core/registry.py` gained the tripwire `redaction_wired()` /
+  `assert_redaction_wired()`: `run_tool` must still call `_egress`, and
+  `_egress` must still mask a canary. Source inspection *and* a behaviour
+  probe — a refactor that unplugs redaction fails loudly instead of
+  quietly.
+- `mcp/core/jobs.py` — the agent-facing gate: `job_kind ∈ {telemetry,
+  public_data}`, `JobRefused` (nothing sent, no client built), and a
+  session-based `egress_selfcheck()` that runs the *real* egress path over a
+  canary and leaves an audit row of its own.
+- `mcp/core/llm.py` — the agent tooling's outbound path: gate → redact the
+  prompt again → send (NVIDIA NIM first, OpenRouter `:free` fallback) → one
+  `llm.request` audit row per attempt, including the failed ones.
+- `write_audit()` in the registry is now the single writer of
+  `telemetry.tool_call_audit` (tool calls and LLM requests alike).
+- Migration `017_llm_egress_audit` adds `sent_to`, `redactions_applied`,
+  `bytes_out`, `redaction_salt`. It resolves the table's real schema first,
+  because migration 20261007_1523 created the monitoring tables *unqualified* —
+  a database built purely from Alembic has them in the search path's first
+  schema, while a `create_all` database has them in `telemetry`.
+- Tests: `tests/test_llm_egress.py` (9 — allowlist, key unification, job-kind
+  gating, config matrix, refusal-without-construction, and a planted-PII
+  capture proving raw rows never reach the wire while clean metrics survive)
+  and `tests/test_llm_routing.py` (10 — the same contract on the agent
+  gateway: paid providers refused at four levels, telemetry refusal sends
+  nothing, every attempt audited with provider/bytes/mask-count/salt, and two
+  runs never sharing a salt).
 
 ### Phase 5 — Aggregate tool layer & scan-agent runtime — PENDING (next)
 Owns prompt task 3 + task 5.
