@@ -42,6 +42,25 @@ Read-only inventory frozen (verified 2026-10-20):
 - Free LLM keys already in `.env.example`: NVIDIA NIM / OpenRouter / (Ollama local).
 - Gap analysis produced the phase list.
 
+**Phase 0 re-run (v2 scope, agent tooling baseline):**
+- `features/oppfeed/agent/llm/` is the reusable provider stack — `base.LLMClient`
+  ABC (async `chat(messages, temperature, max_tokens, response_format) ->
+  LLMResponse(text, model, provider, tokens, latency, cached)`, `list_models`,
+  `health_check`), `NVIDIAClient` (env `NVIDIA_API_KEY`,
+  `NVIDIA_MODEL`, base `https://integrate.api.nvidia.com/v1`),
+  `OpenRouterClient` (env `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`), and an
+  `LLMRouter` failover chain from `LLM_PROVIDER_CHAIN` with rate limiting,
+  caching and quota checks. Phase 4 reuses these — no second LLM stack.
+- **Finding:** the env key for NVIDIA is named two ways — `llms/__init__.py`
+  reads `NVIDIA_NIM_API_KEY` while the reusable OppFeed clients read
+  `NVIDIA_API_KEY`. Phase 4 unifies (accept both, prefer `NVIDIA_API_KEY`)
+  so the agent router and OppFeed share one key.
+- **Finding:** `.opencode/` does not exist in the working tree — the
+  no-terminal rule is already satisfied; Phase 8's preflight scripts the
+  check so it fails fast if it ever appears.
+- `mock`/`opencode_cli` live in OppFeed's own `LLM_PROVIDER_CHAIN`; they are
+  NOT part of the agent-tooling `ALLOWED_PROVIDERS` (telemetry jobs).
+
 ### Phase 1 — MCP core contract — DONE (commit `98d1bad`)
 - `backend/app/mcp/core/registry.py` — tool registry: subsection scoping, 5 s per-call timeout, 10 000-row cap, mandatory `ToolCallAudit` row on success/refusal/timeout/crash.
 - `backend/app/mcp/core/queries.py` — `assert_read_query` (write-keyword regex + credential-table fragments `auth_`/`token`/`password_hash` refused before anything reaches the engine), `ToolNotPermitted`.
@@ -70,7 +89,7 @@ Verify: redaction unit tests green; planted-PII integration test green; all exis
 ### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — PENDING
 Owns prompt tasks 4 (incl. reuse of the OppFeed LLM client) + architecture rules 1, 2, 10.
 
-- Config (`app/core/config.py`, no hard-coding): `llm_provider ∈ {nvidia_nim, openrouter, ollama}` + `llm_model`. Reconcile with the existing generic `llm_provider`/"openai-compatible" settings: `llm_base_url`/`llm_api_key` stay as plumbing, but the *named* provider must be on `ALLOWED_PROVIDERS = {nvidia_nim, openrouter, ollama}`; `off` remains a valid "no LLM" value.
+- Config (`app/core/config.py`, no hard-coding): `llm_provider ∈ {nvidia_nim, openrouter, ollama}` + `llm_model`. Reconcile with the existing generic `llm_provider`/"openai-compatible" settings: `llm_base_url`/`llm_api_key` stay as plumbing, but the *named* provider must be on `ALLOWED_PROVIDERS = {nvidia_nim, openrouter, ollama}`; `off` remains a valid "no LLM" value. The NVIDIA env key is unified with OppFeed's (`NVIDIA_API_KEY` accepted, `NVIDIA_NIM_API_KEY` as alias) per the Phase 0 re-run finding.
 - Startup validation in the scan worker path: provider outside the allowlist → that job refuses to start; `job_kind=telemetry` without verified redaction wiring (the Phase 3 self-check) → refuses with a clear error, **no request sent**.
 - `job_kind ∈ {telemetry, public_data}` routing: telemetry jobs pass through the egress gate; `public_data` (OppFeed) uses any allowlisted provider freely. **REUSE the existing OppFeed provider clients** (`features/oppfeed` NVIDIA NIM / OpenRouter request plumbing) rather than a second parallel LLM stack; `llms/` remains the single allowlist surface and re-exports the OppFeed clients.
 - Alembic migration: `tool_call_audit` gains `sent_to` (which provider consumed what), `redactions_applied` (count), `bytes_out` (redacted payload size), `redaction_salt` (per-run random). Every outbound LLM request writes a row.
