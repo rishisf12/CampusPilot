@@ -321,7 +321,7 @@ Implemented:
   makes the shell-MCP, admin-MCP, secret-leak and edge-exposure checks
   fail).
 
-### Phase 9 — Docs, ADR & recorded demo — DONE (commit `pending`)
+### Phase 9 — Docs, ADR & recorded demo — DONE (commit `4b56295`)
 Owns prompt task 9 + final acceptance.
 
 - `README.md`: new env vars, provider routing, preflight usage.
