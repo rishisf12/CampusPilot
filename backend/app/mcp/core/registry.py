@@ -115,7 +115,8 @@ class ToolRegistry:
 
     def permitted(self, name: str, subsection: str) -> ToolSpec:
         """Return the spec, or raise if the subsection may not use the tool."""
-        return self.resolve(name).permitted_for(subsection)
+        spec, _ = self.resolve(name)
+        return spec.permitted_for(subsection)
 
     def resolve(self, name: str) -> tuple[ToolSpec, Callable[..., ToolResult]]:
         """The (spec, callable) for `name`, or `ToolNotPermitted` if unregistered."""

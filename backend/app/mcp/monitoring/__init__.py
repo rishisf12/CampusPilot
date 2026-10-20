@@ -21,8 +21,25 @@ from sqlmodel import Session, select
 
 from features.monitoring.domain.models import HealthMetric
 from features.monitoring.services import queries as mqueries
-from mcp.core.registry import ToolRegistry, ToolResult, ToolSpec
+from mcp.core.registry import ToolError, ToolRegistry, ToolResult, ToolSpec
 from observability.uptime import coverage_pct
+
+#: `HealthMetric.platform` carries exactly these labels. Refusing anything
+#: else beats answering a typo'd platform with an empty result that reads
+#: like "no data yet".
+PLATFORMS = frozenset({"web", "android"})
+
+#: Widest defensible windows: uptime cannot outlive retention
+#: (`health_retention_days=90`), and a year of DAU is the ceiling anyone asks
+#: for once.
+MAX_UPTIME_WINDOW_HOURS = 24 * 90
+MAX_DAU_WINDOW_DAYS = 365
+
+
+def _validated(platform: str) -> str:
+    if platform not in PLATFORMS:
+        raise ToolError(f"platform {platform!r} not in {sorted(PLATFORMS)}")
+    return platform
 
 
 def _utc_now_naive() -> datetime:
@@ -52,6 +69,7 @@ def _row_to_dict(row: HealthMetric) -> dict[str, Any]:
 
 def health_latest(session: Session, platform: str = "web") -> ToolResult:
     """The newest health sample for a platform, or None before the first one."""
+    _validated(platform)
     row = session.exec(
         select(HealthMetric)
         .where(HealthMetric.platform == platform)
@@ -70,6 +88,9 @@ def health_uptime_pct(
     window_hours: int = 24,
 ) -> ToolResult:
     """Reader-derived availability for the last `window_hours` (or None)."""
+    _validated(platform)
+    if not isinstance(window_hours, int) or not 1 <= window_hours <= MAX_UPTIME_WINDOW_HOURS:
+        raise ToolError(f"window_hours must be 1..{MAX_UPTIME_WINDOW_HOURS}, got {window_hours!r}")
     end = _utc_now_naive()
     start = end - timedelta(hours=window_hours)
     pct = coverage_pct(session, platform=platform, start=start, end=end)
@@ -86,6 +107,9 @@ def daily_active_users(
     window_days: int = 1,
 ) -> ToolResult:
     """Distinct signed-in visitors holding sessions in the window."""
+    _validated(platform)
+    if not isinstance(window_days, int) or not 1 <= window_days <= MAX_DAU_WINDOW_DAYS:
+        raise ToolError(f"window_days must be 1..{MAX_DAU_WINDOW_DAYS}, got {window_days!r}")
     end = _utc_now_naive()
     start = end - timedelta(days=window_days)
     dau = mqueries.active_users(session, start, end, platform)

@@ -59,6 +59,30 @@ def test_registry_scopes_tools_to_their_subsections():
         REGISTRY.permitted("daily_active_users", "C_W_SECURITY")
 
 
+def test_invalid_inputs_are_refused_and_audited(db_session):
+    """A typo'd platform or a zero/negative window must not read like 'no data'."""
+    from mcp.core.registry import ToolError
+
+    for kwargs in (
+        {"platform": "galaxy"},
+        {"platform": "web", "window_hours": 0},
+        {"platform": "web", "window_hours": -5},
+        {"platform": "web", "window_hours": 24 * 90 + 1},
+    ):
+        with pytest.raises(ToolError):
+            _run(db_session, "health_uptime_pct", "A_W_HEALTH", **kwargs)
+    refusals = db_session.exec(select(ToolCallAudit)).all()
+    assert len(refusals) == 4
+    assert all(r.ok is False for r in refusals)
+    assert all("not in" in (r.error or "") or "window_hours" in (r.error or "") for r in refusals)
+
+    with pytest.raises(ToolError, match="window_days"):
+        _run(db_session, "daily_active_users", "B_W_ACTIVITY", window_days=0)
+
+    with pytest.raises(ToolError, match="platform"):
+        _run(db_session, "health_latest", "A_W_HEALTH", platform="browser")
+
+
 def test_health_latest_returns_the_pinned_row(db_session):
     row = db_session.exec(select(HealthMetric)).first()  # empty table confirmed
     assert row is None
