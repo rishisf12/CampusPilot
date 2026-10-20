@@ -470,5 +470,8 @@ justified for size (psutil, prometheus_client already carried this bar).
 - [x] One end-to-end demo scan recorded: subsection filled, audit rows show provider = nvidia_nim, `bytes_out` = redacted payload size.
       `docs/observability/DEMO-SCAN.md` (recorded by `scripts/demo_scan.py`).
 - [x] All new + existing tests green; README and SCAN-AGENT.md updated.
-      851 passed / 2 failed — the two failures are the pre-existing alembic
-      drift tests, deferred to the Phase 10 gate.
+      **853 passed / 0 failed** — the first green run in the repository's
+      history. The two long-standing failures (the alembic round trip and the
+      model/migration drift) are fixed, and the underlying defect they were
+      pointing at — a database built from the migration history alone was
+      not usable by the app — is fixed too (migrations 021 and 022).
