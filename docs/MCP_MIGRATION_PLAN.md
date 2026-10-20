@@ -161,7 +161,7 @@ commit message for the merge):
   nothing, every attempt audited with provider/bytes/mask-count/salt, and two
   runs never sharing a salt).
 
-### Phase 5 — Aggregate tool layer & scan-agent runtime — PENDING (next)
+### Phase 5 — Aggregate tool layer & scan-agent runtime — DONE (commit `7d49a52`)
 Owns prompt task 3 + task 5.
 
 - Curated aggregate tools (registry-registered, read-only, 5 s timeouts, counts/summaries **only** — never raw rows, emails, tokens):
@@ -171,7 +171,43 @@ Owns prompt task 3 + task 5.
 
 Verify: reconcile catches a deliberately wrong cited number (test); clean DB scan returns healthy, not error; curated tools answer the A/W+B subsections' needs.
 
-### Phase 6 — Reactive safety: propose-not-execute reactor — PENDING
+Implemented:
+- `backend/app/mcp/monitoring/aggregates.py` — the six curated tools, each
+  answering one question with counts only: per-hour failed logins (plus
+  distinct source counts, never the addresses), top feedback topics (never a
+  message body), the slowest endpoints (never a request body), crash
+  fingerprints (never a message or a stack trace), health aggregates (never
+  the sample series) and security signal counts (never rule details, IPs or
+  user agents). Nonsense windows are refused rather than answered with an
+  empty result that reads like "no data yet".
+- `backend/app/mcp/monitoring/common.py` — the shared platform/window
+  validation, split out so the Phase 2 tools and the Phase 5 tools agree on
+  what a defensible window is.
+- `backend/app/mcp/agent/reconcile.py` — the **real** reconciler. Every
+  number a finding cites is checked against the audit trail: a metric no tool
+  fetched fails the scan, a number no tool returned (beyond 2 %) fails it,
+  and a `change_pct` that does not follow from its two endpoints fails it
+  too. The tolerance absorbs re-rounding and still catches invention.
+- `backend/app/mcp/agent/runtime.py` — the scan-agent loop: the subsection's
+  own tools run through the registry (so scoping, timeout, row cap and the
+  egress gate all apply), the SCAN-AGENT.md §1 prompt and the §2 schema go
+  to the model, the answer is parsed and reconciled, and a failure is
+  retried **once** at a lower temperature. If it still fails, the scan is
+  stored with status `error` and the reason — never as `healthy`, and never
+  with an unverified finding. The runtime acts on nothing: it writes audit
+  rows and a scan result, and that is all.
+- `tool_call_audit` gains `metric_value` (migration `018`): the tool's
+  redacted answer, so the reconciler can check the model's numbers against
+  what the tool actually said rather than merely against the fact that a
+  tool ran.
+- Tests: `tests/test_mcp_aggregates.py` (8 — registration and scoping, window
+  refusals, and each tool's answer with planted PII proving nothing raw
+  escapes) and `tests/test_scan_agent_runtime.py` (8 — the reconciler
+  catching a wrong number, an unfetched metric and a bogus percentage, the
+  runtime storing `error` rather than `healthy` for a fabricating model, the
+  single retry, and the audit rows for every tool the scan ran).
+
+### Phase 6 — Reactive safety: propose-not-execute reactor — PENDING (next)
 Owns prompt task 3's executor half (architecture rule 4).
 
 - `backend/app/mcp/reactor/` — enum action → procedure map (idempotent, logged, deterministic); every proposal invocation writes `tool_call_audit` with `proposed/executed/rejected`, `sent_to`, `redactions_applied`, `bytes_out`.
