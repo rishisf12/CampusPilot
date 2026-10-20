@@ -77,7 +77,7 @@ duckduckgo-search
 # BeautifulSoup for HTML parsing
 beautifulsoup4
 # lxml for fast parsing
-lxml
+lxml[html_clean]
 # trafilatura for article extraction
 trafilatura
 # Playwright for browser-based fetching (PlaywrightFetcher)
