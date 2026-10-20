@@ -80,7 +80,7 @@ documented pre-existing `test_postgres_migration.py` alembic drift (Phase 10
 gate). New re-run tests all green: `test_mcp_core.py` 16, `test_mcp_monitoring.py`,
 `test_observability.py`, `test_monitoring.py` combined 158. Phase 3 unlocked.
 
-### Phase 3 — Egress gate: redaction & pseudonymization — PENDING (next)
+### Phase 3 — Egress gate: redaction & pseudonymization — DONE (commit `73aba86`, re-run plan v2)
 Owns prompt tasks 1 + 2 and the egress-gate core (architecture rule 2).
 
 - `backend/app/mcp/core/redact.py`
@@ -92,7 +92,17 @@ Owns prompt tasks 1 + 2 and the egress-gate core (architecture rule 2).
 
 Verify: redaction unit tests green; planted-PII integration test green; all existing test files untouched and green.
 
-### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — PENDING
+Implemented exactly as specified, two notes for Phase 4:
+- The per-run salt is shared by `scan_id` (first call for a scan mints it;
+  same-scan calls reuse it) so recurrences are countable across tools of one
+  scan, while runs stay unlinkable. It lands in the audit row's `egress`
+  metadata key; the Phase 4 migration moves it into a real `redaction_salt`
+  column along with `redactions_applied` (count already tracked), `bytes_out`
+  and `sent_to`.
+- `EGRESS_ROW_CAP = 50` truncates list-typed data at the same wiring point;
+  `ToolResult.row_count` still carries the tool's own count for reconciliation.
+
+### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — PENDING (next)
 Owns prompt tasks 4 (incl. reuse of the OppFeed LLM client) + architecture rules 1, 2, 10.
 
 - Config (`app/core/config.py`, no hard-coding): `llm_provider ∈ {nvidia_nim, openrouter, ollama}` + `llm_model`. Reconcile with the existing generic `llm_provider`/"openai-compatible" settings: `llm_base_url`/`llm_api_key` stay as plumbing, but the *named* provider must be on `ALLOWED_PROVIDERS = {nvidia_nim, openrouter, ollama}`; `off` remains a valid "no LLM" value. The NVIDIA env key is unified with OppFeed's (`NVIDIA_API_KEY` accepted, `NVIDIA_NIM_API_KEY` as alias) per the Phase 0 re-run finding.
