@@ -359,20 +359,20 @@ Directive 1. All 7 monitoring containers deleted + 3 volumes in ONE commit, only
 
 ## Parity checklist (the Phase 10 deletion gate)
 
-Status: `pending` → `implemented (7-day gate running)` → `verified`. Rows 1–3/6–8 are being fed by the in-app stores since Phase 2; nothing is deleted until every row is `verified`.
+Status: `pending` → `implemented (7-day gate running)` → `verified`. Rows 1–3/6–8 are being fed by the in-app stores since Phase 2; rows 4–5 joined on 2026-10-20 with the Phase 5 runtime, which fills the eight subsection verdicts, stores the incident transition and reconciles every cited number. Nothing is deleted until every row is `verified`.
 
 | # | Requirement | Current owner | MCP owner | Status |
 |---|-------------|---------------|-----------|--------|
 | 1 | p95 latency finding | thresholds.py | health_metric (in-app histogram deltas) | implemented (Phase 2) — gate running |
 | 2 | HTTP 5xx-rate finding | thresholds.py | health_metric (in-app HTTP mix) | implemented (Phase 2) — gate running |
 | 3 | DB query p95 finding | thresholds.py | health_metric (in-app histogram deltas) | implemented (Phase 2) — gate running |
-| 4 | 8 subsection ScanResult verdicts | telemetry.scan_result | analyst MCP (Phase 5 runtime) | pending |
-| 5 | Incident transitions | telemetry.status_transition | monitoring MCP | pending |
-| 6 | Tool-call audit + reconciliation | telemetry.tool_call_audit | mcp/core (Phases 1+5) | implemented — gate running |
+| 4 | 8 subsection ScanResult verdicts | telemetry.scan_result | analyst MCP (Phase 5 runtime) | implemented (Phase 5) — gate running from 2026-10-20 |
+| 5 | Incident transitions | telemetry.status_transition | monitoring MCP | implemented (Phase 5 runtime stores the transition) — gate running from 2026-10-20 |
+| 6 | Tool-call audit + reconciliation | telemetry.tool_call_audit | mcp/core (Phases 1+5) | implemented (Phases 1, 3, 5) — gate running |
 | 7 | Host CPU/RAM/disk/net | node_exporter + cadvisor | psutil via observability/host | implemented (Phase 2) — gate running |
 | 8 | Uptime probes | blackbox-exporter | reader-derived coverage (observability/uptime) | implemented (Phase 2) — gate running |
-| 9 | Alert routing + silencing | alertmanager | alerting MCP + SMTP | pending |
-| 10 | Dashboards | grafana | admin UI | pending |
+| 9 | Alert routing + silencing | alertmanager | alerting MCP + SMTP | pending — not started; the gate needs its own week |
+| 10 | Dashboards | grafana | admin UI | pending — the admin UI exists but the Grafana replacement does not |
 
 ## Free-forever gate (unchanged)
 
