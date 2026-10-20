@@ -85,6 +85,14 @@ class ToolSpec:
     #: the line the auditors read.
     read_only: bool = True
 
+    def permitted_for(self, subsection: str) -> "ToolSpec":
+        """Return self, or raise if that tool may not serve this subsection."""
+        if subsection not in self.subsections:
+            raise ToolNotPermitted(
+                f"tool {self.name!r} is not permitted for subsection {subsection}"
+            )
+        return self
+
 
 class ToolRegistry:
     """Name -> (spec, callable). Registration is explicit; nothing is guessed."""
@@ -107,22 +115,18 @@ class ToolRegistry:
 
     def permitted(self, name: str, subsection: str) -> ToolSpec:
         """Return the spec, or raise if the subsection may not use the tool."""
+        return self.resolve(name).permitted_for(subsection)
+
+    def resolve(self, name: str) -> tuple[ToolSpec, Callable[..., ToolResult]]:
+        """The (spec, callable) for `name`, or `ToolNotPermitted` if unregistered."""
         try:
-            spec, _ = self._tools[name]
+            return self._tools[name]
         except KeyError:
             raise ToolNotPermitted(f"tool {name!r} is not registered") from None
-        if subsection not in spec.subsections:
-            raise ToolNotPermitted(
-                f"tool {name!r} is not permitted for subsection {subsection}"
-            )
-        return spec
 
-    def executor(self) -> Callable[..., ToolResult]:
-        """The registered callable (after permission is checked separately)."""
-        try:
-            return self._tools[next(iter(self._tools))][1]  # pragma: no cover
-        except StopIteration as exc:  # pragma: no cover
-            raise LookupError("registry is empty") from exc
+    def names(self) -> list[str]:
+        """Registered tool names, sorted — the HTTP endpoint's tool list."""
+        return sorted(self._tools)
 
 
 def run_tool(
@@ -143,25 +147,26 @@ def run_tool(
     `scan_id=None` is for privileged non-scan callers (an admin probe); the
     audit row still records the call with a synthetic id.
     """
-    try:
-        spec, fn = registry._tools[name]  # permission + existence in one check
-    except KeyError:
-        spec, fn = None, None
     resolved_scan_id = scan_id or f"manual-{uuid.uuid4().hex[:12]}"
 
     started = time.monotonic()
     ok, error, value, rows, metric_key = False, None, None, 0, None
+    held_pool = True  # cleared on timeout: the worker must not wait on a wedged tool
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mcp-tool")
     try:
-        if spec is None:
-            raise ToolNotPermitted(f"tool {name!r} is not registered")
-        registry.permitted(name, subsection)  # subsection scoping, server-side
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(fn, session, **(args or {}))
-            try:
-                result = future.result(timeout=timeout_s)
-            except FutureTimeoutError:
-                future.cancel()
-                raise ToolTimeout(f"tool {name!r} exceeded {timeout_s}s budget") from None
+        spec, fn = registry.resolve(name)  # subsection scoping checked next
+        spec.permitted_for(subsection)
+        future = pool.submit(fn, session, **(args or {}))
+        try:
+            result = future.result(timeout=timeout_s)
+        except FutureTimeoutError:
+            # A wedge must not hold the scan worker (SCAN-AGENT.md rule 2). The
+            # abandoned thread drains in the background - tools must be pure
+            # reads, so at worst it re-reads what it was about to read anyway -
+            # but control returns to the caller now and the audit records the
+            # call as failed.
+            held_pool = False
+            raise ToolTimeout(f"tool {name!r} exceeded {timeout_s}s budget") from None
         value, rows, metric_key = result.data, result.row_count, result.metric_key
         ok = True
         return result
@@ -172,6 +177,7 @@ def run_tool(
         error = f"{type(exc).__name__}: {exc}"
         raise ToolError(f"tool {name!r} failed: {error}") from exc
     finally:
+        pool.shutdown(wait=held_pool, cancel_futures=True)
         duration_ms = int((time.monotonic() - started) * 1000)
         _audit(
             session,
@@ -198,12 +204,19 @@ def _audit(
     ok: bool,
     error: str | None,
 ) -> None:
-    """Write the audit row, then commit. Written even when the tool refused."""
+    """Write the audit row, then commit. Written even when the tool refused.
+
+    `args` is deliberately reduced to JSON-safe values: a caller passing a
+    datetime or any other object must not be able to crash the audit trail —
+    the row has to exist for the reconciler's read-only claim to stand.
+    """
+    import json
+
     session.add(
         ToolCallAudit(
             scan_id=scan_id,
             tool=tool,
-            args=args,
+            args=json.loads(json.dumps(args, default=str)),
             metric_key=metric_key,
             row_count=row_count,
             duration_ms=duration_ms,

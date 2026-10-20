@@ -11,8 +11,11 @@ from mcp.core.registry import ToolNotPermitted
 
 #: Statement kinds a scan may never run. Word-boundary match, so a column named
 #: `last_update` does not trip the `UPDATE` rule and `last_created` not `CREATE`.
+#: `copy`/`call`/`do` are included: COPY ... TO can write files, CALL/DO execute
+#: server-side code, and every one of them can mutate state while "reading".
 _WRITE_RE = re.compile(
-    r"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|vacuum)\b",
+    r"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke"
+    r"|vacuum|copy|call|do|lock|listen|notify)\b",
     re.IGNORECASE,
 )
 
@@ -28,11 +31,19 @@ def assert_read_query(sql: str) -> str:
     """
     Return the SQL unchanged if it is provably read-only and non-credential;
     raise `ToolNotPermitted` otherwise.
+
+    Exactly one statement is allowed: a `;` anywhere but the very end means the
+    caller tried to smuggle a second statement past the pattern checks. Literal
+    strings containing `;` are refused too — strict, documented, and the tools
+    we ship are the ones that write their own SQL.
     """
     if not sql or not sql.strip():
         raise ToolNotPermitted("empty query")
     if len(sql) > MAX_SQL_LENGTH:
         raise ToolNotPermitted(f"query exceeds {MAX_SQL_LENGTH} characters")
+    body = sql.strip()
+    if ";" in body.rstrip(";"):
+        raise ToolNotPermitted("exactly one statement per query")
     match = _WRITE_RE.search(sql)
     if match:
         raise ToolNotPermitted(f"query contains write keyword {match.group(1)!r}")

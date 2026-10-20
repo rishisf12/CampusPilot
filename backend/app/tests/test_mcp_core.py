@@ -47,7 +47,7 @@ def reg() -> ToolRegistry:
     r = ToolRegistry()
     r.register(
         ToolSpec(name="count_slots", subsections=frozenset({"A_W_HEALTH", "C_W_SECURITY"})),
-        lambda session: ToolResult(data=[1, 2, 3], row_count=3, metric_key="slot_count"),
+        lambda session, **kwargs: ToolResult(data=[1, 2, 3], row_count=3, metric_key="slot_count"),
     )
     r.register(
         ToolSpec(name="slow_tool", subsections=frozenset({registry.SUBSECTIONS[0]})),
@@ -120,10 +120,66 @@ def test_row_cap_enforced():
         ToolResult(data=None, row_count=registry.ROW_CAP + 1)
 
 
+def test_oversized_sql_refused():
+    oversized = "select " + "a" * queries.MAX_SQL_LENGTH
+    with pytest.raises(ToolNotPermitted, match="exceeds"):
+        queries.assert_read_query(oversized)
+
+
+def test_multi_statement_sql_refused():
+    with pytest.raises(ToolNotPermitted, match="one statement"):
+        queries.assert_read_query("select 1; select 2")
+    # Even inside a literal: strictness beats cleverness for the tools we own.
+    with pytest.raises(ToolNotPermitted, match="one statement"):
+        queries.assert_read_query("select 'x;y' from event")
+
+
+def test_server_side_executors_refused():
+    for kw in ("copy event to '/tmp/x'", "call refresh_stats()", "do $$ begin end $$", "lock table event"):
+        with pytest.raises(ToolNotPermitted, match="write keyword"):
+            queries.assert_read_query(kw)
+
+
+def test_timeout_does_not_hold_the_worker(db_session, reg):
+    """A wedged tool must cost the worker its budget, not its runtime."""
+    started = time.monotonic()
+    with pytest.raises(ToolTimeout):
+        run_tool(db_session, reg, subsection="A_W_HEALTH", name="slow_tool", timeout_s=0.2)
+    elapsed = time.monotonic() - started
+    assert elapsed < 1.5  # the 2s tool may drain in the background; the worker moved on
+    row = _audit_rows(db_session)[0]
+    assert row.ok is False
+    assert "exceeded" in (row.error or "")
+
+
+def test_audit_survives_unserializable_args(db_session, reg):
+    """A non-JSON arg (datetime) must not crash the mandatory audit trail."""
+    from datetime import datetime, timezone
+
+    result = run_tool(
+        db_session,
+        reg,
+        subsection="A_W_HEALTH",
+        name="count_slots",
+        args={"requested_at": datetime.now(timezone.utc)},
+    )
+    assert result.data == [1, 2, 3]
+    row = _audit_rows(db_session)[0]
+    assert row.ok is True
+    assert isinstance(row.args, dict)
+    assert row.args["requested_at"]  # reduced, but recorded
+
+
+def test_registry_lists_names_for_the_endpoint(reg):
+    names = reg.names()
+    assert names == sorted(names)
+    assert "count_slots" in names and "slow_tool" in names
+
+
 def test_write_sql_refused():
     with pytest.raises(ToolNotPermitted, match="write keyword"):
         queries.assert_read_query("DELETE FROM event")
-    with pytest.raises(ToolNotPermitted, match="write keyword"):
+    with pytest.raises(ToolNotPermitted, match="one statement"):
         queries.assert_read_query("select 1; update event set n=1")
     with pytest.raises(ToolNotPermitted, match="protected table fragment"):
         queries.assert_read_query("select * from auth_user")
