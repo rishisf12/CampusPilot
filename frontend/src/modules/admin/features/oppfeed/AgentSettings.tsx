@@ -184,7 +184,7 @@ export default function AgentSettings({ onError }: { onError?: (m: string) => vo
             <Input
               value={settings.llm_provider_chain}
               onChange={e => setSettings({ ...settings, llm_provider_chain: e.target.value })}
-              placeholder="nvidia_nim,opencode_cli,openrouter,ollama,mock"
+              placeholder="nvidia_nim,opencode_cli,openrouter,mock"
               className="text-xs font-mono"
             />
             <p className="text-[10px] mt-1" style={{ color: 'var(--cp-muted)' }}>

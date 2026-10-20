@@ -37,17 +37,24 @@ from typing import Any
 #: Provider -> connection template. Free/open-source providers only (owner
 #: directive 6); this mapping IS the allowlist, re-used everywhere via
 #: `ALLOWED_PROVIDERS`.
+#:
+#: Two providers, both hosted and free: NVIDIA NIM (primary - open-weight
+#: Nemotron models) and OpenRouter's `:free` tier (fallback). There is no
+#: local provider: an installation that wants a model on its own hardware
+#: can point `LLM_BASE_URL` at it for the generic Stage-2 client, but the
+#: agent tooling never routes to it - the fallback has to work when the
+#: primary is down, and "the fallback needs the internet" is exactly what a
+#: fallback is for.
 _PROVIDERS: dict[str, dict[str, str | None]] = {
     "nvidia_nim": {"base": "https://integrate.api.nvidia.com/v1", "key_envs": ("NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY")},
     "openrouter": {"base": "https://openrouter.ai/api/v1", "key_envs": ("OPENROUTER_API_KEY",)},
-    "ollama": {"base_env": "OLLAMA_BASE_URL", "key_envs": ()},
 }
 
 #: Auto-generated view for error messages and checks.
 ALLOWED_PROVIDERS = frozenset(_PROVIDERS)
 
 #: Resolution order when no provider is named.
-_PREFERENCE = ("nvidia_nim", "openrouter", "ollama")
+_PREFERENCE = ("nvidia_nim", "openrouter")
 
 #: What a job may be. `telemetry` jobs carry monitoring-derived data and are
 #: only allowed out after the egress gate has verified itself (see
@@ -114,7 +121,7 @@ def resolve(provider: str | None = None, model: str | None = None) -> ResolvedLL
         return ResolvedLLM(provider=candidate, base_url=base, api_key=key or None, model=model)
     raise LLMConfigError(
         f"no free LLM provider is configured (looked for {candidates}; "
-        "set one of the *_API_KEY / OLLAMA_BASE_URL variables)"
+        "set NVIDIA_API_KEY or OPENROUTER_API_KEY)"
     )
 
 
@@ -156,12 +163,6 @@ def get_client(provider: str) -> Any:
         "nvidia_nim": "features.oppfeed.agent.llm.nvidia_nim_client",
         "openrouter": "features.oppfeed.agent.llm.openrouter_client",
     }
-    if provider not in modules:
-        # ollama - local, no hosted key, and no client in this stack yet.
-        raise LLMConfigError(
-            "provider 'ollama' has no reusable client in this stack yet; "
-            "point the agent tooling at nvidia_nim or openrouter"
-        )
     import importlib
 
     module = importlib.import_module(modules[provider])

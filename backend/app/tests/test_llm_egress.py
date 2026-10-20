@@ -3,7 +3,7 @@
 The rules under test (docs/MCP_MIGRATION_PLAN.md, Phase 4):
 
 1. The free allowlist is the whole universe: a named provider outside
-   {nvidia_nim, openrouter, ollama} is refused at resolve time, key or not.
+   {nvidia_nim, openrouter} is refused at resolve time, key or not.
 2. Job kinds: telemetry work refuses to start when the egress gate is not
    verified inside `run_tool`; public_data resolves freely.
 3. Stage 2 config only speaks allowlisted names (or "off"); anything else
@@ -45,7 +45,7 @@ def db_session():
 
 
 def test_allowlist_is_exactly_the_free_providers():
-    assert ALLOWED_PROVIDERS == {"nvidia_nim", "openrouter", "ollama"}
+    assert ALLOWED_PROVIDERS == {"nvidia_nim", "openrouter"}
     for provider in ("openai", "anthropic", "groq", "openai-compatible"):
         with pytest.raises(LLMConfigError, match="allowlist"):
             resolve(provider)
@@ -124,13 +124,6 @@ def test_resolve_llm_config_refuses_anything_off_allowlist():
 
 
 def test_resolve_llm_config_named_provider(monkeypatch):
-    # ollama needs only its base URL env.
-    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
-    cfg = resolve_llm_config(_settings(llm_provider="ollama"))
-    assert cfg is not None
-    assert cfg.provider == "ollama"
-    assert cfg.base_url == "http://127.0.0.1:11434/v1"
-
     # A named provider inherits llms.resolve's endpoint; settings remain overrides.
     monkeypatch.setenv("NVIDIA_API_KEY", "k")
     cfg = resolve_llm_config(_settings(llm_provider="nvidia_nim", llm_model="nemotron-mini"))

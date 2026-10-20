@@ -139,7 +139,6 @@ services:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
       - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434/v1}
       # The optional admin MCP console. Off by default: with the flag false
       # the endpoint is not mounted at all.
       - ENABLE_ADMIN_MCP=${ENABLE_ADMIN_MCP:-false}

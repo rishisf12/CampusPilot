@@ -107,7 +107,7 @@ class Settings(BaseSettings):
     #: on a model.
     #: Which named free provider the LLM-backed features may use: "off" (no
     #: LLM at all), or one of `llms.ALLOWED_PROVIDERS` (nvidia_nim,
-    #: openrouter, ollama). The *named* provider is validated against that
+    #: openrouter). The *named* provider is validated against that
     #: allowlist - a paid provider name is a configuration error caught at
     #: startup, not a runtime surprise. `llm_base_url`/`llm_api_key` stay as
     #: plumbing for the generic OpenAI-compatible Stage-2 client.

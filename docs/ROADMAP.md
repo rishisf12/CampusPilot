@@ -249,7 +249,7 @@ OppFeed is an autonomous agent that discovers, verifies, and publishes internshi
 **Backend** (`backend/app/features/oppfeed/`):
 - 9 SQLModel tables (Opportunity, AgentRun, RunStep, AgentSettings, SourceRule, SearchQuery, OppFeedFeedback, LLMCache, LLMUsage)
 - 23 REST endpoints: admin CRUD + faculty feed
-- LangGraph agent pipeline with LLM failover chain (NVIDIA NIM → OpenCode CLI → OpenRouter → Ollama → Mock)
+- LangGraph agent pipeline with LLM failover chain (NVIDIA NIM → OpenCode CLI → OpenRouter → Mock)
 - APScheduler for daily runs (02:00–04:00 IST)
 - Alembic migration `016_oppfeed_models` + idempotent seed script
 

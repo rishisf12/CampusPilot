@@ -20,7 +20,9 @@
 7. Dedicated bundle per MCP; a clearly named LLM section mapping which LLM file ↔ which feature.
 
 **Decided architecture for agent tooling (v2, non-negotiable):**
-1. Provider allowlist — hosted free OSS only: NVIDIA NIM (primary), OpenRouter `:free` (fallback). Model via config (`llm_provider`, `llm_model`). Ollama may stay in compose as an optional **disabled** fallback; no job depends on it.
+1. Provider allowlist — hosted free OSS only: NVIDIA NIM (primary), OpenRouter `:free` (fallback). Model via config (`llm_provider`, `llm_model`). There is no local provider: the allowlist, the env, the compose
+file and the discovery agent's failover chain carry none, and no job
+depends on one.
 2. Egress gate (safety core) — a `telemetry` job must never send raw rows: every tool response passes `redact()` + `pseudonymize_id()` before any LLM request; rows capped at 50/call; group queries answered as aggregates. If the redaction pipeline is not wired and self-verified, the job FAILS to start with a clear error — never silently sends unredacted text. "Safe" = nothing identifying in the payload, not "nothing in flight".
 3. Job-kind routing — `job_kind ∈ {telemetry, public_data}`. `public_data` (OppFeed) may use any allowlisted provider freely.
 4. Propose-not-execute — the model proposes from the closed action enum (SCAN-AGENT.md §2); a deterministic executor (no LLM in the loop) maps enum → idempotent procedure, runs it, audits. Anything outside the enum is rejected and logged.
@@ -39,7 +41,7 @@
 Read-only inventory frozen (verified 2026-10-20):
 - The 7 monitoring containers still running in compose: prometheus, node-exporter, alertmanager, victoria-logs, grafana, cadvisor, blackbox-exporter.
 - The backend already owned the hard parts: `prometheus_client` instruments (`features/monitoring/infrastructure/metrics.py`), threshold engine (`domain/thresholds.py`), telemetry tables (`scan_result`, `status_transition`, `tool_call_audit` with `metric_key`, `health_metric`), scan contract (`docs/observability/SCAN-AGENT.md`).
-- Free LLM keys already in `.env.example`: NVIDIA NIM / OpenRouter / (Ollama local).
+- Free LLM keys already in `.env.example`: NVIDIA NIM / OpenRouter.
 - Gap analysis produced the phase list.
 
 **Phase 0 re-run (v2 scope, agent tooling baseline):**
@@ -111,7 +113,7 @@ Implemented exactly as specified, two notes for Phase 4:
 ### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — DONE (commits `2515c7c` + `5f90f57`)
 Owns prompt tasks 4 (incl. reuse of the OppFeed LLM client) + architecture rules 1, 2, 10.
 
-- Config (`app/core/config.py`, no hard-coding): `llm_provider ∈ {nvidia_nim, openrouter, ollama}` + `llm_model`. Reconcile with the existing generic `llm_provider`/"openai-compatible" settings: `llm_base_url`/`llm_api_key` stay as plumbing, but the *named* provider must be on `ALLOWED_PROVIDERS = {nvidia_nim, openrouter, ollama}`; `off` remains a valid "no LLM" value. The NVIDIA env key is unified with OppFeed's (`NVIDIA_API_KEY` accepted, `NVIDIA_NIM_API_KEY` as alias) per the Phase 0 re-run finding.
+- Config (`app/core/config.py`, no hard-coding): `llm_provider ∈ {nvidia_nim, openrouter}` + `llm_model`. Reconcile with the existing generic `llm_provider`/"openai-compatible" settings: `llm_base_url`/`llm_api_key` stay as plumbing, but the *named* provider must be on `ALLOWED_PROVIDERS = {nvidia_nim, openrouter}`; `off` remains a valid "no LLM" value. The NVIDIA env key is unified with OppFeed's (`NVIDIA_API_KEY` accepted, `NVIDIA_NIM_API_KEY` as alias) per the Phase 0 re-run finding.
 - Startup validation in the scan worker path: provider outside the allowlist → that job refuses to start; `job_kind=telemetry` without verified redaction wiring (the Phase 3 self-check) → refuses with a clear error, **no request sent**.
 - `job_kind ∈ {telemetry, public_data}` routing: telemetry jobs pass through the egress gate; `public_data` (OppFeed) uses any allowlisted provider freely. **REUSE the existing OppFeed provider clients** (`features/oppfeed` NVIDIA NIM / OpenRouter request plumbing) rather than a second parallel LLM stack; `llms/` remains the single allowlist surface and re-exports the OppFeed clients.
 - Alembic migration: `tool_call_audit` gains `sent_to` (which provider consumed what), `redactions_applied` (count), `bytes_out` (redacted payload size), `redaction_salt` (per-run random). Every outbound LLM request writes a row.
@@ -253,7 +255,7 @@ Implemented:
 Owns prompt decisions 5–8 and task 7.
 
 - `docker-compose.yml`: `edge` and `app-internal (internal: true)` networks; agent/scan services on internal except the single minimal egress path (LLM-client semantics only); Prometheus/Grafana stay off the edge while Phase 10 is pending.
-- Agent containers receive ONLY provider keys + the restricted read-only DB role (dedicated role over the `SQL_ALLOWLIST` tables); `.env` only in the backend container; ollama kept but unexposed and unused by any job.
+- Agent containers receive ONLY provider keys + the restricted read-only DB role (dedicated role over the `SQL_ALLOWLIST` tables); `.env` only in the backend container; no local model provider anywhere in the stack.
 - Optional HTTP MCP endpoint behind `ENABLE_ADMIN_MCP=false` default + `get_current_user` admin gate middleware (student tokens → empty tool list).
 
 Verify: `docker compose config` shows the networks + internal flag; agent env contains no `SECRET_KEY`/`SMTP_*`; admin middleware denies student tokens.
@@ -269,7 +271,7 @@ Implemented:
 - **Secrets split.** The backend keeps the application secrets; the
   monitoring stack, the database and the rollup worker receive none. The
   paid-provider key is gone from the compose file: the allowlist refuses
-  it, so carrying it was pure risk. Ollama stays configured but unexposed
+  it, so carrying it was pure risk. There is no local model provider:
   and unused by any job.
 - **The read-only role now covers the telemetry schema.** Migration `020`
   grants `monitoring_ro` USAGE on `telemetry` and SELECT on the SQL
@@ -326,14 +328,13 @@ Owns prompt task 9 + final acceptance.
 
 - `README.md`: new env vars, provider routing, preflight usage.
 - `docs/observability/SCAN-AGENT.md` §4 gains the egress-gate rule ("every response redacted before entering context; raw rows never sent").
-- ADR note at docs top: hosted-free-OSS chosen by operator decision; local fallback (ollama, optional/disabled) available but not required.
+- ADR note at docs top: hosted-free-OSS chosen by operator decision; no local provider.
 - Record ONE end-to-end demo scan: subsection filled, audit rows show provider = nvidia_nim, `bytes_out` = redacted payload size.
 
 Implemented:
 - `docs/ADR-0001-hosted-free-llm.md` — the decision and its consequences:
   hosted, free, open-source providers only, from a closed allowlist
-  (`nvidia_nim` primary, `openrouter` fallback, `ollama` optional and
-  unexposed), the paid provider refused at four levels, one provider stack
+  (`nvidia_nim` primary, `openrouter` fallback), the paid provider refused at four levels, one provider stack
   rather than two, and the alternatives considered.
 - `docs/observability/SCAN-AGENT.md` §4 rule 8 — the egress gate, in the
   contract the scan agent itself is held to: every response is redacted
@@ -431,7 +432,7 @@ Status: `pending` → `implemented (7-day gate running)` → `verified`. Rows 1�
 ## Free-forever gate (unchanged)
 
 No paid API, no trial-expiring service, no free-tier-that-bills-later dependency.
-Allowed: NVIDIA NIM (primary), OpenRouter (`:free` models, fallback), ollama
+Allowed: NVIDIA NIM (primary), OpenRouter (`:free` models, fallback)
 (optional disabled local fallback), existing Gmail SMTP. Anything else needs
 owner sign-off. Every new dependency: open-source, merged into the bundle,
 justified for size (psutil, prometheus_client already carried this bar).

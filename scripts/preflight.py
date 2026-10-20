@@ -419,12 +419,46 @@ def select_rows(model, scan_id: str):
     return select(model).where(model.scan_id == scan_id)
 
 
+def check_no_local_model_provider() -> Result:
+    """No local model provider anywhere in the stack.
+
+    The allowlist is hosted free providers only (ADR 0001). A local provider
+    is not "just another option": it is a thing to install, a thing to keep
+    warm, and a thing that can be half-configured on a deployment - and the
+    fallback has to work when the primary is down, which a local model on the
+    same box does not guarantee.
+    """
+    name = "no-local-model-provider"
+    if _import_app() is None:
+        return Result(name, SKIP, "the application could not be imported")
+    from llms import ALLOWED_PROVIDERS
+
+    expected = {"nvidia_nim", "openrouter"}
+    if set(ALLOWED_PROVIDERS) != expected:
+        return Result(
+            name,
+            FAIL,
+            f"the allowlist is {sorted(ALLOWED_PROVIDERS)}, expected {sorted(expected)}",
+        )
+    offenders = []
+    for path in (COMPOSE, ENV_EXAMPLE):
+        if not path.exists():
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "OLLAMA" in line.upper():
+                offenders.append(f"{path.name}:{number}")
+    if offenders:
+        return Result(name, FAIL, f"a local model provider is still configured: {offenders}")
+    return Result(name, PASS, "the allowlist is hosted free providers only")
+
+
 CHECKS: tuple[Callable[[], Result], ...] = (
     check_no_shell_mcp_in_prod_config,
     check_admin_mcp_off_by_default,
     check_no_app_secrets_in_other_services,
     check_redaction_wired,
     check_provider_on_allowlist,
+    check_no_local_model_provider,
     check_opencode_not_in_image,
     check_agent_db_role_read_only,
     check_monitoring_off_the_edge,

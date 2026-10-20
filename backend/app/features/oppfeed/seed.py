@@ -35,7 +35,7 @@ def seed():
                 run_window_end="04:00",
                 auto_publish_enabled=False,
                 auto_publish_threshold=0.85,
-                llm_provider_chain="nvidia_nim,opencode_cli,openrouter,ollama,mock",
+                llm_provider_chain="nvidia_nim,opencode_cli,openrouter,mock",
                 llm_max_rpm=30,
                 enable_agent=True,
                 enable_scheduler=False,

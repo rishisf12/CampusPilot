@@ -400,7 +400,7 @@ def test_llm_router_resolves_free_provider(monkeypatch):
 
 
 def test_llm_router_no_provider_configured(monkeypatch):
-    for var in ("NVIDIA_NIM_API_KEY", "OPENROUTER_API_KEY", "OLLAMA_BASE_URL"):
+    for var in ("NVIDIA_NIM_API_KEY", "NVIDIA_API_KEY", "OPENROUTER_API_KEY"):
         monkeypatch.delenv(var, raising=False)
     with pytest.raises(LLMConfigError, match="no free LLM provider"):
         resolve()

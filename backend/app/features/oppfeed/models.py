@@ -294,7 +294,7 @@ class AgentSettings(SQLModel, table=True):
     auto_publish_threshold: float = Field(default=0.85)
 
     # LLM Provider Chain
-    llm_provider_chain: str = Field(default="nvidia_nim,opencode_cli,openrouter,ollama,mock")
+    llm_provider_chain: str = Field(default="nvidia_nim,opencode_cli,openrouter,mock")
     llm_max_rpm: int = Field(default=30)
 
     # Feature flags

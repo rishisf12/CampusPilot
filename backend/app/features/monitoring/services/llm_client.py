@@ -67,7 +67,7 @@ def resolve_llm_config(settings) -> Optional["LLMConfig"]:
     Rules (Phase 4 of the MCP migration plan):
 
     - `LLM_PROVIDER=off` (or unset) -> `None`: no LLM, Stage 2 skipped.
-    - a provider on the free allowlist (`nvidia_nim`, `openrouter`, `ollama`)
+    - a provider on the free allowlist (`nvidia_nim`, `openrouter`)
       resolves through `llms.resolve`, which reads the provider's own env key.
       `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` remain plumbing overrides on
       top of the resolved endpoint.
@@ -86,7 +86,7 @@ def resolve_llm_config(settings) -> Optional["LLMConfig"]:
             f"LLM_PROVIDER {provider!r} is not on the free allowlist "
             f"({sorted(ALLOWED_PROVIDERS)}); Stage 2 refuses to start and no "
             "request is sent. Historic value 'openai-compatible' is no longer "
-            "accepted - name nvidia_nim, openrouter or ollama."
+            "accepted - name nvidia_nim or openrouter."
         )
     resolved = resolve_llm(provider)
     return LLMConfig(

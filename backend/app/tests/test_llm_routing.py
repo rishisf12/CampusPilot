@@ -62,7 +62,7 @@ def test_allowlist_refuses_a_paid_provider_even_with_a_key(monkeypatch):
         resolve("openai")
     with pytest.raises(LLMConfigError, match="free allowlist"):
         get_client("openai")
-    assert set(ALLOWED_PROVIDERS) == {"nvidia_nim", "openrouter", "ollama"}
+    assert set(ALLOWED_PROVIDERS) == {"nvidia_nim", "openrouter"}
 
 
 def test_off_is_a_valid_no_llm_configuration():

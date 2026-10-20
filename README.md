@@ -149,7 +149,7 @@ pytest against PostgreSQL: ``TEST_DATABASE_URL=postgresql+psycopg://... python -
 | `ALLOWED_EXTENSIONS` | `.pdf,.csv` | Accepted upload types |
 | `BRANCH_OPTIONS` | `CSE A,CSE B,DS,ECE,ME,SM,PG,MDes` | Canonical branch list |
 | `ADMISSION_YEAR` | `21` | Anchor for roll → semester inference |
-| `LLM_PROVIDER` | `off` | Which named free provider the scan agent may use: `off`, `nvidia_nim`, `openrouter` or `ollama`. Anything else is refused at startup — see [ADR 0001](docs/ADR-0001-hosted-free-llm.md). |
+| `LLM_PROVIDER` | `off` | Which named free provider the scan agent may use: `off`, `nvidia_nim` or `openrouter`. Anything else is refused at startup - see [ADR 0001](docs/ADR-0001-hosted-free-llm.md). |
 | `NVIDIA_API_KEY` / `NVIDIA_NIM_API_KEY` | empty | NVIDIA NIM credential. Either name works; `NVIDIA_API_KEY` is canonical. |
 | `OPENROUTER_API_KEY` | empty | OpenRouter credential (the `:free` fallback). |
 | `ENABLE_ADMIN_MCP` | `false` | Mounts the optional admin MCP console at `/api/mcp/*`. Off means the paths do not exist; on means only admins may list or call the tools. |
@@ -157,11 +157,14 @@ pytest against PostgreSQL: ``TEST_DATABASE_URL=postgresql+psycopg://... python -
 
 ### Provider routing
 
-The model may only be one of three, and only from the free tier:
+The model may only be one of two, and only from the free tier:
 
 ```
-nvidia_nim  →  openrouter  →  (ollama, optional and unexposed)
+nvidia_nim  →  openrouter
 ```
+
+There is no local provider: nothing to install, no GPU to buy, and one less
+thing that can be half-configured on a deployment.
 
 `llms/` is the single allowlist surface: a provider outside it is refused at
 the config validator, the resolver, the client factory and the job gate —

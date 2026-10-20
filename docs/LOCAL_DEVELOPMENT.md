@@ -111,7 +111,6 @@ ENABLE_BANNER_GEN=false
 ENABLE_AUDIO_SUMMARY=false
 NVIDIA_API_KEY=your-nvidia-nim-key
 OPENROUTER_API_KEY=your-openrouter-key
-OLLAMA_BASE_URL=http://ollama:11434/v1
 ```
 
 Admin UI: http://localhost:8002 (OppFeed tab: Dashboard, Agent Runs, Opportunities, Settings, LLM Status)
@@ -410,7 +409,6 @@ ENABLE_BANNER_GEN=false
 ENABLE_AUDIO_SUMMARY=false
 NVIDIA_API_KEY=
 OPENROUTER_API_KEY=
-OLLAMA_BASE_URL=http://ollama:11434/v1
 ```
 
 ---
