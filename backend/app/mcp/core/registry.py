@@ -17,12 +17,13 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
 from sqlmodel import Session
 
 from features.monitoring.domain.models import ToolCallAudit
+from mcp.core import redact as _redaction
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,11 @@ TOOL_TIMEOUT_S = 5.0
 
 #: Hard ceiling on rows a single call may return (SCAN-AGENT.md rule 5).
 ROW_CAP = 10_000
+
+#: What crosses `run_tool` is the model's viewport, so list-typed data is
+#: additionally capped here (architecture rule 2). Tools that need to reason
+#: over more rows return aggregates instead of raw rows (Phase 5 tools).
+EGRESS_ROW_CAP = 50
 
 #: The eight scan subsections.
 SUBSECTIONS = (
@@ -130,6 +136,44 @@ class ToolRegistry:
         return sorted(self._tools)
 
 
+#: One salt per scan run: tools called under the same `scan_id` share it, so
+#: identical identifiers pseudonymize identically *within* a run (the model can
+#: count recurrences) while different runs stay unlinkable. Cleared when large
+#: - scan ids are per-run, so the map is bounded by runs, not by calls.
+_RUN_SALTS: dict[str, str] = {}
+
+
+def _salt_for(scan_id: str) -> str:
+    salt = _RUN_SALTS.get(scan_id)
+    if salt is None:
+        if len(_RUN_SALTS) >= 4_096:
+            _RUN_SALTS.clear()
+        salt = uuid.uuid4().hex
+        _RUN_SALTS[scan_id] = salt
+    return salt
+
+
+def _egress(result: ToolResult, salt: str) -> tuple[ToolResult, dict[str, Any]]:
+    """The single egress point: redact + pseudonymize + cap rows (anonymization optics).
+
+    Returns the (possibly rebuilt) result and the metadata that goes into the
+    audit row. Every tool inherits this - there is no second path in or out.
+    """
+    data, redactions = _redaction.redact_value(result.data, salt)
+    truncated = False
+    if isinstance(data, list) and len(data) > EGRESS_ROW_CAP:
+        data = data[:EGRESS_ROW_CAP]
+        truncated = True
+    if redactions or truncated:
+        result = replace(result, data=data)
+    meta = {
+        "salt": salt,
+        "redactions": redactions,
+        "truncated": truncated,
+    }
+    return result, meta
+
+
 def run_tool(
     session: Session,
     registry: ToolRegistry,
@@ -147,11 +191,17 @@ def run_tool(
     refusal, timeout, crash — a `ToolCallAudit` row is written first. Passing
     `scan_id=None` is for privileged non-scan callers (an admin probe); the
     audit row still records the call with a synthetic id.
+
+    On success the data passes through `_egress` before it is returned: no
+    caller of this function - model, scan, dashboard, test - can observe a raw
+    row. The per-run salt and the redaction count go into the audit row's
+    `egress` key (formal columns land in the Phase 4 migration).
     """
     resolved_scan_id = scan_id or f"manual-{uuid.uuid4().hex[:12]}"
 
     started = time.monotonic()
     ok, error, value, rows, metric_key = False, None, None, 0, None
+    egress_meta: dict[str, Any] | None = None
     held_pool = True  # cleared on timeout: the worker must not wait on a wedged tool
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mcp-tool")
     try:
@@ -168,6 +218,7 @@ def run_tool(
             # call as failed.
             held_pool = False
             raise ToolTimeout(f"tool {name!r} exceeded {timeout_s}s budget") from None
+        result, egress_meta = _egress(result, _salt_for(resolved_scan_id))
         value, rows, metric_key = result.data, result.row_count, result.metric_key
         ok = True
         return result
@@ -180,11 +231,14 @@ def run_tool(
     finally:
         pool.shutdown(wait=held_pool, cancel_futures=True)
         duration_ms = int((time.monotonic() - started) * 1000)
+        audit_args: dict[str, Any] = dict(args or {})
+        if egress_meta is not None:
+            audit_args["egress"] = egress_meta
         _audit(
             session,
             scan_id=resolved_scan_id,
             tool=name,
-            args=args or {},
+            args=audit_args,
             metric_key=metric_key,
             row_count=rows,
             duration_ms=duration_ms,
