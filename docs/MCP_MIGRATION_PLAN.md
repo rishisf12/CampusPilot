@@ -102,7 +102,7 @@ Implemented exactly as specified, two notes for Phase 4:
 - `EGRESS_ROW_CAP = 50` truncates list-typed data at the same wiring point;
   `ToolResult.row_count` still carries the tool's own count for reconciliation.
 
-### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — PENDING (next)
+### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — DONE (commit `2515c7c`)
 Owns prompt tasks 4 (incl. reuse of the OppFeed LLM client) + architecture rules 1, 2, 10.
 
 - Config (`app/core/config.py`, no hard-coding): `llm_provider ∈ {nvidia_nim, openrouter, ollama}` + `llm_model`. Reconcile with the existing generic `llm_provider`/"openai-compatible" settings: `llm_base_url`/`llm_api_key` stay as plumbing, but the *named* provider must be on `ALLOWED_PROVIDERS = {nvidia_nim, openrouter, ollama}`; `off` remains a valid "no LLM" value. The NVIDIA env key is unified with OppFeed's (`NVIDIA_API_KEY` accepted, `NVIDIA_NIM_API_KEY` as alias) per the Phase 0 re-run finding.
@@ -112,7 +112,20 @@ Owns prompt tasks 4 (incl. reuse of the OppFeed LLM client) + architecture rules
 
 Verify: provider-outside-allowlist → config rejected; telemetry job with redaction unwired → startup error, zero network attempts; audit rows present with the new columns; e2e request capture contains no planted PII.
 
-### Phase 5 — Aggregate tool layer & scan-agent runtime — PENDING
+All four verify items are pinned in `tests/test_llm_egress.py` (9 tests). Notes:
+- The redaction-wiring self-check is a source-inspection tripwire in
+  `mcp/core/registry.py` (`redaction_wired`/`assert_redaction_wired`): it reads
+  `run_tool`'s own source once per process, so deleting the `_egress` call
+  turns every telemetry job into a loud refusal — green suite, loud failure.
+- `llm.stage2_narrative` audit rows share the scan's salt (`salt_for`), so the
+  pseudonyms inside a prompt reconcile against the tool rows of the same scan.
+- `openai-compatible` as `LLM_PROVIDER` is refused; `LLM_BASE_URL`/`LLM_API_KEY`
+  remain plumbing overrides on top of an allowlisted resolution.
+- Reuse rule in code: `llms/` lazily re-exports the OppFeed provider clients
+  (`NVIDIAClient`, `OpenRouterClient`, `MockLLMClient`) via PEP 562 - features
+  import through `llms/`, never from a provider SDK.
+
+### Phase 5 — Aggregate tool layer & scan-agent runtime — PENDING (next)
 Owns prompt task 3 + task 5.
 
 - Curated aggregate tools (registry-registered, read-only, 5 s timeouts, counts/summaries **only** — never raw rows, emails, tokens):
