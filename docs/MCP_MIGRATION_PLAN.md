@@ -1,211 +1,172 @@
-# MCP Migration & Expansion Plan
+# MCP Migration & Expansion Plan — v2
 
-> Status: PLANNED — not started. Nothing in this document removes existing
-> infrastructure until the MCP pipeline achieves verified parity.
+> **v2 revision (2026-10-20):** phases re-listed from zero. Phases 0–2 are DONE
+> and committed; the prompt's *Privacy-safe agent tooling* architecture is
+> mapped onto Phases 3–9. Directive 1 (remove legacy only when own MCP achieves
+> verified parity) survives as Phase 10, still gated.
 >
-> Governing directives (from the owner):
-> 1. Remove files phase-wise, only when the same work is achieved and verified by our own MCP.
-> 2. Plan a proper bundled directory tree for backend and frontend; changing existing
->    features to make them more advanced is in scope; MCP hosting = minimal storage.
-> 3. Execute in phases; verify progress in each; fix all bugs before a phase closes.
-> 4. Add/modify as many features as sensible and LIST ALL; progress bars monitor
->    security and everything else; the app must not become bulky; everything must fit
->    free deployment.
-> 5. Admin powered by AI: finds bugs, security threats, malware attacks, etc.; clean,
->    organised UI — no messy UI, no long horizontal/vertical scrolling, properly bundled.
-> 6. Build and use our own working MCPs for everything, integrated with AI; use what is
->    available now (more will be set up if needed); prefer open-source used directly.
->    NEVER use anything paid or that needs payment after deployment. Free forever or not shipped.
-> 7. Dedicated bundle per MCP; a clearly named LLM section mapping which LLM file
->    integrates with which feature; separate bundles for future maintenance.
+> Nothing in this document removes existing infrastructure until the phase
+> that owns it achieves and verifies the same work.
+
+## Governing rules
+
+**Owner's original directives (unchanged):**
+1. Remove files phase-wise, only when the same work is achieved and verified by our own MCP.
+2. Plan a proper bundled directory tree; changing existing features to make them more advanced is in scope; MCP hosting = minimal storage.
+3. Execute in phases; verify progress in each; fix all bugs before a phase closes.
+4. Add/modify as many features as sensible and LIST ALL; progress bars for security and everything; the app must not get bulky; everything must fit free deployment.
+5. Admin powered by AI: finds bugs, security threats, malware — clean, organised UI, no messy scrolling, properly bundled.
+6. Build and use our own working MCPs for everything, AI-integrated; prefer open-source used directly. NEVER anything paid or pay-after-deployment — free forever or not shipped.
+7. Dedicated bundle per MCP; a clearly named LLM section mapping which LLM file ↔ which feature.
+
+**Decided architecture for agent tooling (v2, non-negotiable):**
+1. Provider allowlist — hosted free OSS only: NVIDIA NIM (primary), OpenRouter `:free` (fallback). Model via config (`llm_provider`, `llm_model`). Ollama may stay in compose as an optional **disabled** fallback; no job depends on it.
+2. Egress gate (safety core) — a `telemetry` job must never send raw rows: every tool response passes `redact()` + `pseudonymize_id()` before any LLM request; rows capped at 50/call; group queries answered as aggregates. If the redaction pipeline is not wired and self-verified, the job FAILS to start with a clear error — never silently sends unredacted text. "Safe" = nothing identifying in the payload, not "nothing in flight".
+3. Job-kind routing — `job_kind ∈ {telemetry, public_data}`. `public_data` (OppFeed) may use any allowlisted provider freely.
+4. Propose-not-execute — the model proposes from the closed action enum (SCAN-AGENT.md §2); a deterministic executor (no LLM in the loop) maps enum → idempotent procedure, runs it, audits. Anything outside the enum is rejected and logged.
+5. No terminal for agents — shell MCP tooling lives only in `.opencode/mcp_servers/` (interactive dev, client approvals ON). Never imported in `backend/app`, never a compose service, never given to an autonomous agent.
+6. Secrets isolation — agent containers get ONLY provider keys and a restricted DB connection (dedicated read-only role over allowlisted tables). No `SECRET_KEY`, `SMTP_*`, or unrelated API keys in agent reach. `.env` lives only in the backend container.
+7. Network isolation — agent/scan services on an `internal: true` network except an explicitly minimal egress path that speaks LLM-client semantics only (not arbitrary curl). Backend/others per current topology.
+8. HTTP MCP endpoint (optional) — `ENABLE_ADMIN_MCP=false` default; admin gate middleware reusing `get_current_user` (student tokens see an empty tool list). Consent UI explicitly out of scope.
+9. Untrusted data stays data — SCAN-AGENT.md §1 rules preserved everywhere: tool results, feedback text, log lines, stack traces are DATA, never instructions.
+10. Every tool call AND every outbound LLM request is audited — `tool_call_audit` gains `sent_to`, `bytes_out`, `redactions_applied`, `redaction_salt`.
 
 ---
 
-## 0. Baseline inventory (verified 2026-10-20, read-only audit)
+## Phases
 
-### What the current monitoring stack runs (docker-compose.yml)
+### Phase 0 — Baseline & governing rules — DONE
+Read-only inventory frozen (verified 2026-10-20):
+- The 7 monitoring containers still running in compose: prometheus, node-exporter, alertmanager, victoria-logs, grafana, cadvisor, blackbox-exporter.
+- The backend already owned the hard parts: `prometheus_client` instruments (`features/monitoring/infrastructure/metrics.py`), threshold engine (`domain/thresholds.py`), telemetry tables (`scan_result`, `status_transition`, `tool_call_audit` with `metric_key`, `health_metric`), scan contract (`docs/observability/SCAN-AGENT.md`).
+- Free LLM keys already in `.env.example`: NVIDIA NIM / OpenRouter / (Ollama local).
+- Gap analysis produced the phase list.
 
-| # | Service | Image | Role | Disposition |
-|---|---------|-------|------|-------------|
-| 1 | prometheus | prom/prometheus:v2.54.1 | Scrape + TSDB store | REPLACE (monitoring MCP) |
-| 2 | node-exporter | prom/node-exporter:v1.8.2 | Host metrics feed | REPLACE (psutil) |
-| 3 | alertmanager | prom/alertmanager:v0.27.0 | Alert routing/silencing | REPLACE (alerting MCP) |
-| 4 | victoria-logs | victoriametrics/victoria-logs:v1.10.0 | Log storage | REPLACE (DB/stdlib) |
-| 5 | grafana | grafana/grafana:11.1.0 | Dashboards | REPLACE (admin module UI) |
-| 6 | cadvisor | gcr.io/cadvisor/cadvisor:v0.51.0 | Container metrics | REPLACE |
-| 7 | blackbox-exporter | prom/blackbox-exporter:v0.25.0 | Uptime probes | REPLACE (in-app self-report) |
+### Phase 1 — MCP core contract — DONE (commit `98d1bad`)
+- `backend/app/mcp/core/registry.py` — tool registry: subsection scoping, 5 s per-call timeout, 10 000-row cap, mandatory `ToolCallAudit` row on success/refusal/timeout/crash.
+- `backend/app/mcp/core/queries.py` — `assert_read_query` (write-keyword regex + credential-table fragments `auth_`/`token`/`password_hash` refused before anything reaches the engine), `ToolNotPermitted`.
+- `backend/app/llms/__init__.py` — free-only provider router; a paid provider name is refused even with a working key in env.
+- Suite-wide invariant hardened: **every Postgres connection starts core-first** (`search_path=core,academic,social,telemetry,public` in `engine_kwargs`), ending the pooled-connection search-path accidents; `test_mcp_core.py` 10 tests.
 
-Volumes freed at removal: `prometheus_data`, `alertmanager_data`, `grafana_data`.
+### Phase 2 — Monitoring MCP & in-app collectors — DONE (commit `bc32586`)
+- `backend/app/observability/host.py` — psutil host metrics in-process (replaces node-exporter + cAdvisor): deltas, first-sample None, reboot-safe counters, per-metric failure isolation. `psutil` also added to `backend/requirements.txt` (was silently missing and crashed `features/health` in clean installs).
+- `backend/app/observability/uptime.py` — reader-derived uptime from `health_metric` sample coverage (replaces blackbox): gap counting, bootstrap anchoring, None-vs-0 honesty.
+- `backend/app/mcp/monitoring/` — tools `health_latest`, `health_uptime_pct`, `daily_active_users` on the Phase 1 registry.
+- `thresholds.py` source labels repointed to the actual stores (`health_metric`, `psutil`); A-W collector derives uptime from coverage; telemetry Mirrors kept green — 778 passed / 2 known pre-existing (documented, Phase 10-gated).
+- Parity rows 1–3 and 6–8: implemented, 7-day gate running (table below).
 
-### What the backend ALREADY owns (the hard parts — stays)
+### Phase 3 — Egress gate: redaction & pseudonymization — PENDING (next)
+Owns prompt tasks 1 + 2 and the egress-gate core (architecture rule 2).
 
-| Piece | Location | Notes |
-|---|---|---|
-| In-app instruments | `app/features/monitoring/infrastructure/metrics.py` | `prometheus_client` **pip library** (not the container): Counter/Gauge/Histogram, CollectorRegistry |
-| `/metrics` endpoint | `app/main.py` (~L134) | Containers only scrape this — cutting containers does not cut this |
-| Threshold rule engine | `app/features/monitoring/domain/thresholds.py` | Emits Findings (p95 latency, HTTP 5xx rate, DB p95) at healthy/warning/critical lines |
-| `ScanResult` | `telemetry.scan_result` | Full scan verdict per subsection (status enum, findings, root_causes, actions, confidence, model, prompt_hash, windows) |
-| `StatusTransition` | `telemetry.status_transition` | Incident log; durations derived, not stored |
-| `ToolCallAudit` | `telemetry.tool_call_audit` | Reconciler key `metric_key` present — the anti-hallucination contract |
-| `HealthMetric` | `telemetry.health_metric` | Web+Android snapshots: uptime, p50/p95/p99, HTTP 2xx/4xx/5xx %, CPU/RAM/disk/net, DB connections |
-| Request logging middleware | `app/core/monitoring.py` | Skips health/metrics paths |
-| Daily aggregation worker | `app/core/analytics.py` | Pre-computed metrics |
-| Crash MCP (separate process) | `mcp-crash-monitor/` | Already exists at repo root |
-| Scan agent contract | `docs/observability/SCAN-AGENT.md` | System prompt, schema, tool rules, reconciliation — the SPEC |
+- `backend/app/mcp/core/redact.py`
+  - `redact(text) -> str`: regex-mask emails, JWT-shaped tokens, phone numbers, IP addresses, `password`/`_hash` field values, card-like numbers (Luhn-shaped run).
+  - `pseudonymize_id(value, salt) -> "USER_xxxxxxxx"`: SHA-256 truncated, stable within one run so the model can count recurrences without learning identities; salt is per-run random and kept in audit metadata.
+- **Wiring at exactly ONE call site:** the shared `ToolResult` assembly in `mcp/core/registry.py` — every registered tool (including `mcp/monitoring/*` and future aggregate tools) inherits it; `queries.py`-based read paths and the monitoring tool output dicts are covered because they all return through `run_tool`. Byte counts of redactions feed `redactions_applied` once the Phase 4 columns land.
+- Row cap for LLM-bound contexts: 50 rows per call; group-question tools (Phase 5) return aggregates instead of rows.
+- Tests: per pattern + unicode/case/format edges; **planted email/JWT/phone/IP in source DB rows can never appear in any tool output** (capture + assert).
 
-### Free LLM providers already wired in `.env.example`
+Verify: redaction unit tests green; planted-PII integration test green; all existing test files untouched and green.
 
-`LLM_BASE_URL`/`LLM_API_KEY` (generic OpenAI-compatible), `NVIDIA_NIM_API_KEY`,
-`OPENROUTER_API_KEY` (free models), `OLLAMA_BASE_URL` (local). **Zero paid providers
-may enter any production path.**
+### Phase 4 — Provider routing, job-kind gating & LLM egress auditing — PENDING
+Owns prompt tasks 4 (incl. reuse of the OppFeed LLM client) + architecture rules 1, 2, 10.
 
-### The gap analysis (what actually has to be built)
+- Config (`app/core/config.py`, no hard-coding): `llm_provider ∈ {nvidia_nim, openrouter, ollama}` + `llm_model`. Reconcile with the existing generic `llm_provider`/"openai-compatible" settings: `llm_base_url`/`llm_api_key` stay as plumbing, but the *named* provider must be on `ALLOWED_PROVIDERS = {nvidia_nim, openrouter, ollama}`; `off` remains a valid "no LLM" value.
+- Startup validation in the scan worker path: provider outside the allowlist → that job refuses to start; `job_kind=telemetry` without verified redaction wiring (the Phase 3 self-check) → refuses with a clear error, **no request sent**.
+- `job_kind ∈ {telemetry, public_data}` routing: telemetry jobs pass through the egress gate; `public_data` (OppFeed) uses any allowlisted provider freely. **REUSE the existing OppFeed provider clients** (`features/oppfeed` NVIDIA NIM / OpenRouter request plumbing) rather than a second parallel LLM stack; `llms/` remains the single allowlist surface and re-exports the OppFeed clients.
+- Alembic migration: `tool_call_audit` gains `sent_to` (which provider consumed what), `redactions_applied` (count), `bytes_out` (redacted payload size), `redaction_salt` (per-run random). Every outbound LLM request writes a row.
 
-1. `HealthMetric` rows are fed by node_exporter/cadvisor scrape → need an in-app writer.
-2. `thresholds.py` source label is `prometheus` → repoint to the in-app store.
-3. Blackbox uptime probes → self-report via middleware + scheduled task.
-4. MCPs monitoring/alerting/security/analyst do not exist yet (only crash-monitor).
-5. Grafana-equivalent admin UI does not exist yet.
+Verify: provider-outside-allowlist → config rejected; telemetry job with redaction unwired → startup error, zero network attempts; audit rows present with the new columns; e2e request capture contains no planted PII.
 
----
+### Phase 5 — Aggregate tool layer & scan-agent runtime — PENDING
+Owns prompt task 3 + task 5.
 
-## 1. Target bundled directory tree
+- Curated aggregate tools (registry-registered, read-only, 5 s timeouts, counts/summaries **only** — never raw rows, emails, tokens):
+  `failed_logins_by_hour`, `feedback_themes_top5`, `p95_latency_window`, `crash_clusters(max_n)`, `telemetry_health(days)`, `security_signals(days)` (crash-monitor equivalents). README table per tool: name, params, and an explicit "what it never returns" column; enforced by the Phase 3 egress gate + planted-PII test.
+- Scan-agent runtime: calls §3 tools → receives the SCAN-AGENT.md §1 system prompt → fills the §2 `ScanResult` schema → **real `reconcile()`** (upgrade the current `_reconcile_findings` stub: re-query every cited `metric_key` from the audit trail, >2 % deviation fails the scan) → retries once at lower temperature → stores subsection as `error`, never faked healthy.
+- No auto-act on tool output anywhere; feeds the UI as display-only until Phase 6 wires the executor.
 
-```
-backend/app/
-├── mcp/                          # BUNDLE: all house-built MCPs, each self-contained
-│   ├── core/                     # shared tool layer (read-only rule, 5s timeouts,
-│   │                             #  row caps, table allowlists, audit logging)
-│   ├── monitoring/               # MCP #1 — Prometheus replacement
-│   ├── alerting/                 # MCP #2 — Alertmanager replacement
-│   ├── security/                 # MCP #3 — bug/threat/malware scans
-│   └── analyst/                  # MCP #4 — AI admin brain feeding the dashboard
-├── llms/                         # BUNDLE: named per-feature LLM wrappers
-│   ├── __init__.py               # provider router — free-only allowlist
-│   ├── analyst.py                # -> admin security/bug intelligence
-│   ├── timetable_parser.py       # -> exam/timetable feature
-│   └── feedback_voice.py         # -> feedback sentiment
-├── observability/
-│   ├── metrics.py                # in-app collector (no exporters)
-│   ├── thresholds.py             # SCAN-AGENT §5 tables, in code
-│   └── store.py                  # writer into existing DB (no new storage service)
-└── features/                     # (existing, per AGENTS.md rules — business logic)
+Verify: reconcile catches a deliberately wrong cited number (test); clean DB scan returns healthy, not error; curated tools answer the A/W+B subsections' needs.
 
-frontend/src/modules/admin/features/
-├── monitoring/                   # BUNDLE: Grafana replacement — compact cards,
-│                                 #  progress bars, zero-scroll tabs
-└── ...existing...
-```
+### Phase 6 — Reactive safety: propose-not-execute reactor — PENDING
+Owns prompt task 3's executor half (architecture rule 4).
 
-Every bundle is independently maintainable: swap/debug one MCP or LLM mapping without
-touching the others.
+- `backend/app/mcp/reactor/` — enum action → procedure map (idempotent, logged, deterministic); every proposal invocation writes `tool_call_audit` with `proposed/executed/rejected`, `sent_to`, `redactions_applied`, `bytes_out`.
+- Non-enum action → rejected + logged; the model never executes.
 
----
+Verify: executor rejects a non-enum action (test); audit row exists for every proposal; idempotency asserted per procedure.
 
-## 2. Phases (each closes only after verification passes and all bugs are fixed)
+### Phase 7 — Isolation: compose networks, secrets split, RBAC endpoint — PENDING
+Owns prompt decisions 5–8 and task 7.
 
-### Phase 0 — Baseline freeze (DONE)
-Read-only inventory above; parity checklist defined below. Zero modifications.
+- `docker-compose.yml`: `edge` and `app-internal (internal: true)` networks; agent/scan services on internal except the single minimal egress path (LLM-client semantics only); Prometheus/Grafana stay off the edge while Phase 10 is pending.
+- Agent containers receive ONLY provider keys + the restricted read-only DB role (dedicated role over the `SQL_ALLOWLIST` tables); `.env` only in the backend container; ollama kept but unexposed and unused by any job.
+- Optional HTTP MCP endpoint behind `ENABLE_ADMIN_MCP=false` default + `get_current_user` admin gate middleware (student tokens → empty tool list).
 
-### Phase 1 — MCP core bundle
-- Create `backend/app/mcp/core/`: tool registry, `tool_call_audit` enforcement,
-  read-only verification, DB table allowlists, 5s timeouts, 10k row caps.
-- Create `backend/app/llms/__init__.py`: provider router restricted to free providers
-  (NVIDIA NIM / OpenRouter free models / Ollama), keyed off existing env vars.
-- NO new pip dependencies. `prometheus_client` and `psutil` are tiny, open-source.
-- **Verify:** unit tests — audit row written and read back for a fake tool call;
-  router refuses a paid-provider config; full pytest suite green.
+Verify: `docker compose config` shows the networks + internal flag; agent env contains no `SECRET_KEY`/`SMTP_*`; admin middleware denies student tokens.
 
-### Phase 2 — Monitoring MCP (Prometheus + node/cadvisor replacement)
-- `observability/collector.py`: records requests, latency, 5xx, auth failures from the
-  existing middleware into `telemetry.health_metric` (existing table).
-- `observability/store.py`: host CPU/RAM/disk via `psutil`; uptime self-report.
-- `mcp/monitoring/`: query API exposing the A-W/B-A subsection metrics.
-- Repoint `thresholds.py` from `"prometheus"` source to the in-app store.
-- **Verify:** real requests produce rows; numbers match manual counts; the §5
-  thresholds table reproduces identical healthy/warning/critical verdicts from the
-  new source; `test_monitoring.py` extended and green.
+### Phase 8 — Preflight CI gate & image hygiene — PENDING
+Owns prompt task 8.
 
-### Phase 3 — Alerting MCP (Alertmanager replacement)
-- `mcp/alerting/`: threshold breach → dedupe (fire once per window) → email via
-  existing SMTP config → tracked in its own audit table.
-- **Verify:** simulated breach sends exactly one email; second breach in window is
-  silenced; happy path + 401 tests green.
+- `scripts/preflight.py` — non-zero exit on any failure, one-line report per check:
+  terminal/shell MCP reachable from prod config → FAIL · `ENABLE_ADMIN_MCP=true` in prod → FAIL · agent env contains `SECRET_KEY`/SMTP/unrelated keys → FAIL · telemetry job without redaction wiring → FAIL · provider outside allowlist on any job → FAIL · `.opencode` in the built backend image → FAIL · agent DB user not read-only-restricted → FAIL · Prometheus/Grafana exposed on edge → FAIL · egress-audit rows missing after a test scan → FAIL.
+- Backend image excludes `.opencode/`.
 
-### Phase 4 — Security MCP + AI Analyst (intellectual core — owner directive 5)
-- `mcp/security/`: failed-login clustering, injection-attempt detection in feedback
-  rows, token misuse signals.
-- `mcp/analyst/`: LLM analyst produces structured findings with machine-verifiable
-  evidence (`tool_call_audit` reconciliation, per SCAN-AGENT §3); planted prompt
-  injections in data are reported as findings, never obeyed.
-- Admin UI (`admin/features/monitoring/`): security-health progress bar, threat
-  cards, compact grid. Page does not scroll horizontally; vertical scroll only
-  within a card. Lazy-loaded; bundle size checked before merge.
-- **Verify:** `npx tsc`, `npm run build`, lint, bundle-size budget; reconciliation
-  correctly rejects a fabricated number; scan of a clean DB returns healthy, not error.
+Verify: preflight passes on this repo; `docker run --rm <backend-image> ls .opencode` fails.
 
-### Phase 5 — Directory bundling (owner directive 2)
-- Execute the tree above; slim `ops/` to `ops/_legacy/` (kept read-only as reference).
-- LLM-feature mapping enforced by a test (each `llms/*.py` maps to exactly one feature).
-- **Verify:** shared-layer purity (`grep -r "from.*features" src/shared` = zero),
-  build chunk sizes recorded and compared, all tests green.
+### Phase 9 — Docs, ADR & recorded demo — PENDING
+Owns prompt task 9 + final acceptance.
 
-### Phase 6 — Removal (owner directive 1 — parity gate)
-- All 7 monitoring containers deleted + 3 volumes + `ops/_legacy/` in ONE commit,
-  only after the parity checklist below passes for a full parity week.
-- **Verify:** `docker compose config` valid; app boots with no removed service;
-  documented rollback path (revert commit = restore).
+- `README.md`: new env vars, provider routing, preflight usage.
+- `docs/observability/SCAN-AGENT.md` §4 gains the egress-gate rule ("every response redacted before entering context; raw rows never sent").
+- ADR note at docs top: hosted-free-OSS chosen by operator decision; local fallback (ollama, optional/disabled) available but not required.
+- Record ONE end-to-end demo scan: subsection filled, audit rows show provider = nvidia_nim, `bytes_out` = redacted payload size.
 
-### Phase 7 — Feature expansion (owner directive 4) — continuous
-- New features each carry: name, bundle location, LLM file used (if any),
-  free-tier cost check, happy+401 test, progress-bar surface for its subsystem.
-- Running app size budget re-checked every phase; **bulky = that phase rolls back.**
+### Phase 10 — Legacy removal (v1 parity gate, UNCHANGED) — GATED
+Directive 1. All 7 monitoring containers deleted + 3 volumes in ONE commit, only after the parity table below passes for a full 7-day parity week, and only while preflight keeps guarding the edge. Rollback = revert commit.
 
 ---
 
-## 3. Parity checklist (the Phase 6 deletion gate)
+## Parity checklist (the Phase 10 deletion gate)
 
-Status values: `pending` → `implemented (MCP settled, 7-day gate running)` →
-`verified`. A row only becomes `verified` when its MCP reproduces the old
-behavior AND the `test_monitoring.py` suite passes against the new source for
-7 consecutive days.
+Status: `pending` → `implemented (7-day gate running)` → `verified`. Rows 1–3/6–8 are being fed by the in-app stores since Phase 2; nothing is deleted until every row is `verified`.
 
 | # | Requirement | Current owner | MCP owner | Status |
 |---|-------------|---------------|-----------|--------|
 | 1 | p95 latency finding | thresholds.py | health_metric (in-app histogram deltas) | implemented (Phase 2) — gate running |
 | 2 | HTTP 5xx-rate finding | thresholds.py | health_metric (in-app HTTP mix) | implemented (Phase 2) — gate running |
 | 3 | DB query p95 finding | thresholds.py | health_metric (in-app histogram deltas) | implemented (Phase 2) — gate running |
-| 4 | 8 subsection ScanResult verdicts | telemetry.scan_result | analyst MCP | pending |
+| 4 | 8 subsection ScanResult verdicts | telemetry.scan_result | analyst MCP (Phase 5 runtime) | pending |
 | 5 | Incident transitions | telemetry.status_transition | monitoring MCP | pending |
-| 6 | Tool-call audit + reconciliation | telemetry.tool_call_audit | mcp/core (Phase 1) | implemented (Phase 1) — gate running |
+| 6 | Tool-call audit + reconciliation | telemetry.tool_call_audit | mcp/core (Phases 1+5) | implemented — gate running |
 | 7 | Host CPU/RAM/disk/net | node_exporter + cadvisor | psutil via observability/host | implemented (Phase 2) — gate running |
 | 8 | Uptime probes | blackbox-exporter | reader-derived coverage (observability/uptime) | implemented (Phase 2) — gate running |
 | 9 | Alert routing + silencing | alertmanager | alerting MCP + SMTP | pending |
 | 10 | Dashboards | grafana | admin UI | pending |
 
-A row may only be checked when its MCP reproduces the old behavior AND the
-`test_monitoring.py` suite passes against the new source for 7 consecutive days.
+## Free-forever gate (unchanged)
 
-Implementation notes for the implemented rows (Phase 2, verified by tests):
+No paid API, no trial-expiring service, no free-tier-that-bills-later dependency.
+Allowed: NVIDIA NIM (primary), OpenRouter (`:free` models, fallback), ollama
+(optional disabled local fallback), existing Gmail SMTP. Anything else needs
+owner sign-off. Every new dependency: open-source, merged into the bundle,
+justified for size (psutil, prometheus_client already carried this bar).
 
-- Rows 1–3 were already fed by the in-app instruments (`health.sample_once`
-  writes `telemetry.health_metric` from `prometheus_client` deltas) — Phase 2
-  repointed the `thresholds.py` Finding source labels from `prometheus` / the
-  external exporters (`node_exporter`, `uptime_kuma`) to the actual stores:
-  `health_metric` and `psutil`.
-- Row 7 is `observability/host.py`: psutil read in-process, per-metric failure
-  isolation, network bytes as deltas with a reboot-safe floor of 0.
-- Row 8 is `observability/uptime.py`: uptime is computed at read time from
-  sample coverage (anchored to the platform's oldest surviving sample);
-  rows keep `uptime_pct` NULL by design, the A_W collector no longer needs an
-  external prober to fill it.
+## Working rules (carried forward)
 
----
+- Dormant-by-default: new agent code is imported only by tests, the scan worker, and preflight — never by `main.py` or live request paths.
+- SQLModel patterns per AGENTS.md: `session.exec(select(...))`, server-side timestamp defaults, Alembic for schema changes.
+- Never commit `.env`, `database/classpilot.db`, `uploads/`, `.opencode/` edits.
+- Pre-PR: `pytest tests/ -q` green; frontend build/lint/tsc green if touched.
 
-## 4. Free-only gate (applies to EVERY phase)
+## Acceptance criteria (v2)
 
-- No paid API, no trial-expiring service, no free-tier-that-bills-later dependency.
-- Providers allowed: NVIDIA NIM (free tier), OpenRouter (free models only),
-  Ollama (local), SMTP (existing Gmail app password). Anything else needs owner sign-off.
-- Every new dependency must be: open-source, merged into the bundle, and justified for
-  bundle size.
+- [ ] Failure mode: telemetry job with redaction unwired → clear startup error, NO request sent.
+- [ ] Planted email/JWT/phone/IP in DB can never appear in any tool output or LLM request body (asserted on captured requests).
+- [ ] Provider outside allowlist → config rejected at startup.
+- [ ] `reconcile()` catches a deliberately wrong cited number (test).
+- [ ] Executor rejects non-enum action; audit row exists for every proposal.
+- [ ] `docker compose config` shows required networks + internal flag.
+- [ ] `docker run --rm <backend-image> ls .opencode` fails (dev files absent).
+- [ ] `scripts/preflight.py` passes on this repo.
+- [ ] One end-to-end demo scan recorded: subsection filled, audit rows show provider = nvidia_nim, `bytes_out` = redacted payload size.
+- [ ] All new + existing tests green; README and SCAN-AGENT.md updated.
