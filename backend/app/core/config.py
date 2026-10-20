@@ -143,6 +143,12 @@ class Settings(BaseSettings):
     #: labelled unverified rather than quietly assumed good.
     enable_store_verify: bool = Field(default=False, alias="ENABLE_STORE_VERIFY")
 
+    #: Mount the HTTP MCP endpoint (`/api/mcp/*`). Off by default: it is a
+    #: console for the scan tools, and an installation that does not use it
+    #: should not have the paths at all. When it is on, only admins may list
+    #: or call the tools - a student token gets an empty list.
+    enable_admin_mcp: bool = Field(default=False, alias="ENABLE_ADMIN_MCP")
+
     @field_validator("llm_provider")
     @classmethod
     def _provider_must_be_free(cls, value: str) -> str:

@@ -22,7 +22,6 @@ from typing import Any, Callable
 
 from sqlmodel import Session
 
-from features.monitoring.domain.models import ToolCallAudit
 from mcp.core import redact as _redaction
 
 logger = logging.getLogger(__name__)
@@ -326,6 +325,12 @@ def write_audit(
     answer for the reconciler to check the model's numbers against.
     """
     import json
+
+    # Imported here, not at module level: the registry is the lower layer,
+    # and a module-level import of the monitoring models would drag the whole
+    # API and services layer in - which imports the registry back, and the
+    # cycle only shows up when the registry is imported first.
+    from features.monitoring.domain.models import ToolCallAudit
 
     session.add(
         ToolCallAudit(

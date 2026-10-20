@@ -47,6 +47,11 @@ Thumbs.db
 .env.*
 !.env.example
 
+# The v1 scan-agent tooling (opencode config + its shell MCP server).
+# It must never reach an image: a shell server in a production image is a
+# terminal with the app's environment. Phase 10 removes it from the repo.
+.opencode/
+
 # Logs
 *.log
 logs/

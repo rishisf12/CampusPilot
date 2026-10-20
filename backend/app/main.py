@@ -236,6 +236,14 @@ app.include_router(security_routes.router, tags=["Admin - Security"])
 app.include_router(collect_router)
 app.include_router(monitoring_router)
 
+# The HTTP MCP endpoint is optional and off by default: with the flag false
+# the paths do not exist at all, rather than existing and refusing.
+if settings.enable_admin_mcp:
+    from mcp.api.routes import router as mcp_router
+
+    app.include_router(mcp_router, prefix="/api/mcp", tags=["Admin - MCP"])
+    logger.info("admin MCP endpoint mounted at /api/mcp (ENABLE_ADMIN_MCP=true)")
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -49,6 +49,11 @@ services:
       - effective_cache_size=1GB
       - -c
       - random_page_cost=1.1
+    # The database has no route to the internet: it is only on the internal
+    # network. The published port is for the host (migrations, psql), not for
+    # other machines.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -68,6 +73,9 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    # Reaches the database on the internal network only; no route out.
+    networks:
+      - app-internal
 
   # ================================================================
   # Application Services
@@ -132,7 +140,14 @@ services:
       - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434/v1}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # The optional admin MCP console. Off by default: with the flag false
+      # the endpoint is not mounted at all.
+      - ENABLE_ADMIN_MCP=${ENABLE_ADMIN_MCP:-false}
+      # Read-only telemetry access for anything that only analyses: the
+      # `monitoring_ro` role can SELECT the telemetry tables and nothing
+      # else. Left empty on purpose - only a sidecar that needs it should
+      # carry it.
+      - MONITORING_RO_URL=${MONITORING_RO_URL:-}
     volumes:
       - database:/app/database
       - ./backend/app/uploads:/app/backend/uploads
@@ -146,6 +161,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    # The backend is the only service with a route out: SMTP and the single
+    # permitted egress path (the LLM provider call). Everything else it
+    # talks to lives on the internal network.
+    networks:
+      - edge
+      - app-internal
     deploy:
       resources:
         limits:
@@ -165,6 +186,9 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    # The public face: on the edge, and on nothing else.
+    networks:
+      - edge
     deploy:
       resources:
         limits:
@@ -193,6 +217,10 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    # Internal only: no route out of the compose network, and not
+    # on the edge network either.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -215,6 +243,10 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
     restart: unless-stopped
+    # Internal only: no route out of the compose network, and not
+    # on the edge network either.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -237,6 +269,10 @@ services:
       prometheus:
         condition: service_started
     restart: unless-stopped
+    # Internal only: no route out of the compose network, and not
+    # on the edge network either.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -288,6 +324,10 @@ services:
     volumes:
       - victoria_logs_data:/victoria-logs-data
     restart: unless-stopped
+    # Internal only: no route out of the compose network, and not
+    # on the edge network either.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -317,6 +357,10 @@ services:
       victoria-logs:
         condition: service_started
     restart: unless-stopped
+    # Internal only: no route out of the compose network, and not
+    # on the edge network either.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -336,6 +380,10 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     privileged: true
     restart: unless-stopped
+    # Internal only: no route out of the compose network, and not
+    # on the edge network either.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -353,6 +401,10 @@ services:
     volumes:
       - ops/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     restart: unless-stopped
+    # Internal only: no route out of the compose network, and not
+    # on the edge network either.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -378,6 +430,10 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    # Internal only: no route out of the compose network, and not
+    # on the edge network either.
+    networks:
+      - app-internal
     deploy:
       resources:
         limits:
@@ -390,12 +446,26 @@ services:
   # ================================================================
   # Networks
   # ================================================================
+# Two networks, and the difference is the point:
+#
+#   edge         - the only network with a route to the internet. The
+#                  frontend and the backend live here; the backend needs it
+#                  for SMTP and for the one permitted egress path (the LLM
+#                  provider call).
+#   app-internal - `internal: true`, so no container on it can reach
+#                  anything outside the compose network. The database, the
+#                  rollup worker and the whole monitoring stack live here.
+#
+# A container that is only on app-internal has no internet access at all: a
+# scrape, a rollout or a compromise inside it cannot call out.
 networks:
-  default:
-    name: campuspilot-network
+  edge:
+    name: campuspilot-edge
     driver: bridge
-    # Internal network with no internet access for security services
-    # internet-facing services should use a separate network
+  app-internal:
+    name: campuspilot-internal
+    driver: bridge
+    internal: true
 
 # ================================================================
 # Volumes

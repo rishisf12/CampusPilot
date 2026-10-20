@@ -146,9 +146,30 @@ jobs:
           pip install -r requirements.txt
           python -m py_compile app/main.py
 
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          cd CampusPilot/backend
+          pip install -r requirements.txt
+          pip install pyyaml
+      - name: Run the agent-tooling preflight
+        # Nine checks: no shell MCP in the production config, the admin MCP
+        # console off by default, no application secret outside the backend,
+        # the egress gate wired, every provider on the free allowlist, no
+        # .opencode in the image, the agent's database role read-only, the
+        # monitoring stack off the edge, and egress audit rows after a scan.
+        run: python scripts/preflight.py
+
   notify:
     runs-on: ubuntu-latest
-    needs: [backend-lint, frontend-lint, backend-tests, frontend-tests, enforce-monitoring, enforce-api-docs, build]
+    needs: [backend-lint, frontend-lint, backend-tests, frontend-tests, enforce-monitoring, enforce-api-docs, build, preflight]
     if: failure()
     steps:
       - name: Notify on failure

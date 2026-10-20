@@ -25,6 +25,13 @@ COPY backend/alembic ./backend/alembic
 COPY tools ./tools
 COPY database ./database
 
+# Image hygiene: the v1 scan-agent tooling (the opencode config and its shell
+# MCP server) must never be in the image. A shell server inside a production
+# image is a terminal with the app's environment. The copies above are
+# explicit paths, so this cannot happen by accident - this line makes it a
+# build failure if someone widens them.
+RUN test ! -e /app/.opencode
+
 # Create uploads directory
 RUN mkdir -p /app/backend/uploads
 
