@@ -68,7 +68,7 @@ python-jose[cryptography]==3.3.0
 apscheduler==3.10.4
 # LangGraph/LangChain for agent pipeline (pinned for Pydantic 2.10 compatibility)
 langgraph==0.2.0
-langchain-core==0.2.0
+langchain-core>=0.2.27,<0.3
 langchain-community==0.2.0
 # OpenAI-compatible LLM clients
 openai==1.35.0
