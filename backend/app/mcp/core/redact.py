@@ -93,11 +93,26 @@ _TEXT_PATTERNS: tuple[tuple[re.Pattern[str], Any], ...] = (
 
 def redact(text: str) -> str:
     """Mask every recognisable PII shape in `text`. See module docstring."""
-    if not text:
-        return text
     for pattern, repl in _TEXT_PATTERNS:
         text = pattern.sub(repl, text)
     return text
+
+
+def redact_counted(text: str) -> tuple[str, int]:
+    """`redact()` that also counts *matched occurrences*, not masked strings.
+
+    The ToolResult walker counts "a string changed"; the LLM prompt egress
+    counts masks applied (each email/phone/IP is one). Same trade either way -
+    the exact number is only ever as good as the regexes - but occurrence
+    counting is what goes in the audit column.
+    """
+    if not text:
+        return text, 0
+    count = 0
+    for pattern, repl in _TEXT_PATTERNS:
+        text, n = pattern.subn(repl, text)
+        count += n
+    return text, count
 
 
 #: Dict keys whose value is a credential and gets blanked entirely, rather than

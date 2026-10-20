@@ -17,6 +17,8 @@ import asyncio
 import hashlib
 import inspect
 import time
+import json
+import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -76,6 +78,10 @@ from features.monitoring.services.llm_client import (
     resolve_llm_config,
     LLMError,
 )
+from llms import LLMConfigError
+from mcp.core import redact as _redaction
+from mcp.core.registry import assert_redaction_wired, salt_for
+from features.monitoring.domain.models import ToolCallAudit
 from observability.uptime import coverage_pct
 from core.config import get_settings
 
@@ -518,8 +524,12 @@ def run_stage2_scan(
             # FastAPI runs those in a worker thread, so this cannot collide with
             # an event loop.
             llm_verdict = asyncio.run(
-                _run_llm_stage(subsection, verdict, collected_data, start, end)
+                _run_llm_stage(subsection, verdict, collected_data, start, end, scan_id=scan_id)
             )
+        except LLMConfigError:
+            raise  # a misconfigured provider/refused job is not a degradation:
+            # the operator named something off the allowlist - failing loudly
+            # is the "no request sent" contract, not a fallback to Stage 1.
         except Exception as e:  # noqa: BLE001 - stage 2 is an enhancement; failures degrade to stage 1
             # LLM failed - log and fall back to Stage 1 only
             import logging
@@ -741,13 +751,41 @@ async def _run_llm_stage(
     collected_data: dict,
     start: datetime,
     end: datetime,
+    scan_id: str,
 ) -> ScanNarrative:
-    """Run the LLM stage to generate summary, root causes, and actions."""
-    settings = get_settings()
+    """Run the LLM stage to generate summary, root causes, and actions.
 
+    This is the only place a telemetry payload leaves the backend for a model,
+    so the Phase 4 egress contract lives here:
+
+    1. Refuse before anything is built — no request sent — when the egress gate
+       is not verified inside `run_tool` (`assert_redaction_wired`) or when the
+       named provider is not on the free allowlist (`resolve_llm_config`
+       raises `LLMConfigError`).
+    2. Defense in depth on the wire: the user prompt is passed through
+       `redact_counted` even though tool output that reached the collector is
+       already egressed — the prompt is what actually leaves the machine, so
+       the gate fires on what is sent, not on what was assembled.
+    3. Whatever the outcome (success, endpoint down, refusal mid-flight), one
+       `tool_call_audit` row is written with `sent_to`, `redactions_applied`,
+       `bytes_out` and `redaction_salt` — sharing the scan's salt so the
+       pseudonyms in the prompt match those in its tool rows.
+    """
+    settings = get_settings()
+    assert_redaction_wired()
     config = resolve_llm_config(settings)
+    if config is None:
+        raise LLMConfigError(
+            "scan_llm_enabled but LLM_PROVIDER is off/unset - Stage 2 refuses to start"
+        )
 
     system_prompt = load_system_prompt()
+
+    # Wire-gate step 1: walk the collected data itself - pseudonymizes id-keyed
+    # fields and masks strings - before it is serialized into the prompt.
+    salt = salt_for(scan_id)
+    collected_data, gate_redactions = _redaction.redact_value(collected_data, salt)
+
     user_prompt = build_user_prompt(subsection, {
         "status": stage1_verdict.status.value,
         "findings": [
@@ -774,25 +812,99 @@ async def _run_llm_stage(
         ],
     }, collected_data)
 
-    async with LLMClient(config) as client:
-        # Verify the endpoint is reachable before spending a Stage 2 call.
-        healthy = await client.health_check()
-        if not healthy:
-            raise LLMError("LLM endpoint not available or model not loaded")
+    # Wire-gate step 2: the assembled prompt (what actually goes out) is
+    # masked again as defense in depth - the walker in step 1 covers structured
+    # data, this covers anything a string join could have introduced.
+    user_prompt, prompt_redactions = _redaction.redact_counted(user_prompt)
+    redactions = gate_redactions + prompt_redactions
+    payload = json.dumps(
+        {"system": system_prompt, "user": user_prompt},
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
 
-        result = await client.chat_completion(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            # The narrow narrative shape, not the full `ScanResult`. Status and
-            # findings are overwritten with the rule engine's values immediately
-            # below, so asking the model for them only burns tokens restating
-            # numbers that are discarded.
-            response_model=ScanNarrative,
-            temperature=0.1,
-            max_tokens=512,
+    started = time.perf_counter()
+    ok, error = False, None
+    try:
+        async with LLMClient(config) as client:
+            # Verify the endpoint is reachable before spending a Stage 2 call.
+            healthy = await client.health_check()
+            if not healthy:
+                raise LLMError("LLM endpoint not available or model not loaded")
+
+            result = await client.chat_completion(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                # The narrow narrative shape, not the full `ScanResult`. Status and
+                # findings are overwritten with the rule engine's values immediately
+                # below, so asking the model for them only burns tokens restating
+                # numbers that are discarded.
+                response_model=ScanNarrative,
+                temperature=0.1,
+                max_tokens=512,
+            )
+        ok = True
+        return result
+    except Exception as exc:  # noqa: BLE001 - the result/error pair is audited below
+        error = f"{type(exc).__name__}: {exc}"
+        raise
+    finally:
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        _write_llm_audit_row(
+            scan_id=scan_id,
+            subsection=subsection,
+            config=config,
+            redactions=redactions,
+            payload=payload,
+            ok=ok,
+            error=error,
+            duration_ms=duration_ms,
         )
 
-        return result
+
+def _write_llm_audit_row(
+    *,
+    scan_id: str,
+    subsection: str,
+    config,
+    redactions: int,
+    payload: bytes,
+    ok: bool,
+    error: Optional[str],
+    duration_ms: int,
+) -> None:
+    """Every outbound LLM request writes one audited row (architecture rule 10).
+
+    Tool-call rows leave the egress columns NULL; this writes an `llm.*` row
+    that fills them. A failed insert is logged but never masks the primary
+    outcome - it has its own ERROR-level trail.
+    """
+    from core.database import session_scope
+
+    log = logging.getLogger(__name__)
+    try:
+        with session_scope() as session:
+            session.add(
+                ToolCallAudit(
+                    scan_id=scan_id,
+                    tool="llm.stage2_narrative",
+                    args={
+                        "job_kind": "telemetry",
+                        "model": config.model,
+                        "subsection": subsection,
+                    },
+                    row_count=1,
+                    duration_ms=duration_ms,
+                    ok=ok,
+                    error=error,
+                    sent_to=config.provider,
+                    redactions_applied=redactions,
+                    bytes_out=len(payload),
+                    redaction_salt=salt_for(scan_id),
+                )
+            )
+    except Exception:
+        log.exception("failed to write the LLM egress audit row for scan %s", scan_id)
 
 
 # ---------------------------------------------------------------------------

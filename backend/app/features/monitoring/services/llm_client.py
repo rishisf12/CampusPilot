@@ -27,14 +27,18 @@ logger = logging.getLogger(__name__)
 class LLMConfig(BaseModel):
     """Configuration for the Stage 2 client.
 
-    Provider-agnostic: every supported backend speaks the OpenAI
-    chat-completions shape. Only the base URL, model and key change.
-    `api_key` empty means no auth header, which is correct for servers
-    that need none.
+    Provider-agnostic transport: every supported backend speaks the OpenAI
+    chat-completions shape, so only base URL, model and key change. But the
+    *named* provider is gated by the free allowlist in `llms/` — `resolve()`
+    refuses anything else. `api_key` empty means no auth header, which is
+    correct for servers that need none.
     """
 
-    #: Empty by default: there is no sensible built-in endpoint. Stage 2 stays
-    #: off unless the operator points `LLM_BASE_URL` at a reachable server.
+    #: Which allowlisted provider this config came from. Also what the LLM
+    #: egress audit row records as `sent_to`.
+    provider: str = ""
+
+    #: Empty by default: the operator's config decides (see resolve_llm_config).
     base_url: str = ""
     model: str = ""
     api_key: str = ""
@@ -57,16 +61,39 @@ class LLMError(Exception):
     """LLM-related error."""
 
 
-def resolve_llm_config(settings) -> "LLMConfig":
-    """Build the Stage 2 client config from settings.
+def resolve_llm_config(settings) -> Optional["LLMConfig"]:
+    """Build the Stage 2 client config from settings — or refuse.
 
-    `GROQ_API_KEY` is accepted as a fallback key name because that is what
-    Groq's own dashboard labels it.
+    Rules (Phase 4 of the MCP migration plan):
+
+    - `LLM_PROVIDER=off` (or unset) -> `None`: no LLM, Stage 2 skipped.
+    - a provider on the free allowlist (`nvidia_nim`, `openrouter`, `ollama`)
+      resolves through `llms.resolve`, which reads the provider's own env key.
+      `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` remain plumbing overrides on
+      top of the resolved endpoint.
+    - any other named provider is refused with `LLMConfigError` — including the
+      historic `"openai-compatible"` value, which could point anywhere and is
+      exactly what the allowlist exists to prevent. Nothing is sent.
     """
+    provider = (getattr(settings, "llm_provider", "") or "").strip().lower()
+    if provider in ("", "off"):
+        return None
+
+    from llms import ALLOWED_PROVIDERS, LLMConfigError, resolve as resolve_llm
+
+    if provider not in ALLOWED_PROVIDERS:
+        raise LLMConfigError(
+            f"LLM_PROVIDER {provider!r} is not on the free allowlist "
+            f"({sorted(ALLOWED_PROVIDERS)}); Stage 2 refuses to start and no "
+            "request is sent. Historic value 'openai-compatible' is no longer "
+            "accepted - name nvidia_nim, openrouter or ollama."
+        )
+    resolved = resolve_llm(provider)
     return LLMConfig(
-        base_url=settings.llm_base_url,
-        model=settings.llm_model,
-        api_key=settings.llm_api_key or getattr(settings, "groq_api_key", "") or "",
+        provider=resolved.provider,
+        base_url=settings.llm_base_url or resolved.base_url,
+        model=settings.llm_model or resolved.model or "",
+        api_key=settings.llm_api_key or resolved.api_key or "",
         timeout=settings.llm_timeout,
     )
 

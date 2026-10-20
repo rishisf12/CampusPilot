@@ -109,10 +109,9 @@ ENABLE_SCHEDULER=true
 ENABLE_VISION=false
 ENABLE_BANNER_GEN=false
 ENABLE_AUDIO_SUMMARY=false
-NVIDIA_NIM_API_KEY=your-nvidia-nim-key
+NVIDIA_API_KEY=your-nvidia-nim-key
 OPENROUTER_API_KEY=your-openrouter-key
 OLLAMA_BASE_URL=http://ollama:11434/v1
-OPENAI_API_KEY=your-openai-key
 ```
 
 Admin UI: http://localhost:8002 (OppFeed tab: Dashboard, Agent Runs, Opportunities, Settings, LLM Status)
@@ -409,10 +408,9 @@ ENABLE_SCHEDULER=false
 ENABLE_VISION=false
 ENABLE_BANNER_GEN=false
 ENABLE_AUDIO_SUMMARY=false
-NVIDIA_NIM_API_KEY=
+NVIDIA_API_KEY=
 OPENROUTER_API_KEY=
 OLLAMA_BASE_URL=http://ollama:11434/v1
-OPENAI_API_KEY=
 ```
 
 ---

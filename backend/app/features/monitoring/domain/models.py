@@ -22,7 +22,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from sqlalchemy import JSON, DateTime, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Integer, String, Text, UniqueConstraint, func
 # Aliased, not imported as `Enum`: a bare `Enum` here would shadow `enum.Enum`
 # from line 22, and every `class X(str, Enum)` below would then be built on
 # SQLAlchemy's *type* rather than the stdlib enum. SQLAlchemy's isinstance
@@ -426,6 +426,17 @@ class ToolCallAudit(SQLModel, table=True):
         default=None,
         sa_column=Column("at", DateTime, nullable=False, server_default=func.now()),
     )
+    # -- Phase 4: LLM egress auditing ---------------------------------------
+    # Rows written by tool calls leave these NULL; outbound LLM requests write
+    # their own row (tool name `llm.*`) and fill every one. Together they are
+    # the "every outbound request is audited" rule: sent_to names the provider
+    # that consumed what, redactions_applied counts the masks the egress gate
+    # applied, bytes_out is the redacted payload size on the wire, and
+    # redaction_salt is the per-run salt those pseudonyms were derived from.
+    sent_to: Optional[str] = Field(default=None, sa_column=Column("sent_to", String(255), nullable=True))
+    redactions_applied: Optional[int] = Field(default=None, sa_column=Column("redactions_applied", Integer, nullable=True))
+    bytes_out: Optional[int] = Field(default=None, sa_column=Column("bytes_out", Integer, nullable=True))
+    redaction_salt: Optional[str] = Field(default=None, sa_column=Column("redaction_salt", String(64), nullable=True))
 
 
 # =============================================================================

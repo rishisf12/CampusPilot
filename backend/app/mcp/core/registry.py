@@ -153,6 +153,47 @@ def _salt_for(scan_id: str) -> str:
     return salt
 
 
+#: Public alias: the Stage 2 LLM egress shares one scan's salt with its tools,
+#: so pseudonyms line up between tool output and prompt text.
+salt_for = _salt_for
+
+_redaction_verified: bool | None = None
+
+
+def redaction_wired() -> bool:
+    """Tripwire: is the egress gate actually inside `run_tool`?
+
+    The egress rule has no second enforcement point downstream of the scan
+    consumer, so if a refactor ever silently removed the `_egress` call from
+    `run_tool`, tool output would go straight to the model unredacted. This
+    inspects `run_tool`'s own source once per process and caches the answer -
+    not proof of correctness, but a loud tripwire against exactly the kind of
+    regression that hides in an otherwise-green test suite.
+    """
+    global _redaction_verified
+    if _redaction_verified is None:
+        import inspect
+
+        src = inspect.getsource(run_tool)
+        _redaction_verified = (
+            "_egress(result" in src and "_redaction.redact_value(" in inspect.getsource(_egress)
+        )
+    return _redaction_verified
+
+
+def assert_redaction_wired() -> None:
+    """Refuse loudly if the egress gate is not in `run_tool`'s path.
+
+    Called by telemetry LLM jobs (via `llms.resolve_for_job`) before anything
+    is sent: the raised `ToolError` is the "no request sent" refusal.
+    """
+    if not redaction_wired():
+        raise ToolError(
+            "egress gate not wired into run_tool - refusing telemetry job "
+            "(no request sent); inspect mcp.core.registry run_tool"
+        )
+
+
 def _egress(result: ToolResult, salt: str) -> tuple[ToolResult, dict[str, Any]]:
     """The single egress point: redact + pseudonymize + cap rows (anonymization optics).
 
