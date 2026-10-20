@@ -6,7 +6,7 @@ The reordering matters, so these pin the new order down:
     /auth/signup/start  ->  /auth/signup/verify  ->  /auth/signup
 
 and check the properties that make it safe: nothing is created until the address
-is proven, the first step cannot be used to discover who has an account, and the
+is proven, a registered address gets no code and only a sign-in hint, and the
 code cannot be guessed.
 """
 import sys
@@ -123,8 +123,11 @@ class TestStartStep:
         with pytest.raises(svc.SignupVerificationError):
             svc.start(db, "not-an-email")
 
-    def test_a_duplicate_address_is_not_revealed(self, client, db):
-        """Asking about a registered address must look like asking about any other."""
+    def test_a_registered_address_is_refused_with_a_signin_hint(self, client, db):
+        """The contract changed deliberately: "start" itself refuses an address a
+        User already owns, and does not send it a code. It names no resend-all
+        message for the taken address - the single RegisteredAddress message is
+        the whole response."""
         db.add(
             User(
                 email=EMAIL,
@@ -135,10 +138,15 @@ class TestStartStep:
             )
         )
         db.commit()
-        taken = client.post("/auth/signup/start", json={"email": EMAIL}).json()
+        taken = client.post("/auth/signup/start", json={"email": EMAIL})
         _purge(db)
-        free = client.post("/auth/signup/start", json={"email": "brandnew@iiitdmj.ac.in"}).json()
-        assert taken == free
+        free = client.post("/auth/signup/start", json={"email": "brandnew@iiitdmj.ac.in"})
+        assert taken.status_code == 400
+        assert taken.json() == {
+            "detail": "This email is already associated with an account. "
+            "Please sign in to continue."
+        }
+        assert free.status_code == 200
 
     def test_resending_too_soon_looks_the_same_as_sending(self, client, db):
         first = client.post("/auth/signup/start", json={"email": EMAIL})

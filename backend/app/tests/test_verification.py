@@ -203,20 +203,26 @@ class TestRegistrationJourney:
 class TestDuplicateChecks:
     """Reported at the last step, once the requester has proved the mailbox."""
 
-    def test_duplicate_email_is_rejected(self, client, mail):
+    def test_duplicate_email_is_rejected_at_the_start(self, client, mail):
         signup = make_signup()
         prove(client, mail, signup)
         assert client.post("/auth/signup", json=signup).status_code == 200
 
-        # A second attempt on the same address: it proves the address again - which
-        # is allowed - and is only then told the address is taken. Changing to a
-        # *different* address is refused by the verification gate instead, which
-        # is the stricter and more useful answer.
+        # A second attempt on the same address is refused at "start" and sends
+        # nothing: the owner's mailbox is not to be mail-bombed into revealing
+        # itself, so the referral to sign in is the whole answer.
         other = make_signup()
-        prove(client, mail, {**other, "email": signup["email"]})
+        sent_before = len(mail)
+        start = client.post("/auth/signup/start", json={"email": signup["email"]})
+        assert start.status_code == 400
+        assert start.json()["detail"] == (
+            "This email is already associated with an account. Please sign in to continue."
+        )
+        assert len(mail) == sent_before
+        # And the final step must not have become reachable either: no code for
+        # the other details exists on that address.
         res = client.post("/auth/signup", json={**other, "email": signup["email"]})
         assert res.status_code == 400
-        assert "already registered" in res.json()["detail"]
 
     def test_claiming_a_different_address_than_the_one_proved_is_refused(self, client, mail):
         """Proving one mailbox must not let you claim another."""

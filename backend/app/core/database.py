@@ -46,6 +46,15 @@ def engine_kwargs() -> dict:
             "connect_args": {
                 "connect_timeout": settings.db_connect_timeout,
                 "application_name": "campuspilot-api",
+                # Alembic's baseline creates its tables unqualified, so they
+                # land in the search path's FIRST schema (`core`) — the whole
+                # app then reads and writes them unqualified. Every connection
+                # must therefore start with the same core-first search_path,
+                # and it must not depend on which connection a migration left
+                # in the pool (a session-scoped SET survives pooling; an
+                # unqualified INSERT that only works because of it does not
+                # survive a disposed pool).
+                "options": "-csearch_path=core,academic,social,telemetry,public",
                 **({"sslmode": settings.db_sslmode} if settings.db_sslmode != "disable" else {}),
             },
         }

@@ -166,6 +166,11 @@ def _schema():
         ).all():
             conn.execute(text(f'DROP TYPE IF EXISTS public."{type_name}" CASCADE'))
     command.upgrade(cfg, "heads")
+    # Migrations share the app engine; dispose of pooled connections so no
+    # session-scoped state a migration left behind (search_path, timezone...)
+    # leaks into the fixture's sessions. A fresh pool costs milliseconds here
+    # and buys a clean slate for the whole suite.
+    engine.dispose()
     # Catch-up for tables that exist via create_all in prod but never via
     # Alembic (social.feedback, academic.timetable_slot, ...). Prod gets
     # them from create_all on fresh installs; tests get them here so the

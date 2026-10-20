@@ -965,9 +965,12 @@ class TestCollectorRoutes:
         assert r.status_code == 200
         assert r.json() == {"accepted": 2, "rejected": 1}
 
-    def test_refuses_when_telemetry_is_disabled(self, anon_client, db):
+    def test_refuses_when_telemetry_is_disabled(self, anon_client, monkeypatch, db):
         """The default. An open unauthenticated write endpoint should not be
         there just because someone forgot to switch it off."""
+        # Off is the configured default, but a developer .env may enable it;
+        # this test asserts the *setting's* effect, not the machine's luck.
+        monkeypatch.setattr(get_settings(), "telemetry_enabled", False)
         r = anon_client.post("/collect/events", json={"events": [_event()]})
         assert r.status_code == 503
         assert len(db.exec(select(Event)).all()) == 0
