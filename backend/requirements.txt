@@ -60,9 +60,6 @@ requests==2.31.0
 # pillow pinned without a version: 10.3.0 fails to build from source on 3.12+
 pillow
 
-# --- SQLAlchemy (used directly by features.oppfeed.routes) ---
-sqlalchemy>=2.0.0
-
 # --- Auth: python-jose[cryptography] (used by webauthn/passkey) ---
 python-jose[cryptography]==3.3.0
 
