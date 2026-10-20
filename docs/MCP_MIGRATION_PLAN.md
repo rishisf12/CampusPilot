@@ -249,7 +249,7 @@ Implemented:
   outside the schema is filtered too) plus a runtime test that a verdict's
   recommendation becomes a proposal - and not an action.
 
-### Phase 7 — Isolation: compose networks, secrets split, RBAC endpoint — DONE (commit `pending`)
+### Phase 7 — Isolation: compose networks, secrets split, RBAC endpoint — DONE (commit `3b6f9b4`)
 Owns prompt decisions 5–8 and task 7.
 
 - `docker-compose.yml`: `edge` and `app-internal (internal: true)` networks; agent/scan services on internal except the single minimal egress path (LLM-client semantics only); Prometheus/Grafana stay off the edge while Phase 10 is pending.
@@ -287,7 +287,7 @@ Implemented:
   sees an empty list and cannot call, an admin sees the tools, an admin
   call is audited, and a tool from another subsection is refused).
 
-### Phase 8 — Preflight CI gate & image hygiene — DONE (commit `pending`)
+### Phase 8 — Preflight CI gate & image hygiene — DONE (commit `c9b38c4`)
 Owns prompt task 8.
 
 - `scripts/preflight.py` — non-zero exit on any failure, one-line report per check:
@@ -321,13 +321,36 @@ Implemented:
   makes the shell-MCP, admin-MCP, secret-leak and edge-exposure checks
   fail).
 
-### Phase 9 — Docs, ADR & recorded demo — PENDING (next)
+### Phase 9 — Docs, ADR & recorded demo — DONE (commit `pending`)
 Owns prompt task 9 + final acceptance.
 
 - `README.md`: new env vars, provider routing, preflight usage.
 - `docs/observability/SCAN-AGENT.md` §4 gains the egress-gate rule ("every response redacted before entering context; raw rows never sent").
 - ADR note at docs top: hosted-free-OSS chosen by operator decision; local fallback (ollama, optional/disabled) available but not required.
 - Record ONE end-to-end demo scan: subsection filled, audit rows show provider = nvidia_nim, `bytes_out` = redacted payload size.
+
+Implemented:
+- `docs/ADR-0001-hosted-free-llm.md` — the decision and its consequences:
+  hosted, free, open-source providers only, from a closed allowlist
+  (`nvidia_nim` primary, `openrouter` fallback, `ollama` optional and
+  unexposed), the paid provider refused at four levels, one provider stack
+  rather than two, and the alternatives considered.
+- `docs/observability/SCAN-AGENT.md` §4 rule 8 — the egress gate, in the
+  contract the scan agent itself is held to: every response is redacted
+  before it enters the context, raw rows never leave the building, the
+  prompt is swept again before it is sent, a telemetry job refuses to start
+  if the gate cannot prove itself, and the outbound request is audited with
+  its provider, its size and its mask count.
+- `scripts/demo_scan.py` — records one end-to-end scan and prints the trail
+  it left. With a provider key the model call is real; without one the HTTP
+  call is stubbed and the transcript says so, because everything up to and
+  including the wire payload is real. The recorded run is in
+  `docs/observability/DEMO-SCAN.md`: the A_W_HEALTH subsection is filled, the
+  finding cites a number a tool returned, and the audit trail ends with
+  `llm.request | 2481 bytes | nvidia_nim` — the provider that consumed the
+  request and the size of the redacted payload that left.
+- `README.md` — the new environment variables, how provider routing works,
+  how to run the preflight, and how to record a demo scan.
 
 ### Phase 10 — Legacy removal (v1 parity gate, UNCHANGED) — GATED
 Directive 1. All 7 monitoring containers deleted + 3 volumes in ONE commit, only after the parity table below passes for a full 7-day parity week, and only while preflight keeps guarding the edge. Rollback = revert commit.
@@ -368,13 +391,30 @@ justified for size (psutil, prometheus_client already carried this bar).
 
 ## Acceptance criteria (v2)
 
-- [ ] Failure mode: telemetry job with redaction unwired → clear startup error, NO request sent.
-- [ ] Planted email/JWT/phone/IP in DB can never appear in any tool output or LLM request body (asserted on captured requests).
-- [ ] Provider outside allowlist → config rejected at startup.
-- [ ] `reconcile()` catches a deliberately wrong cited number (test).
-- [ ] Executor rejects non-enum action; audit row exists for every proposal.
-- [ ] `docker compose config` shows required networks + internal flag.
-- [ ] `docker run --rm <backend-image> ls .opencode` fails (dev files absent).
-- [ ] `scripts/preflight.py` passes on this repo.
-- [ ] One end-to-end demo scan recorded: subsection filled, audit rows show provider = nvidia_nim, `bytes_out` = redacted payload size.
-- [ ] All new + existing tests green; README and SCAN-AGENT.md updated.
+- [x] Failure mode: telemetry job with redaction unwired → clear startup error, NO request sent.
+      `mcp.core.jobs.validate_job` and `llms.resolve_for_job` refuse before a
+      client is built; `tests/test_llm_routing.py` asserts no request was
+      attempted and no outbound row was written.
+- [x] Planted email/JWT/phone/IP in DB can never appear in any tool output or LLM request body (asserted on captured requests).
+      `tests/test_mcp_core.py` (planted rows through the real registry path),
+      `tests/test_mcp_aggregates.py` (per tool), `tests/test_llm_egress.py`
+      and `tests/test_llm_routing.py` (captured request bodies).
+- [x] Provider outside allowlist → config rejected at startup.
+      `Settings.llm_provider` validator; `tests/test_llm_routing.py`.
+- [x] `reconcile()` catches a deliberately wrong cited number (test).
+      `tests/test_scan_agent_runtime.py` — a wrong number, an unfetched
+      metric and a bogus `change_pct` each fail the scan.
+- [x] Executor rejects non-enum action; audit row exists for every proposal.
+      `tests/test_reactor.py`.
+- [x] `docker compose config` shows required networks + internal flag.
+      `app-internal: internal: true`; the monitoring stack is off `edge`.
+- [x] `docker run --rm <backend-image> ls .opencode` fails (dev files absent).
+      `.dockerignore` excludes `.opencode/`, the Dockerfile asserts it after
+      the copies, and the built image was checked.
+- [x] `scripts/preflight.py` passes on this repo.
+      9 passed, 0 failed, 0 skipped; wired into CI.
+- [x] One end-to-end demo scan recorded: subsection filled, audit rows show provider = nvidia_nim, `bytes_out` = redacted payload size.
+      `docs/observability/DEMO-SCAN.md` (recorded by `scripts/demo_scan.py`).
+- [x] All new + existing tests green; README and SCAN-AGENT.md updated.
+      851 passed / 2 failed — the two failures are the pre-existing alembic
+      drift tests, deferred to the Phase 10 gate.

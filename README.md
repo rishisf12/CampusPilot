@@ -149,6 +149,47 @@ pytest against PostgreSQL: ``TEST_DATABASE_URL=postgresql+psycopg://... python -
 | `ALLOWED_EXTENSIONS` | `.pdf,.csv` | Accepted upload types |
 | `BRANCH_OPTIONS` | `CSE A,CSE B,DS,ECE,ME,SM,PG,MDes` | Canonical branch list |
 | `ADMISSION_YEAR` | `21` | Anchor for roll → semester inference |
+| `LLM_PROVIDER` | `off` | Which named free provider the scan agent may use: `off`, `nvidia_nim`, `openrouter` or `ollama`. Anything else is refused at startup — see [ADR 0001](docs/ADR-0001-hosted-free-llm.md). |
+| `NVIDIA_API_KEY` / `NVIDIA_NIM_API_KEY` | empty | NVIDIA NIM credential. Either name works; `NVIDIA_API_KEY` is canonical. |
+| `OPENROUTER_API_KEY` | empty | OpenRouter credential (the `:free` fallback). |
+| `ENABLE_ADMIN_MCP` | `false` | Mounts the optional admin MCP console at `/api/mcp/*`. Off means the paths do not exist; on means only admins may list or call the tools. |
+| `MONITORING_RO_URL` | empty | Read-only telemetry connection for a sidecar that only analyses (the `monitoring_ro` role can SELECT the telemetry allowlist and nothing else). |
+
+### Provider routing
+
+The model may only be one of three, and only from the free tier:
+
+```
+nvidia_nim  →  openrouter  →  (ollama, optional and unexposed)
+```
+
+`llms/` is the single allowlist surface: a provider outside it is refused at
+the config validator, the resolver, the client factory and the job gate —
+even when a working key for it is in the environment. A `telemetry` job also
+refuses to start if the egress gate cannot prove itself, so nothing raw can
+leave the building. The outbound request is audited with the provider it
+went to and the size of the redacted payload. The reasoning is in
+[ADR 0001](docs/ADR-0001-hosted-free-llm.md).
+
+### Preflight
+
+```bash
+# Nine checks: shell MCP in prod config, admin MCP on, secrets outside the
+# backend, egress gate wired, provider allowlist, .opencode in the image,
+# read-only DB role, monitoring on the edge, egress audit rows after a scan.
+python scripts/preflight.py
+```
+
+It exits non-zero on any failure, and it runs in CI on every push. Add
+`--strict` to treat a skipped check as a failure, and `--image <name>` to
+check a built image for `/app/.opencode`.
+
+To see the whole trail for yourself:
+
+```bash
+# One end-to-end scan, with the audit rows it left behind.
+python scripts/demo_scan.py --subsection A_W_HEALTH
+```
 
 The frontend has no required variables. Set `VITE_API_URL` only if you want to
 bypass the dev proxy and call the API directly.

@@ -315,6 +315,16 @@ not the model's transcription:
 7. **Per-scan allowlist** is enforced server-side from `SCAN_ID` →
    `scan_id → subsection → tool set`. A model asking for `db_stats` during a
    feedback scan gets `tool not permitted`, not the data.
+8. **Every response is redacted before it enters the context.** Raw rows never
+   leave the building. One wiring point — `run_tool` — masks emails, JWTs,
+   card numbers, IP addresses and phone numbers, blanks password and hash
+   fields, pseudonymizes person identifiers (`USER_xxxxxxxx`, salted per run so
+   recurrences stay countable and runs stay unlinkable), and caps list-shaped
+   output at 50 rows. The assembled prompt is swept again before it is sent,
+   and a telemetry job refuses to start if the gate cannot prove itself. The
+   outbound request is audited with the provider it went to, the size of the
+   redacted payload and the number of masks applied — so "what left the
+   building" is answerable from one table.
 
 ---
 
