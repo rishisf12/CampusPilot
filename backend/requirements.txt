@@ -60,6 +60,12 @@ requests==2.31.0
 # pillow pinned without a version: 10.3.0 fails to build from source on 3.12+
 pillow
 
+# --- SQLAlchemy (used directly by features.oppfeed.routes) ---
+sqlalchemy>=2.0.0
+
+# --- Auth: python-jose[cryptography] (used by webauthn/passkey) ---
+python-jose[cryptography]==3.3.0
+
 # --- OppFeed Agent dependencies -----------------------------------------------
 # APScheduler for daily agent job scheduling
 apscheduler==3.10.4
@@ -75,7 +81,7 @@ duckduckgo-search==6.0.0
 beautifulsoup4==4.12.2
 # lxml for fast parsing
 lxml==5.2.0
-# Newspaper3k for article extraction (optional, may need system deps)
+# Newspaper3k for article extraction (optional, may need system deps: libxml2, libxslt)
 # newspaper3k==0.2.8
 # Rate limiting for LLM providers
 aiolimiter==1.1.0
