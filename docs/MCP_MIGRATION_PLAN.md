@@ -207,7 +207,7 @@ Implemented:
   runtime storing `error` rather than `healthy` for a fabricating model, the
   single retry, and the audit rows for every tool the scan ran).
 
-### Phase 6 — Reactive safety: propose-not-execute reactor — PENDING (next)
+### Phase 6 — Reactive safety: propose-not-execute reactor — DONE (commit `b597877`)
 Owns prompt task 3's executor half (architecture rule 4).
 
 - `backend/app/mcp/reactor/` — enum action → procedure map (idempotent, logged, deterministic); every proposal invocation writes `tool_call_audit` with `proposed/executed/rejected`, `sent_to`, `redactions_applied`, `bytes_out`.
@@ -215,7 +215,35 @@ Owns prompt task 3's executor half (architecture rule 4).
 
 Verify: executor rejects a non-enum action (test); audit row exists for every proposal; idempotency asserted per procedure.
 
-### Phase 7 — Isolation: compose networks, secrets split, RBAC endpoint — PENDING
+Implemented:
+- `mcp/reactor/procedures.py` — the closed catalogue. All eleven actions of
+  the `Action` enum map to exactly one playbook each: the steps, how to
+  verify, how to undo, how urgent, and whether a human must carry it out.
+  Every procedure that touches production says so: a rollback, a credential
+  rotation, a rate limit and a store contact are recorded as *advice* and
+  never performed by the system.
+- `mcp/reactor/executor.py` — the only path from a suggestion to a work
+  item. An action outside the catalogue is rejected, audited as a rejection
+  and leaves nothing behind; a target is redacted and bounded; the work item
+  is keyed on (scan, action, target), so the same suggestion twice is one
+  row, not two tasks in an operator's queue.
+- `telemetry.reactor_proposal` (migration `019`) — the durable work item,
+  with the unique constraint as the idempotency guarantee rather than a
+  convention. `tool_call_audit` gains `proposal_state` (proposed | executed
+  | rejected) and `proposal_id`, so every proposal invocation sits in the
+  same trail as the tool calls and LLM requests that led to it.
+- The scan runtime now calls the reactor for a reconciled verdict's
+  recommendations. Proposing is not acting: the reactor refuses what is not
+  on the list, and no production state changes.
+- Tests: `tests/test_reactor.py` (11 — the catalogue is complete, a
+  non-enum action is rejected and audited, a targetless proposal is
+  rejected, the work item and its audit row appear, `no_action` needs no
+  operator, the same suggestion is one row, the same target in another scan
+  is another row, target and detail are redacted, and a verdict built
+  outside the schema is filtered too) plus a runtime test that a verdict's
+  recommendation becomes a proposal - and not an action.
+
+### Phase 7 — Isolation: compose networks, secrets split, RBAC endpoint — PENDING (next)
 Owns prompt decisions 5–8 and task 7.
 
 - `docker-compose.yml`: `edge` and `app-internal (internal: true)` networks; agent/scan services on internal except the single minimal egress path (LLM-client semantics only); Prometheus/Grafana stay off the edge while Phase 10 is pending.
