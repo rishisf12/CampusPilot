@@ -55,9 +55,15 @@ Read-only inventory frozen (verified 2026-10-20):
   reads `NVIDIA_NIM_API_KEY` while the reusable OppFeed clients read
   `NVIDIA_API_KEY`. Phase 4 unifies (accept both, prefer `NVIDIA_API_KEY`)
   so the agent router and OppFeed share one key.
-- **Finding:** `.opencode/` does not exist in the working tree — the
-  no-terminal rule is already satisfied; Phase 8's preflight scripts the
-  check so it fails fast if it ever appears.
+- **Finding:** `.opencode/` **does exist** in the repository and is tracked
+  (`.opencode/opencode.json` with the eight v1 scan agents, and
+  `.opencode/mcp_servers/shell_server.py` — a shell MCP server). An earlier
+  pass in this phase reported it absent; that was wrong, because a glob with
+  the default options skips dot-directories. The v1 shell MCP is exactly
+  what this migration replaces, so the rule it breaks is now explicit:
+  `.opencode/` must never be reachable from a production configuration and
+  must never be inside the built image (Phase 8 scripts both checks, Phase
+  10 removes the directory).
 - `mock`/`opencode_cli` live in OppFeed's own `LLM_PROVIDER_CHAIN`; they are
   NOT part of the agent-tooling `ALLOWED_PROVIDERS` (telemetry jobs).
 
@@ -243,7 +249,7 @@ Implemented:
   outside the schema is filtered too) plus a runtime test that a verdict's
   recommendation becomes a proposal - and not an action.
 
-### Phase 7 — Isolation: compose networks, secrets split, RBAC endpoint — PENDING (next)
+### Phase 7 — Isolation: compose networks, secrets split, RBAC endpoint — DONE (commit `pending`)
 Owns prompt decisions 5–8 and task 7.
 
 - `docker-compose.yml`: `edge` and `app-internal (internal: true)` networks; agent/scan services on internal except the single minimal egress path (LLM-client semantics only); Prometheus/Grafana stay off the edge while Phase 10 is pending.
@@ -252,7 +258,36 @@ Owns prompt decisions 5–8 and task 7.
 
 Verify: `docker compose config` shows the networks + internal flag; agent env contains no `SECRET_KEY`/`SMTP_*`; admin middleware denies student tokens.
 
-### Phase 8 — Preflight CI gate & image hygiene — PENDING
+Implemented:
+- **Two networks.** `edge` carries a route to the internet and holds only
+  the frontend and the backend; `app-internal` is `internal: true`, so a
+  container on it has no way out at all. The database, the rollup worker and
+  the whole monitoring stack (Prometheus, node-exporter, alertmanager,
+  VictoriaLogs, Grafana, cAdvisor, blackbox-exporter) sit on the internal
+  network only — so the dashboards are off the edge while Phase 10 is
+  pending. `docker compose config` shows `app-internal: internal: true`.
+- **Secrets split.** The backend keeps the application secrets; the
+  monitoring stack, the database and the rollup worker receive none. The
+  paid-provider key is gone from the compose file: the allowlist refuses
+  it, so carrying it was pure risk. Ollama stays configured but unexposed
+  and unused by any job.
+- **The read-only role now covers the telemetry schema.** Migration `020`
+  grants `monitoring_ro` USAGE on `telemetry` and SELECT on the SQL
+  allowlist — and nothing else. Verified on the running database: the role
+  reads `telemetry.health_metric` and is refused an INSERT into it. The
+  role stays `default_transaction_read_only = on`.
+- **The optional admin MCP endpoint** (`/api/mcp/*`), off by default
+  (`ENABLE_ADMIN_MCP=false`): with the flag false the router is not mounted,
+  so the paths do not exist. When it is on, a student token gets an *empty*
+  tool list — no names, no parameters, no hint that a toolbox exists — and
+  a call is refused with 403. An admin gets the real list, and a call goes
+  through `run_tool`, so the subsection scoping, the timeout, the row cap
+  and the egress gate all apply and the call is audited like any other.
+- Tests: `tests/test_admin_mcp.py` (6 — the flag defaults to off, a student
+  sees an empty list and cannot call, an admin sees the tools, an admin
+  call is audited, and a tool from another subsection is refused).
+
+### Phase 8 — Preflight CI gate & image hygiene — DONE (commit `pending`)
 Owns prompt task 8.
 
 - `scripts/preflight.py` — non-zero exit on any failure, one-line report per check:
@@ -261,7 +296,32 @@ Owns prompt task 8.
 
 Verify: preflight passes on this repo; `docker run --rm <backend-image> ls .opencode` fails.
 
-### Phase 9 — Docs, ADR & recorded demo — PENDING
+Implemented:
+- `scripts/preflight.py` — nine checks, one line each, exit 1 on any failure.
+  It reads the real files (the compose file, the Dockerfile, the
+  `.dockerignore`, the migrations) and the real database when one is
+  reachable; a check that cannot run reports SKIP rather than pretending to
+  pass, and `--strict` turns a skip into a failure. On this repository it
+  reports **9 passed, 0 failed, 0 skipped**.
+- **Image hygiene.** `.dockerignore` excludes `.opencode/` explicitly, and
+  the Dockerfile asserts it after the copies (`RUN test ! -e /app/.opencode`)
+  so widening the copy list cannot quietly put a shell MCP server into a
+  production image.
+- **CI.** A `preflight` job runs the script on every push and pull request,
+  and the `notify` job depends on it.
+- **A real bug found on the way:** `import mcp.core.registry` failed on its
+  own with a circular import — the registry imported the monitoring models
+  at module level, which dragged the API and services layer in, which
+  imported the registry back. It only surfaced because the preflight imports
+  the registry first. The registry now imports the audit model inside the
+  function that writes the row: the lower layer no longer depends on the
+  upper one at import time.
+- Tests: `tests/test_preflight.py` (7 — the script answers, the static
+  checks pass on this repository, and a deliberately broken compose file
+  makes the shell-MCP, admin-MCP, secret-leak and edge-exposure checks
+  fail).
+
+### Phase 9 — Docs, ADR & recorded demo — PENDING (next)
 Owns prompt task 9 + final acceptance.
 
 - `README.md`: new env vars, provider routing, preflight usage.
