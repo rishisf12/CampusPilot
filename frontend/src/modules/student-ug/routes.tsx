@@ -87,8 +87,16 @@ export function StudentUGRoutes() {
     return requested && NAV_TABS.some(item => item.id === requested) ? requested : 'live';
   });
 
-  // Important sub-tabs
-  const IMPORTANT_TABS = ['academics', 'placement'] as const;
+  // Important sub-tabs: the five sections the college runs under
+  // "Important", in the order they are taught out.
+  const IMPORTANT_TABS = [
+    { id: 'academics', label: 'Academics' },
+    { id: 'placement', label: 'Placement Cell' },
+    { id: 'cultural', label: 'Cultural' },
+    { id: 'technical', label: 'Technical' },
+    { id: 'sports', label: 'Sports' },
+  ] as const;
+  const [importantTab, setImportantTab] = useState<string>('academics');
 
   // The bundle this student belongs to decides the classroom tabs. Chips use
   // the short labels ("Schedule", "Free Rooms") so nothing wraps on a phone;
@@ -303,14 +311,9 @@ export function StudentUGRoutes() {
               style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
             >
               <Tabs
-                tabs={IMPORTANT_TABS.map(item => ({
-                  id: item,
-                  label: item === 'academics' ? 'Academics' : 'Placement Cell',
-                }))}
-                active=""
-                onChange={() => {
-                  // Could add tab state for important if needed
-                }}
+                tabs={IMPORTANT_TABS.map(item => ({ id: item.id, label: item.label }))}
+                active={importantTab}
+                onChange={setImportantTab}
                 onChrome
               />
             </div>
@@ -367,8 +370,10 @@ export function StudentUGRoutes() {
 
           {section === 'important' && (
             <div className="text-center py-12" style={{ color: 'var(--cp-muted)' }}>
-              <p className="text-lg font-medium">Important</p>
-              <p className="mt-2">Academics and Placement Cell content coming soon.</p>
+              <p className="text-lg font-medium">
+                {IMPORTANT_TABS.find(item => item.id === importantTab)?.label ?? 'Important'}
+              </p>
+              <p className="mt-2">Content coming soon.</p>
             </div>
           )}
 
