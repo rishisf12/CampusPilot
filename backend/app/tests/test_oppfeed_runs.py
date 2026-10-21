@@ -213,6 +213,67 @@ def test_the_drafts_reach_the_opportunities(anon_client, admin_headers):
     assert runner._bring_drafts_across(RUN_ID) == 0
 
 
+def test_a_run_publishes_its_drafts_when_auto_publish_is_on(anon_client, admin_headers):
+    """
+    The auto-publish switch is wired to the run.
+
+    It existed, and the publishing service existed, and nothing called
+    them: a run finished, its drafts sat in the queue, and the feed stayed
+    empty. A switch that is wired to nothing is a lie the admin reads.
+    """
+    from features.oppfeed import runner
+    from features.oppfeed.models import AgentSettings
+
+    with Session(engine) as s:
+        settings = s.exec(select(AgentSettings)).first()
+        if settings is None:
+            settings = AgentSettings()
+            s.add(settings)
+            s.commit()
+            s.refresh(settings)
+        was_enabled = settings.auto_publish_enabled
+        was_threshold = settings.auto_publish_threshold
+        settings.auto_publish_enabled = True
+        settings.auto_publish_threshold = 0.5
+        s.add(settings)
+        s.commit()
+
+    try:
+        with Session(engine) as s:
+            s.add(
+                Opportunity(
+                    slug="test-run-publish-1",
+                    status="draft",
+                    title="A verified internship",
+                    organization_name="Somewhere",
+                    opportunity_type="INTERNSHIP",
+                    apply_url="https://example.org/verified",
+                    confidence_score=0.9,
+                    verification_report={"checks": {"url_live": True}},
+                    llm_provider="nvidia_nim",
+                    created_by_run_id=RUN_ID,
+                )
+            )
+            s.commit()
+
+        published = runner._publish(RUN_ID)
+        assert published == 1, published
+
+        with Session(engine) as s:
+            opp = s.exec(
+                select(Opportunity).where(Opportunity.slug == "test-run-publish-1")
+            ).first()
+            assert opp.status == "published"
+    finally:
+        with Session(engine) as s:
+            settings = s.exec(select(AgentSettings)).first()
+            if settings is not None:
+                settings.auto_publish_enabled = was_enabled
+                settings.auto_publish_threshold = was_threshold
+                s.add(settings)
+                s.commit()
+
+
 def test_a_mock_extraction_is_never_published(anon_client, admin_headers):
     """
     A placeholder must not reach the students' feed.

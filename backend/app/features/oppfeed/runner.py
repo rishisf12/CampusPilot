@@ -169,7 +169,12 @@ async def _execute(run_id: str, mode: str) -> None:
             router.set_chain(chain)
 
         pipeline = AgentPipeline(router)
-        state = PipelineState(run_id=run_id, mode=mode, current_stage="init")
+        state = PipelineState(
+            run_id=run_id,
+            mode=mode,
+            current_stage="init",
+            max_drafts=_max_drafts(),
+        )
 
         _mark_running(run_id)
         async with AsyncSession(async_engine) as adb:
@@ -197,7 +202,8 @@ async def _execute(run_id: str, mode: str) -> None:
                 _set_stage(run_id, stage)
 
         drafted = _bring_drafts_across(run_id)
-        _complete(run_id, state, drafted)
+        published = _publish(run_id)
+        _complete(run_id, state, drafted, published=published)
     finally:
         await async_engine.dispose()
 
@@ -302,7 +308,35 @@ def _finish_step(
         s.commit()
 
 
-def _complete(run_id: str, state: Any, drafted: int) -> None:
+def _max_drafts() -> int:
+    """How many drafts a run may write, as the settings say."""
+    with Session(engine) as s:
+        settings = s.exec(select(AgentSettings)).first()
+    if settings is None:
+        return 100
+    return max(0, int(settings.max_drafts_per_run or 0))
+
+
+def _publish(run_id: str) -> int:
+    """
+    Publish the run's drafts, when the settings say to.
+
+    The auto-publish switch exists to say "verified work goes to the
+    students' feed without a human in the loop". Wiring it to the run is
+    what makes it that, rather than a field nobody reads.
+    """
+    from features.oppfeed.services.publishing_service import PublishingService
+
+    try:
+        with Session(engine) as s:
+            published = PublishingService.process_auto_publish(s, run_id=run_id)
+        return len(published)
+    except Exception as exc:  # noqa: BLE001 - publishing must not lose the run
+        logger.warning("OppFeed run %s could not publish: %s", run_id, exc)
+        return 0
+
+
+def _complete(run_id: str, state: Any, drafted: int, published: int = 0) -> None:
     """The run is done: the counts are the pipeline's own."""
     found = len(getattr(state, "candidates", []) or [])
     verified = len(getattr(state, "verification_result", []) or [])
@@ -317,14 +351,48 @@ def _complete(run_id: str, state: Any, drafted: int) -> None:
         run.opportunities_verified = verified
         run.opportunities_rejected = max(0, found - verified)
         run.opportunities_drafted = drafted
+        run.opportunities_published = published
         run.llm_calls = int(getattr(state, "llm_calls", 0) or 0)
         run.llm_tokens = int(getattr(state, "llm_tokens", 0) or 0)
         run.checkpoint = _checkpoint(state)
         errors = list(getattr(state, "errors", []) or [])
+        # Say why nothing was published. A run that found work and published
+        # none, with no explanation, reads as a broken switch.
+        note = _publishing_note(run_id, drafted, published)
+        if note:
+            errors.append({"stage": "publish", "error": note})
         if errors:
             run.errors = {"errors": errors}
         s.add(run)
         s.commit()
+
+
+def _publishing_note(run_id: str, drafted: int, published: int) -> str:
+    """Why a run's drafts were not published, when that is the case."""
+    if drafted == 0 or published > 0:
+        return ""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT count(*) FROM core.oppfeed_opportunity "
+                "WHERE created_by_run_id = :run_id AND (llm_provider IS NULL "
+                "OR lower(llm_provider) <> 'mock')"
+            ),
+            {"run_id": run_id},
+        ).first()
+    if row and row[0]:
+        # Real extractions were written but did not meet the publish
+        # criteria - the confidence threshold, most likely.
+        return (
+            f"{drafted} draft(s) were written but none met the auto-publish "
+            "criteria (the confidence threshold, most likely)."
+        )
+    return (
+        f"{drafted} draft(s) were written but none were published: the run "
+        "used the mock provider, which stands in for an LLM that is not "
+        "there, so its extractions are placeholders and must not reach the "
+        "students' feed."
+    )
 
 
 def _fail(run_id: str, exc: Exception) -> None:

@@ -14,6 +14,7 @@ export default function AgentSettings({ onError }: { onError?: (m: string) => vo
     auto_publish_threshold: number;
     llm_provider_chain: string;
     llm_max_rpm: number;
+    max_drafts_per_run: number;
     enable_agent: boolean;
     enable_scheduler: boolean;
     enable_vision: boolean;
@@ -204,6 +205,29 @@ export default function AgentSettings({ onError }: { onError?: (m: string) => vo
               }
               className="w-24 text-xs"
             />
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold mb-1" style={{ color: 'var(--cp-muted)' }}>
+              Max drafts per run
+            </p>
+            <Input
+              type="number"
+              min={0}
+              max={500}
+              value={settings.max_drafts_per_run ?? 100}
+              onChange={e =>
+                setSettings({
+                  ...settings,
+                  max_drafts_per_run: Math.max(0, parseInt(e.target.value) || 0),
+                })
+              }
+              className="w-24 text-xs"
+            />
+            <p className="text-[10px] mt-1" style={{ color: 'var(--cp-muted)' }}>
+              How many verified opportunities one run may write. The rest are reported, not quietly
+              dropped.
+            </p>
           </div>
 
           <div>

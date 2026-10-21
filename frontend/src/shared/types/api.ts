@@ -872,6 +872,8 @@ export interface AgentSettingsResponse {
   auto_publish_threshold: number;
   llm_provider_chain: string;
   llm_max_rpm: number;
+  /** How many verified opportunities one run may write. */
+  max_drafts_per_run: number;
   enable_agent: boolean;
   enable_scheduler: boolean;
   enable_vision: boolean;
@@ -887,6 +889,7 @@ export interface AgentSettingsUpdateRequest {
   auto_publish_threshold?: number;
   llm_provider_chain?: string;
   llm_max_rpm?: number;
+  max_drafts_per_run?: number;
   enable_agent?: boolean;
   enable_scheduler?: boolean;
   enable_vision?: boolean;

@@ -41,6 +41,10 @@ class PipelineState(BaseModel):
     # Template - generated opportunity templates awaiting a draft
     template_data: Optional[List[Dict[str, Any]]] = None
 
+    # How many drafts this run may write. The app's setting travels here;
+    # the default is a bound, not a limit on what may be published.
+    max_drafts: int = 100
+
     # Output
     opportunity_id: Optional[int] = None
     draft_saved: bool = False

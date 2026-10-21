@@ -16,7 +16,12 @@ async def generate_template(
     """Generate structured template + short student-friendly summary for each verified item."""
     templates = []
 
-    for item in state.verification_result[:10]:
+    # The cap is the app's setting, carried in the state. It bounds what one
+    # run may write, and the run reports what it left out - dropping
+    # verified opportunities silently is how a run ends up reporting ten
+    # drafts when it verified fifty-three.
+    cap = max(0, int(getattr(state, "max_drafts", 100) or 0))
+    for item in (state.verification_result or [])[:cap]:
         verification = item.get("_verification", {})
         confidence = verification.get("confidence_score", 0)
 

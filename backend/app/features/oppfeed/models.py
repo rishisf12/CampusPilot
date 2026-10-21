@@ -420,6 +420,11 @@ class AgentSettings(SQLModel, table=True):
     # LLM Provider Chain
     llm_provider_chain: str = Field(default="nvidia_nim,opencode_cli,openrouter,mock")
     llm_max_rpm: int = Field(default=30)
+    #: How many drafts one run may write. A cap is a cost guard, not a
+    #: limit on what may be published: a run that verified fifty-three
+    #: opportunities and wrote ten of them has thrown away forty-three, and
+    #: the run says so.
+    max_drafts_per_run: int = Field(default=100)
 
     # Feature flags
     enable_agent: bool = Field(default=True)

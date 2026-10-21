@@ -298,6 +298,8 @@ class AgentSettingsResponse(BaseModel):
     auto_publish_threshold: float
     llm_provider_chain: str
     llm_max_rpm: int
+    max_drafts_per_run: int
+    max_drafts_per_run: int
     enable_agent: bool
     enable_scheduler: bool
     enable_vision: bool
@@ -314,6 +316,7 @@ class AgentSettingsUpdateRequest(BaseModel):
     auto_publish_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     llm_provider_chain: Optional[str] = None
     llm_max_rpm: Optional[int] = Field(default=None, ge=1, le=1000)
+    max_drafts_per_run: Optional[int] = Field(default=None, ge=0, le=500)
     enable_agent: Optional[bool] = None
     enable_scheduler: Optional[bool] = None
     enable_vision: Optional[bool] = None
