@@ -90,13 +90,15 @@ docker compose --profile lite up -d --build
 
 This starts:
 - **postgres** (port 5432)
+- **adminer** (port 8080)
 - **backend** (port 8002 → container 8001)
 - **frontend** (port 5174 → container 80)
-- **prometheus** (port 9090)
-- **node-exporter** (port 9100)
-- **alertmanager** (port 9093)
-- **rollup** (background worker)
+- **rollup** (background worker — the in-app hourly rollup and retention prune)
 - **OppFeed** (bundled in backend — enable via `.env`: `ENABLE_AGENT=true`, `ENABLE_SCHEDULER=true`)
+
+> There is no separate metrics server any more. The MCP tools and the
+> monitoring API read the same in-app stores, so the admin dashboards work
+> with nothing but the backend and the database.
 
 ### OppFeed (Opportunity Discovery)
 

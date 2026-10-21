@@ -211,7 +211,12 @@ services:
           memory: 128M
 
   # ================================================================
-  # Observability Stack - Lite Profile (4 GB target)
+  # In-app rollup worker
+  #
+  # The hourly rollup and retention prune, run in their own process so
+  # they cannot compete with request handling. It reads the in-app
+  # event stores directly - there is no external metrics server to
+  # query any more.
 
   rollup:
     build:

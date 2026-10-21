@@ -132,8 +132,8 @@
 ### 6.1 Container Security
 - [ ] **Non-root containers** - `USER` directive in Dockerfiles
 - [ ] **Read-only rootfs** - where possible
-- [ ] **No privileged containers** - except cAdvisor (required)
-- [ ] **Docker socket read-only** - for cAdvisor/monitoring
+- [ ] **No privileged containers**
+- [ ] **No docker socket mounted** - the metrics stack is in-process, so nothing needs it
 - [ ] **Internal network** - no internet egress for tools containers
 
 ### 6.2 Network Security

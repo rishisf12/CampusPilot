@@ -32,10 +32,14 @@
 | 8.4 | Test notifications end-to-end | 2h | Telegram bot |
 
 **Deliverables:**
-- `ops/alertmanager/alertmanager.yml`
-- `ops/prometheus/alerts.yml` (27 rules across 8 subsections)
-- `ops/alerting/README.md` (Apprise config guide)
+- ~~`ops/alertmanager/alertmanager.yml`~~ — removed in the MCP migration
+- ~~`ops/prometheus/alerts.yml`~~ (27 rules across 8 subsections) — removed in the MCP migration
+- ~~`ops/alerting/README.md`~~ (Apprise config guide) — removed in the MCP migration
 - Verified Telegram alerts firing
+
+> The alert rules now live in the app: the MCP alerting tools evaluate
+> thresholds against the in-app stores and open the incidents themselves, so
+> the external Alertmanager/Prometheus configuration is no longer needed.
 
 ### Week 2: Docker Profiles + Hardening (3 days)
 
@@ -108,22 +112,19 @@
 | postgres | 2 GB | Primary DB |
 | backend | 2 GB | API + scan worker |
 | frontend | 512 MB | nginx + React |
-| prometheus | 1 GB | 15d retention |
-| victoria-logs | 4 GB | 30d logs |
-| grafana | 1 GB | Dashboards |
-| alertmanager | 256 MB | |
-| alerting (Apprise) | 256 MB | |
-| cAdvisor | 1 GB | Container metrics |
-| blackbox-exporter | 256 MB | Synthetic checks |
-| **Total** | **~12 GB** | Fits 16 GB with room to spare |
+| adminer | 256 MB | DB admin UI |
+| rollup | 512 MB | In-app hourly rollup + retention prune |
+| **Total** | **~5.5 GB** | Fits 8 GB with room to spare |
 
 **Lite Profile (4 GB) - drop:**
-- victoria-logs → remove
-- Grafana → remove
-- cAdvisor → remove
-- blackbox-exporter → remove
+- adminer → remove
 - no local model → Stage 2 off by default, or point `LLM_BASE_URL` at a hosted endpoint
-- **Total: ~3.5 GB** ✅
+- **Total: ~4.5 GB** ✅
+
+> The external monitoring stack (Prometheus, Grafana, Alertmanager, VictoriaLogs,
+> cAdvisor, blackbox-exporter) was removed in the MCP migration: the MCP tools
+> and the monitoring API read the same in-app stores, so there is nothing left
+> to run. `scripts/preflight.py` asserts they stay gone.
 
 ---
 ## Testing Strategy

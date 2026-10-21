@@ -8,9 +8,9 @@
 >
 > | Area | State |
 > |---|---|
-> | `/metrics` + Prometheus instruments | **Built.** 9 metrics, route templates, status classes, no user identifiers |
-> | Prometheus + node_exporter (`monitoring` profile) | **Built.** Config and 7 alert rules validated by `promtool`; scraping verified against a live stack |
-> | cAdvisor + blackbox (`monitoring-full` profile) | **Built, not enabled** — config validated, needs an 8 GB+ host |
+> | `/metrics` + Prometheus instruments | **Built.** 9 metrics, route templates, status classes, no user identifiers. The client library stays - the app measures itself in-process - but nothing scrapes it any more. |
+> | Prometheus + node_exporter (`monitoring` profile) | **Removed** in the MCP migration. The MCP tools and the monitoring API read the same in-app stores, so the exporter fleet had nothing left to do. |
+> | cAdvisor + blackbox (`monitoring-full` profile) | **Removed** in the MCP migration. Replaced by `observability/host.py` (psutil, in-process) and `observability/uptime.py` (reader-derived coverage). |
 > | Telemetry ingest (`/collect/*`) | **Built.** Allowlist, batch cap, per-source rate limiting, HMAC pseudonymisation |
 > | Ten monitoring tables + migration | **Built.** Alembic revision `27f44ac2c78b` |
 > | Hourly rollup (`event` → `event_hourly`) | **Built.** Idempotent recompute, CLI + optional in-process timer |
@@ -188,13 +188,13 @@ check before you install them — see §2.1 for the one-liner that checks everyt
 | **Pydantic** | Schema validation | MIT | all 8 | core | MIT | None |
 | **Python MCP SDK** | MCP | MIT | all 8 | core | MIT | None |
 | **RQ** | Queue | BSD-3-Clause | scan queue | core | BSD; single-worker mode is all we need | Worker must be `concurrency=1` (see §6) |
-| **Prometheus** | Metrics | Apache-2.0 | A-W | core | Apache-2.0, no enterprise feature split | Retention math (§7) |
-| **Blackbox exporter** | Synthetic | Apache-2.0 | A-W, C-W | core | Apache-2.0 | Probes from inside the VPS only |
-| **node_exporter** | Host metrics | Apache-2.0 | A-W | core | Apache-2.0 | None |
-| **cAdvisor** | Container metrics | Apache-2.0 | A-W | core | Apache-2.0 | Needs `--docker` + docker socket; read-only mount |
-| **Uptime Kuma** | Uptime / SSL | MIT | A-W | core | MIT; does its own SSL probing | Wakes on its own schedule; it is a monitoring tool, not an agent |
-| **Grafana** | Dashboards | AGPL-3.0 | all | core | AGPL-3.0, OSI-approved | AGPL: fine self-hosted internally; **no redistribution as a closed product** without reviewing. Vendored plugins carry their own licenses — audit `grafana-sqlite-datasource`. |
-| **VictoriaLogs** | Logs (lite) | Apache-2.0 | A-W, C-W | core | Apache-2.0, single-node free | UNVERIFIED: confirm single-node is Apache-2.0, not the enterprise split |
+| **Prometheus client** | Metrics (in-process) | Apache-2.0 | A-W | core | Apache-2.0, no enterprise feature split | Instrumentation only - no server, no retention maths |
+| ~~**Blackbox exporter**~~ | Synthetic | Apache-2.0 | A-W, C-W | core | Apache-2.0 | **Removed** in the MCP migration - `observability/uptime.py` derives coverage from the sample table instead |
+| ~~**node_exporter**~~ | Host metrics | Apache-2.0 | A-W | core | Apache-2.0 | **Removed** in the MCP migration - `observability/host.py` samples the host with psutil instead |
+| ~~**cAdvisor**~~ | Container metrics | Apache-2.0 | A-W | core | Apache-2.0 | **Removed** in the MCP migration - nothing needs the docker socket any more |
+| ~~**Uptime Kuma**~~ | Uptime / SSL | MIT | A-W | core | MIT | **Removed** in the MCP migration - `observability/uptime.py` covers uptime; SSL is checked by the web-security MCP |
+| ~~**Grafana**~~ | Dashboards | AGPL-3.0 | all | core | AGPL-3.0, OSI-approved | **Removed** in the MCP migration - the admin dashboards read the in-app stores |
+| ~~**VictoriaLogs**~~ | Logs (lite) | Apache-2.0 | A-W, C-W | core | Apache-2.0, single-node free | **Removed** in the MCP migration - the logs MCP reads the app's own log store |
 | **GlitchTip** | Crashes/ANRs | MIT | A-W, A-A | core | MIT fork of Sentry; Sentry **SDKs are MIT** so Android/web point at it | UNVERIFIED: confirm current release cadence + that no feature is enterprise-gated. Sentry's own SDK is fine; the *SaaS* is not. |
 | **Trivy** | CVE / image / IaC | Apache-2.0 | C-W, C-A | core | Apache-2.0; DB is a public JSON feed | UNVERIFIED: OSS DB download from ghcr — that is a one-time egress, see §9 |
 | **OSV-Scanner** | Dep CVE | Apache-2.0 | C-W, C-A | core | Apache-2.0; queries osv.dev | UNVERIFIED: OSV API is a *third-party egress* per-call. See §9 — I recommend offline mirror. |
@@ -551,20 +551,19 @@ persistence, and a second dependency tree to solve problems you do not have.
 | Component | RAM | Note |
 |---|---|---|
 | backend + frontend (existing) | ~350 MB | |
-| prometheus | ~250 MB | 15-day retention |
-| victoria-logs | ~400 MB | 7-day retention |
-| grafana + sqlite datasource | ~350 MB | |
-| uptime-kuma | ~180 MB | |
 | glitchtip (web + postgres internal) | ~500 MB | |
-| blackbox + node_exporter + cadvisor | ~150 MB | |
 | redis | ~50 MB | |
 | trivy + osv-scanner | ~250 MB | |
-| **total** | **~2.5 GB** | fits, no local model bundled |
+| **total** | **~1.5 GB** | fits easily, no local model bundled |
 
 **No local model is bundled.** Stage 2 talks to whatever endpoint `LLM_BASE_URL`
 names, so a self-hosted model is optional rather than part of the baseline
 footprint; leave `LLM_PROVIDER=off` (the default) to run rule-engine scans only.
-Uptime Kuma stays in the lite profile.
+
+> The external monitoring fleet (Prometheus, VictoriaLogs, Grafana,
+> blackbox, node_exporter, cAdvisor, Uptime Kuma) is **gone**: the MCP tools
+> and the monitoring API read the same in-app stores, so the whole stack was
+> storage with nothing to add. `scripts/preflight.py` asserts it stays gone.
 
 Also for lite: **no GlitchTip web** (use Prometheus request metrics only),
 **Semgrep CE off by default** (run on release tags, not on a schedule),
@@ -704,8 +703,9 @@ comment.
 Ordered by value-per-hour, assuming you want working numbers before you want
 AI commentary:
 
-**Phase 1 — data exists (no AI, no MCPs)**
-1. node_exporter + cAdvisor + Blackbox + Prometheus, scrape config, retention.
+**Phase 1 — data exists (no AI, no MCPs)** — *done, and the exporter fleet it
+listed was later removed; the in-app stores below took its place*
+1. ~~node_exporter + cAdvisor + Blackbox + Prometheus, scrape config, retention.~~
 2. FastAPI `/metrics` on the existing backend: request duration histogram,
    status-code counters, DB query timing, background-job duration.
 3. `sqlite_readonly` tool + `/collect/events` endpoint + `events_hourly` rollup.
