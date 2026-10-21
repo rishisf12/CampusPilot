@@ -40,7 +40,7 @@ COLUMNS = (
     ("attachments", sa.JSON(), False, None),
     ("labels", sa.JSON(), False, None),
     ("created_by", sa.Integer(), True, None),
-    ("created_at", sa.DateTime(timezone=True), False, None),
+    ("created_at", sa.DateTime(timezone=True), False, sa.func.now()),
 )
 
 INDEXES = (
