@@ -525,6 +525,21 @@ export interface AdminUser {
   role: string;
   is_email_verified: boolean;
   created_at: string | null;
+  /** The profile's own fields: what the list filters on. */
+  programme?: string | null;
+  semester?: number | null;
+  branch?: string | null;
+  section?: string | null;
+  batch_year?: number | null;
+  is_faculty?: boolean;
+  is_class_representative?: boolean;
+}
+
+/** The values the admin's user list can be filtered by. */
+export interface AdminUserFilters {
+  batch_years: number[];
+  branches: string[];
+  semesters: number[];
 }
 
 export interface AdminFlag {
@@ -573,16 +588,48 @@ export interface AdminRemoteConfig {
 }
 
 export const adminApi = {
-  users: (params: { search?: string; role?: string; page?: number; size?: number } = {}) => {
+  users: (
+    params: {
+      search?: string;
+      role?: string;
+      category?: string;
+      group?: string;
+      programme?: string;
+      batch_year?: number;
+      branch?: string;
+      semester?: number;
+      page?: number;
+      size?: number;
+    } = {}
+  ) => {
     const search = new URLSearchParams();
     if (params.search) search.set('search', params.search);
     if (params.role) search.set('role', params.role);
+    if (params.category) search.set('category', params.category);
+    if (params.group) search.set('group', params.group);
+    if (params.programme) search.set('programme', params.programme);
+    if (params.batch_year) search.set('batch_year', String(params.batch_year));
+    if (params.branch) search.set('branch', params.branch);
+    if (params.semester) search.set('semester', String(params.semester));
     search.set('page', String(params.page ?? 1));
     search.set('size', String(params.size ?? 20));
     return request<{ total: number; page: number; size: number; users: AdminUser[] }>(
       `/admin/users?${search}`
     );
   },
+  userFilters: () => request<AdminUserFilters>('/admin/users/filters'),
+  updateUser: (
+    id: number,
+    data: {
+      programme?: string;
+      semester?: number;
+      branch?: string;
+      section?: string;
+      batch_year?: number;
+      is_faculty?: boolean;
+      is_class_representative?: boolean;
+    }
+  ) => request<AdminUser>(`/admin/users/${id}`, { method: 'PATCH', body: data }),
   setRole: (id: number, role: 'admin' | 'student') =>
     request<AdminUser>(`/admin/users/${id}/role`, { method: 'PATCH', body: { role } }),
   stats: () =>

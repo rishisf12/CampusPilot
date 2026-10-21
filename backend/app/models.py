@@ -380,6 +380,15 @@ class UserProfile(SQLModel, table=True):
     #: what tells one batch's papers from another's, so the exam index can
     #: speak about the right students.
     batch_year: Optional[int] = None
+    #: The teaching staff. A member of the faculty is not a student, so this
+    #: flag is what tells the two apart when the admin asks "who are the
+    #: faculty": the role column alone cannot, because an account only ever
+    #: carries "admin" or "student".
+    is_faculty: bool = False
+    #: A class representative: a student who represents their class. The
+    #: class is the batch, the branch and the semester, so those are what the
+    #: admin filters on to find the CRs of a class.
+    is_class_representative: bool = False
     #: Branch as free text. The academic-core normalisation added the
     #: ``branch_id`` FK below, but the profile, teams and branch-change flows
     #: still read and write the string form, so it is kept alongside the id.

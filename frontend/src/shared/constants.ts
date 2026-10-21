@@ -81,6 +81,22 @@ export const PROGRAMME_SEMESTERS = {
   PhD: [1, 2],
 } as const;
 
+/**
+ * The admin's user-list taxonomy.
+ *
+ * Students split the way an administrator thinks of them - undergraduate and
+ * postgraduate - and PhD sits with the postgraduates here, even though
+ * signup asks for Doctoral as a group of its own: this is a filter over who
+ * is who, not a question about which groups the app bundles features by.
+ */
+export const ADMIN_STUDENT_GROUPS = {
+  UG: ['BTech', 'BDes'],
+  PG: ['MTech', 'MDes', 'PhD'],
+} as const;
+
+/** Programmes with no batch year: a doctoral student joins no batch. */
+export const BATCHLESS_PROGRAMMES = ['PhD'] as const;
+
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' } as const;
 
 /** `5` -> `"V Sem"`. */
