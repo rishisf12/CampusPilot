@@ -95,6 +95,7 @@ export function StudentUGRoutes() {
     { id: 'cultural', label: 'Cultural' },
     { id: 'technical', label: 'Technical' },
     { id: 'sports', label: 'Sports' },
+    { id: 'other', label: 'Other' },
   ] as const;
   const [importantTab, setImportantTab] = useState<string>('academics');
 
