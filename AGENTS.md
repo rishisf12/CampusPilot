@@ -268,12 +268,10 @@ VITE_DEV_BACKEND=http://127.0.0.1:8000   # Must use 127.0.0.1, not localhost (Wi
 
 ## Documentation References
 
-- `MODULE_ARCHITECTURE.md` — Frontend module architecture deep dive
 - `docs/LOCAL_DEVELOPMENT.md` — Local dev setup details
 - `docs/ROADMAP.md` — Project roadmap
-- `docs/PHASE_WISE_TASK_LIST.md` — Phase-wise task breakdown
 - `CONTRIBUTING.md` — Original contributing guide
-- `START_BACKEND_GUIDE.md` — Backend startup guide
+- `docs/archive/` — Older planning and session documents (historic reference)
 
 ---
 
