@@ -215,6 +215,7 @@ from features.security import routes as security_routes
 from ocr import routes as ocr_routes
 from features.settings import routes as settings_routes
 from features.oppfeed.api import router as oppfeed_router
+from features.mail.routes import router as mail_router
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
 app.include_router(timetable.router, prefix="/timetable", tags=["Timetable"])
@@ -227,6 +228,7 @@ from features.profile import admin_routes as profile_admin  # noqa: E402
 app.include_router(profile_admin.router, prefix="/profile", tags=["Profile"])
 app.include_router(settings_routes.router, tags=["Settings"])
 app.include_router(oppfeed_router, tags=["OppFeed"])
+app.include_router(mail_router, tags=["Mail"])
 app.include_router(rooms.router, prefix="/rooms", tags=["Rooms"])
 app.include_router(exam.router, prefix="/exam", tags=["Exam"])
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])

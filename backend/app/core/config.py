@@ -1,6 +1,8 @@
 """Configuration constants loaded from environment with sensible defaults."""
 import os
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
 from functools import lru_cache
@@ -266,6 +268,51 @@ class Settings(BaseSettings):
     feed_max_attachment_bytes: int = Field(default=5 * 1024 * 1024, alias="FEED_MAX_ATTACHMENT_BYTES")
     feed_max_body_chars: int = Field(default=8000, alias="FEED_MAX_BODY_CHARS")
 
+    # ------------------------------------------------------- mail app
+    #
+    # The mail app is not the feedback feed with a different label. The feed
+    # turns a message into a feedback row and throws the message away; the
+    # mail app keeps the message - sender, subject, body, attachments, the
+    # star - and files it under the section it belongs to. So it has its own
+    # tables, its own endpoints and its own front-end bundle.
+    #
+    # Each section has its own receiving mail address (e.g.
+    # ug-academics@college.ac.in). All sections of one programme group share
+    # one IMAP mailbox (e.g. ug@college.ac.in for UG,
+    # pg@college.ac.in for PG). The college sends mail to each section's
+    # address and it lands in the group mailbox; the section a message
+    # belongs to is decided by the receiving address it was sent to.
+    #
+    # mail_mailboxes_json is JSON keyed by group id:
+    #   {
+    #     "ug": {
+    #       "imap_host": "imap.gmail.com",
+    #       "imap_port": 993,
+    #       "imap_user": "ug@college.ac.in",
+    #       "imap_password": "...",
+    #       "mailbox": "INBOX",
+    #       "sections": {
+    #         "academics": "ug-academics@college.ac.in",
+    #         "placement": "ug-placement@college.ac.in",
+    #         "cultural": "ug-cultural@college.ac.in",
+    #         "technical": "ug-technical@college.ac.in",
+    #         "sports": "ug-sports@college.ac.in",
+    #         "other": "ug-other@college.ac.in",
+    #       }
+    #     },
+    #     "pg": { ... },
+    #   }
+    #
+    # mail_ingest_secret is the ingest secret used when a group's entry does
+    # not define its own - a group may set "ingest_secret" in its JSON block
+    # for its own, and without one anywhere the ingest stays closed.
+    mail_mailboxes_json: str = Field(default="{}", alias="MAIL_MAILBOXES_JSON")
+    mail_ingest_secret: str = Field(default="", alias="MAIL_INGEST_SECRET")
+    #: The address the app sends from. Empty means the group's SMTP user.
+    mail_from: str = Field(default="", alias="MAIL_FROM")
+    #: How long a message is kept, in days.
+    mail_retention_days: int = Field(default=90, alias="MAIL_RETENTION_DAYS")
+
     # Exam / branch inference
     #: Canonical branch list used across profile dropdowns and exam filtering.
     branch_options: str = Field(
@@ -290,6 +337,67 @@ class Settings(BaseSettings):
     def feed_enabled(self) -> bool:
         """Mail ingestion only runs with both halves of the credential present."""
         return bool(self.feed_imap_user and self.feed_imap_password)
+
+    def _mail_mailboxes(self) -> Dict[str, Any]:
+        """The configured mailboxes, parsed from the JSON setting."""
+        import json
+
+        try:
+            data = json.loads(self.mail_mailboxes_json or "{}")
+        except ValueError:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def mail_group_cfg(self, group: str) -> Dict[str, Any]:
+        """One group's mailbox entry from the JSON setting."""
+        cfg = self._mail_mailboxes().get(group)
+        return cfg if isinstance(cfg, dict) else {}
+
+    @property
+    def mail_enabled(self) -> bool:
+        """The mail app runs when at least one group's mailbox is configured."""
+        return any(self.mail_group_enabled(group) for group in ("ug", "pg"))
+
+    def mail_group_enabled(self, group: str) -> bool:
+        """Whether one group's mailbox is configured."""
+        cfg = self.mail_group_cfg(group)
+        return bool(cfg.get("imap_user") and cfg.get("imap_password"))
+
+    def mail_group_secret(self, group: str) -> str:
+        """The ingest secret for one group's mailbox.
+
+        A group may keep its own secret in its JSON entry; the shared
+        ``MAIL_INGEST_SECRET`` stands in when it does not.
+        """
+        cfg = self.mail_group_cfg(group)
+        return str(cfg.get("ingest_secret") or self.mail_ingest_secret or "")
+
+    def mail_group_sections(self, group: str) -> Dict[str, str]:
+        """One group's section -> receiving-address map."""
+        sections = self.mail_group_cfg(group).get("sections")
+        if not isinstance(sections, dict):
+            return {}
+        return {str(key): str(value) for key, value in sections.items()}
+
+    def mail_section_for_address(
+        self, group: str, address: Optional[str]
+    ) -> Optional[str]:
+        """The section a message sent to ``address`` belongs to.
+
+        The college keeps a list of mail ids, one per section; content that
+        arrives at one of them is filed under that section. ``None`` means
+        the address is not on the list, and the caller decides what to do
+        with it.
+        """
+        if not address:
+            return None
+        address = address.strip().lower()
+        if not address:
+            return None
+        for section, receiving in self.mail_group_sections(group).items():
+            if receiving.strip().lower() == address:
+                return section
+        return None
 
 
 @lru_cache()
