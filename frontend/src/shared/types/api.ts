@@ -989,3 +989,57 @@ export interface OppFeedFeedbackCreateRequest {
   tags?: string[];
   comment?: string;
 }
+
+/** The administrator's own profile: an operator's, not a student's. */
+export interface AdminProfileResponse {
+  id: number;
+  user_id?: number | null;
+  email: string;
+  role: string;
+  display_name?: string | null;
+  job_title?: string | null;
+  team?: string | null;
+  timezone: string;
+  locale: string;
+  theme: 'system' | 'light' | 'dark';
+  density: 'comfortable' | 'compact';
+  default_subsection?: string | null;
+  default_window_days: number;
+  pinned_panels: string[];
+  notify_email?: string | null;
+  notify_channels: string[];
+  quiet_hours: Record<string, unknown>;
+  notes?: string | null;
+  /** Their account's own state. */
+  account_created_at?: string | null;
+  passkey_registered: boolean;
+  own_action_count: number;
+  recent_actions: AdminActivityItem[];
+}
+
+/** What an administrator may change about their own profile. */
+export interface AdminProfileUpdate {
+  display_name?: string | null;
+  job_title?: string | null;
+  team?: string | null;
+  timezone?: string | null;
+  locale?: string | null;
+  theme?: 'system' | 'light' | 'dark';
+  density?: 'comfortable' | 'compact';
+  default_subsection?: string | null;
+  default_window_days?: number;
+  pinned_panels?: string[];
+  notify_email?: string | null;
+  notify_channels?: string[];
+  quiet_hours?: Record<string, unknown>;
+  notes?: string | null;
+}
+
+/** One of the administrator's own actions. */
+export interface AdminActivityItem {
+  id: number;
+  action: string;
+  target_type?: string | null;
+  target_id?: string | null;
+  at?: string | null;
+}

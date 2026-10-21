@@ -19,7 +19,10 @@ import { Sidebar } from '@shared/components/Sidebar';
 /** Lazy-loaded features */
 const AdminPanel = lazy(() => import('./features/admin/AdminPanel'));
 const Monitoring = lazy(() => import('./features/monitoring/Monitoring'));
-const Profile = lazy(() => import('@shared/features/profile/Profile'));
+// The administrator's own profile - an operator's, not the student one. The
+// shared Profile screen is the *student's* profile (roll number, branch,
+// electives), which describes none of this.
+const AdminProfile = lazy(() => import('./features/admin/AdminProfile'));
 const Settings = lazy(() => import('@shared/features/settings/Settings'));
 const OppFeedDashboard = lazy(() => import('./features/oppfeed/OppFeedDashboard'));
 const AgentRunsList = lazy(() => import('./features/oppfeed/AgentRunsList'));
@@ -251,7 +254,7 @@ export function AdminRoutes() {
             )}
             {adminTab === 'oppfeed-settings' && <AgentSettings onError={setConnectionError} />}
             {adminTab === 'oppfeed-llm-status' && <LLMStatus onError={setConnectionError} />}
-            {adminTab === 'profile' && <Profile />}
+            {adminTab === 'profile' && <AdminProfile onError={setConnectionError} />}
             {adminTab === 'settings' && <Settings onOpenProfile={() => setAdminTab('profile')} />}
           </Suspense>
         </ModuleErrorBoundary>

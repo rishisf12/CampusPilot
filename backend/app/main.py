@@ -221,6 +221,10 @@ app.include_router(timetable.router, prefix="/timetable", tags=["Timetable"])
 app.include_router(reinforcement.router, prefix="/reinforcement", tags=["Reinforcement Patterns"])
 app.include_router(schedule.router, prefix="/schedule", tags=["Schedule"])
 app.include_router(profile.router, prefix="/profile", tags=["Profile"])
+# The administrator's own profile - a separate surface from the student one.
+from features.profile import admin_routes as profile_admin  # noqa: E402
+
+app.include_router(profile_admin.router, prefix="/profile", tags=["Profile"])
 app.include_router(settings_routes.router, tags=["Settings"])
 app.include_router(oppfeed_router, tags=["OppFeed"])
 app.include_router(rooms.router, prefix="/rooms", tags=["Rooms"])

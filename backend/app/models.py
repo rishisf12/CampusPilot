@@ -4,7 +4,7 @@ from typing import Any, Optional, List
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON
 from sqlalchemy.dialects import postgresql
 import sqlalchemy as sa
-from sqlalchemy import BigInteger, Date, DateTime, Identity, UniqueConstraint, func, Enum as SAEnum, Integer, ForeignKey
+from sqlalchemy import BigInteger, Date, DateTime, Identity, Text, UniqueConstraint, func, Enum as SAEnum, Integer, ForeignKey
 from enum import Enum
 
 
@@ -701,6 +701,65 @@ class FeedCursor(SQLModel, table=True):
     updated_at: datetime = Field(
         default=None,
         sa_column=Column("updated_at", DateTime, nullable=False, server_default=func.now()),
+    )
+
+
+class AdminProfile(SQLModel, table=True):
+    """The administrator's own profile.
+
+    A student profile is a roll number, a branch and a set of electives.
+    None of that describes an administrator, and none of it belongs on their
+    screen. This one carries what an operator actually works with:
+
+    - how they are addressed (display name, job title, team);
+    - how the console behaves for them (theme, density, the monitoring
+      subsection and window they land on, the panels they keep pinned);
+    - where their alerts go (email, the channels, their quiet hours);
+    - their own notes.
+
+    It holds nothing about anybody else. The admin's view of *other*
+    people lives in User 360, which is a different screen on purpose.
+    """
+
+    __tablename__ = "admin_profile"
+    __table_args__ = {"schema": "core"}
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(
+        default=None, foreign_key="core.user.id", unique=True, index=True
+    )
+
+    # How they are addressed
+    display_name: Optional[str] = Field(default=None, max_length=120)
+    job_title: Optional[str] = Field(default=None, max_length=120)
+    team: Optional[str] = Field(default=None, max_length=120)
+    timezone: str = Field(default="Asia/Kolkata", max_length=64)
+    locale: str = Field(default="en-IN", max_length=16)
+
+    # How the console behaves for them
+    theme: str = Field(default="system", max_length=16)
+    density: str = Field(default="comfortable", max_length=16)
+    #: The monitoring subsection they land on.
+    default_subsection: Optional[str] = Field(default=None, max_length=32)
+    default_window_days: int = 7
+    #: The admin panels they keep pinned, by id.
+    pinned_panels: List[str] = Field(default=[], sa_column=Column(JSON))
+
+    # Where their alerts go
+    notify_email: Optional[str] = Field(default=None, max_length=255)
+    #: The channels they want to be reached on: email, telegram, webhook.
+    notify_channels: List[str] = Field(default=[], sa_column=Column(JSON))
+    #: {"start": "22:00", "end": "07:00", "timezone": "Asia/Kolkata"}
+    quiet_hours: dict = Field(default_factory=dict, sa_column=Column(JSON, default=dict))
+
+    #: The operator's own private notes. Never shown to anybody else.
+    notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+
+    created_at: datetime = Field(
+        default=None, sa_column=Column("created_at", DateTime, nullable=False, server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default=None, sa_column=Column("updated_at", DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
     )
 
 class AuditLog(SQLModel, table=True):

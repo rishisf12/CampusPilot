@@ -28,6 +28,9 @@ import type {
   ProfileResponse,
   ProfileUpdate,
   ProfileOptions,
+  AdminProfileResponse,
+  AdminProfileUpdate,
+  AdminActivityItem,
   BranchChangeRequest,
   ScheduleNowResponse,
   ExtraCourseResponse,
@@ -278,6 +281,18 @@ export const profileApi = {
     request<{ message: string }>('/profile/branch-change', { method: 'POST', body: data }),
   clearBranchChange: () =>
     request<{ message: string }>('/profile/branch-change', { method: 'DELETE' }),
+};
+
+// ---------------------------------------------------------- admin profile
+//
+// The administrator's own profile. A separate surface from the student one
+// on purpose: an operator has no roll number, no branch and no elective
+// list, and their screen says what an operator actually works with.
+export const adminProfileApi = {
+  get: () => request<AdminProfileResponse>('/profile/admin'),
+  update: (data: AdminProfileUpdate) =>
+    request<AdminProfileResponse>('/profile/admin', { method: 'PUT', body: data }),
+  activity: (limit = 25) => request<AdminActivityItem[]>(`/profile/admin/activity?limit=${limit}`),
 };
 
 // ------------------------------------------------------------ settings
