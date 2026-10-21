@@ -22,6 +22,14 @@ import SignupProgress from './SignupProgress';
 /** YYBBBNNN, e.g. 23BCS125. */
 const ROLL_PATTERN = /^\d{2}[A-Z]{3}\d{3}$/;
 
+/**
+ * The latest batch year a student can join in.
+ *
+ * Next year's entrants enrol a year before they sit their first exam, so the
+ * year after this one is still a real batch - and nothing beyond it is.
+ */
+const LATEST_BATCH_YEAR = new Date().getFullYear() + 1;
+
 /** Rough 0-4 password strength. */
 function scorePassword(value: string): number {
   let score = 0;
@@ -72,6 +80,7 @@ export default function SignupForm({
     programme: firstProgramme as Programme,
     semester: 1,
     branch: PROGRAMME_BRANCHES[firstProgramme][0] as BranchOption,
+    batch_year: '',
     username: '',
     roll_number: '',
     whatsapp: '',
@@ -109,6 +118,15 @@ export default function SignupForm({
       found.username = '3-30 characters: letters, numbers, dot, dash or underscore';
     const roll = form.roll_number.trim().toUpperCase();
     if (!ROLL_PATTERN.test(roll)) found.roll_number = 'Use YYBBBNNN, e.g. 23BCS125';
+    // The batch year is the year they joined. It is a plain year, and the
+    // range the server accepts is the same one.
+    const batchYear = form.batch_year.trim();
+    if (batchYear) {
+      const year = Number(batchYear);
+      if (!/^\d{4}$/.test(batchYear) || year < 2000 || year > LATEST_BATCH_YEAR) {
+        found.batch_year = `Enter a year between 2000 and ${LATEST_BATCH_YEAR}`;
+      }
+    }
     const digits = form.whatsapp.replace(/\D/g, '');
     if (!digits) found.whatsapp = 'WhatsApp number is required';
     else if (!/^[6-9]\d{9}$/.test(digits)) found.whatsapp = 'Enter a valid 10-digit mobile number';
@@ -130,6 +148,7 @@ export default function SignupForm({
       last_name: true,
       username: true,
       roll_number: true,
+      batch_year: true,
       whatsapp: true,
       email: true,
       password: true,
@@ -152,6 +171,9 @@ export default function SignupForm({
         semester: Number(form.semester),
         // A revealed branch change moves the student to the target branch.
         branch: canChangeBranch && showBranchChange && branchTo ? branchTo : form.branch,
+        // The batch they joined. The roll's prefix carries it too, but the
+        // roll is a label and this is the fact.
+        batch_year: form.batch_year.trim() ? Number(form.batch_year.trim()) : undefined,
         username: form.username.trim(),
         roll_number: form.roll_number.trim().toUpperCase(),
         whatsapp: form.whatsapp.trim(),
@@ -311,6 +333,30 @@ export default function SignupForm({
                     </option>
                   ))}
                 </Select>
+              </Field>
+            </div>
+
+            {/* Batch year - the year the student joined, e.g. 2024. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field
+                label="Batch year"
+                hint="The year you joined, e.g. 2024. Your roll number starts with it."
+                error={invalid('batch_year')}
+              >
+                <Input
+                  id="su-batch-year"
+                  type="number"
+                  inputMode="numeric"
+                  min={2000}
+                  max={LATEST_BATCH_YEAR}
+                  step={1}
+                  value={form.batch_year}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    update('batch_year', e.target.value)
+                  }
+                  onBlur={() => setTouched(t => ({ ...t, batch_year: true }))}
+                  placeholder="2024"
+                />
               </Field>
             </div>
 

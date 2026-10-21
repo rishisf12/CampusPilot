@@ -33,6 +33,8 @@ export interface SignupRequest {
   programme: string;
   semester: number;
   branch: string;
+  /** The year the student joined, e.g. 2024 - the batch they belong to. */
+  batch_year?: number;
   username: string;
   roll_number: string;
   whatsapp: string;
@@ -68,6 +70,8 @@ export interface ProfileResponse {
   last_name?: string;
   phone?: string;
   programme?: string;
+  /** The year the student joined, e.g. 2024 - the batch they belong to. */
+  batch_year?: number | null;
   section?: string;
   elective_codes?: string[];
   attendance_target?: number;
@@ -88,6 +92,7 @@ export interface ProfileUpdate {
   phone?: string;
   programme?: string;
   semester?: number;
+  batch_year?: number | null;
   branch?: string;
   elective_codes?: string[];
   attendance_target?: number;

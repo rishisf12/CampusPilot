@@ -39,6 +39,10 @@ class SignupRequest(BaseModel):
     programme: str
     semester: int
     branch: str
+    #: The year the student joined, e.g. 2024 - the batch they belong to.
+    #: The roll number carries it ("24BCS125" -> 2024), but the roll is a
+    #: label and the batch year is the fact, so it is asked for and stored.
+    batch_year: Optional[int] = None
     username: str
     roll_number: str
     whatsapp: Optional[str] = None
@@ -51,6 +55,19 @@ class SignupRequest(BaseModel):
         allowed = list(PROGRAMME_SEMESTERS)
         if v not in allowed:
             raise ValueError(f"Programme must be one of: {', '.join(allowed)}")
+        return v
+
+    @field_validator("batch_year")
+    @classmethod
+    def validate_batch_year(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        # A batch year is a calendar year the student joined in. The upper
+        # bound allows next year's entrants (they enrol in the year before
+        # they sit the first exam); the lower bound keeps out typos.
+        latest = datetime.now(timezone.utc).year + 1
+        if not 2000 <= v <= latest:
+            raise ValueError(f"Batch year must be between 2000 and {latest}")
         return v
 
     @model_validator(mode="after")
@@ -393,6 +410,7 @@ async def signup(data: SignupRequest, session: Session = Depends(get_session), r
         programme=data.programme,
         semester=data.semester,
         branch=data.branch,
+        batch_year=data.batch_year,
         elective_codes=[],
     )
     session.add(profile)

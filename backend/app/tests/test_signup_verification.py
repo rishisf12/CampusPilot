@@ -260,6 +260,35 @@ class TestCreateStep:
         assert profile.branch == "CSE A"
         assert profile.semester == 5
 
+    def test_the_batch_year_is_stored(self, client, db):
+        """The year they joined is a fact of the profile, not a guess."""
+        prove(db)
+        response = client.post("/auth/signup", json={**DETAILS, "batch_year": 2024})
+        assert response.status_code == 200, response.text
+        user = db.exec(select(User).where(User.email == EMAIL)).first()
+        profile = db.exec(select(UserProfile).where(UserProfile.user_id == user.id)).first()
+        assert profile.batch_year == 2024
+
+    def test_the_batch_year_is_optional(self, client, db):
+        """An old client that does not send it still signs up."""
+        prove(db)
+        response = client.post("/auth/signup", json=DETAILS)
+        assert response.status_code == 200, response.text
+        user = db.exec(select(User).where(User.email == EMAIL)).first()
+        profile = db.exec(select(UserProfile).where(UserProfile.user_id == user.id)).first()
+        assert profile.batch_year is None
+
+    def test_a_nonsense_batch_year_is_refused(self, client, db):
+        """A year that cannot be a batch is a typo, and a typo is not stored."""
+        # One proof, then four attempts: a refused signup does not consume it.
+        prove(db)
+        for year in (19, 20245, 1800, 9999):
+            response = client.post(
+                "/auth/signup", json={**DETAILS, "batch_year": year}
+            )
+            assert response.status_code == 422, (year, response.text)
+            assert accounts_on(db, EMAIL) == []
+
     def test_the_pending_record_is_cleared(self, client, db):
         prove(db)
         client.post("/auth/signup", json=DETAILS)

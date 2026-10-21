@@ -24,6 +24,8 @@ interface ProfileContextValue {
   branch: string;
   semester: number | null;
   programme: string;
+  /** The year the student joined, e.g. 2024 - the batch they belong to. */
+  batchYear: number | null;
   attendanceTarget: number;
   electiveCodes: string[];
   extraCourses: ExtraCourseResponse[];
@@ -113,6 +115,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       branch: profile?.branch || '',
       semester: profile?.semester ?? null,
       programme: profile?.programme || '',
+      batchYear: profile?.batch_year ?? null,
       attendanceTarget: Number(profile?.attendance_target ?? 75),
 
       /** Elective codes chosen in the profile, normalised. */

@@ -40,6 +40,7 @@ export default function Profile() {
     branch,
     semester: profileSemester,
     programme: profileProgramme,
+    batchYear: profileBatchYear,
     attendanceTarget,
     extraCourses,
     branchChange,
@@ -54,6 +55,7 @@ export default function Profile() {
   const [programme, setProgramme] = useState(profileProgramme);
   const [semester, setSemester] = useState(profileSemester);
   const [branchState, setBranch] = useState(branch);
+  const [batchYear, setBatchYear] = useState(profileBatchYear ? String(profileBatchYear) : '');
 
   // Branch change state
   const [branchFrom, setBranchFrom] = useState(branchChange.from || branch || '');
@@ -129,11 +131,19 @@ export default function Profile() {
     setSaving(true);
     setMessage(null);
     setLocalError(null);
+    // An empty field means "I have not set it", not "set it to nothing".
+    const year = batchYear.trim();
+    if (year && !/^\d{4}$/.test(year)) {
+      setLocalError('Batch year must be a year, e.g. 2024');
+      setSaving(false);
+      return;
+    }
     try {
       await profileApi.update({
         programme,
         semester: Number(semester),
         branch: branchState,
+        batch_year: year ? Number(year) : null,
         attendance_target: Number(target),
       });
       // Bump the profile version so the timetable, attendance, rooms and
@@ -301,6 +311,25 @@ export default function Profile() {
                 </option>
               ))}
             </Select>
+          </div>
+          <div>
+            <span className="label">Batch year</span>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={2000}
+              max={new Date().getFullYear() + 1}
+              step={1}
+              value={batchYear}
+              onChange={e => {
+                clearMessages();
+                setBatchYear(e.target.value);
+              }}
+              placeholder="2024"
+            />
+            <p className="mt-1 text-xs" style={{ color: 'var(--cp-muted)' }}>
+              The year you joined. Your roll number starts with it.
+            </p>
           </div>
         </div>
       </Card>

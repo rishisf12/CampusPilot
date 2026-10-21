@@ -146,6 +146,26 @@ class TestProtectedRoutes:
             "CSE A", "CSE B", "DS", "ECE", "ME", "SM", "PG", "MDes",
         ]
 
+    def test_the_batch_year_can_be_set_and_read(self, client):
+        """The batch year is editable: a typo in it must not be permanent."""
+        headers = make_verified_user("batchuser")
+        res = client.put(
+            "/profile/", headers=headers, json={"batch_year": 2024}
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["batch_year"] == 2024
+
+        res = client.get("/profile/", headers=headers)
+        assert res.json()["batch_year"] == 2024
+
+    def test_a_nonsense_batch_year_is_refused(self, client):
+        headers = make_verified_user("batchuser2")
+        res = client.put(
+            "/profile/", headers=headers, json={"batch_year": 1800}
+        )
+        assert res.status_code == 400, res.text
+        assert "batch year" in res.json()["detail"].lower()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

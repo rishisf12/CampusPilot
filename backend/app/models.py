@@ -375,6 +375,11 @@ class UserProfile(SQLModel, table=True):
     phone: Optional[str] = None
     programme: Optional[str] = None
     semester: int = 1
+    #: The year the student joined, e.g. 2024 - the batch they belong to.
+    #: The roll number's prefix carries it ("24BCS125" -> 2024), and it is
+    #: what tells one batch's papers from another's, so the exam index can
+    #: speak about the right students.
+    batch_year: Optional[int] = None
     #: Branch as free text. The academic-core normalisation added the
     #: ``branch_id`` FK below, but the profile, teams and branch-change flows
     #: still read and write the string form, so it is kept alongside the id.

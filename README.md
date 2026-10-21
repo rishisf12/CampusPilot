@@ -114,8 +114,10 @@ the `.ts` you are editing has no effect.
 3. Upload data from the UI:
    - **Live Schedule → Timetable** → class timetable (PDF or CSV)
    - **Exam** → *Exam Timetable* and *Exam Seating Index*
-4. Set **Profile → Branch / Semester / electives** so the exam and attendance
-   filters line up with your registration.
+4. Set **Profile → Branch / Semester / Batch year / electives** so the exam and
+   attendance filters line up with your registration. The batch year is the
+   year you joined (e.g. 2024) — the roll number starts with it, and it is
+   what tells one batch's exam papers from another's.
 
 ---
 
@@ -585,7 +587,7 @@ All paths are relative to `http://127.0.0.1:8001`. 🔒 requires
 
 | Method | Path | Body / notes |
 |---|---|---|
-| `POST` | `/auth/signup` | `{first_name, last_name, gender, programme, semester, branch, username, roll_number, email, password}` |
+| `POST` | `/auth/signup` | `{first_name, last_name, gender, programme, semester, branch, batch_year, username, roll_number, email, password}` |
 | `POST` | `/auth/verify-email` | `{email, code}` |
 | `POST` | `/auth/resend-code` | `{email}` |
 | `POST` | `/auth/login` | OAuth2 form: `username`, `password` → `{access_token}` |

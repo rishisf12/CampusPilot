@@ -1,6 +1,6 @@
 """Profile API routes: profile CRUD, branch options, and branch-change tracking."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -44,6 +44,10 @@ class ProfileUpdate(BaseModel):
     phone: Optional[str] = None
     programme: Optional[str] = None
     semester: Optional[int] = None
+    #: The year the student joined, e.g. 2024. The roll number carries it
+    #: ("24BCS125" -> 2024), but it is asked for and stored on its own so a
+    #: typo in the roll can be corrected without changing the roll.
+    batch_year: Optional[int] = None
     branch: Optional[str] = None
     section: Optional[str] = None
     elective_codes: Optional[List[str]] = None
@@ -62,6 +66,7 @@ class ProfileResponse(BaseModel):
     phone: Optional[str] = None
     programme: Optional[str] = None
     semester: int
+    batch_year: Optional[int] = None
     branch: str
     section: Optional[str] = None
     elective_codes: List[str] = []
@@ -112,6 +117,7 @@ def _to_response(profile: UserProfile) -> ProfileResponse:
         phone=profile.phone,
         programme=profile.programme,
         semester=profile.semester,
+        batch_year=profile.batch_year,
         branch=profile.branch or "",
         section=profile.section,
         elective_codes=list(profile.elective_codes or []),
@@ -213,6 +219,16 @@ def update_profile(
                     f"{effective_programme or 'your programme'}. "
                     f"Choose one of {list(allowed_semesters)}."
                 ),
+            )
+
+    if data.get("batch_year") is not None:
+        # The same bound signup applies: a batch year is a calendar year the
+        # student joined in, and a year outside the range is a typo.
+        latest = datetime.now(timezone.utc).year + 1
+        if not 2000 <= data["batch_year"] <= latest:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Batch year must be between 2000 and {latest}.",
             )
 
     if "elective_codes" in data and data["elective_codes"] is not None:
