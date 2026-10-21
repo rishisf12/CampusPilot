@@ -46,7 +46,7 @@ class MockLLMClient(LLMClient):
         if "search queries" in prompt_lower or ("quer" in prompt_lower and "generat" in prompt_lower):
             response_text = self._mock_query_plan()
         elif "extract" in prompt_lower or "field_evidence" in prompt_lower:
-            response_text = self._mock_extraction()
+            response_text = self._mock_extraction(prompt)
         elif "verify" in prompt_lower or "scam" in prompt_lower:
             response_text = self._mock_verification()
         elif "summary" in prompt_lower:
@@ -87,16 +87,17 @@ class MockLLMClient(LLMClient):
             ]
         })
 
-    def _mock_extraction(self) -> str:
-        """Mock extraction response.
+    def _mock_extraction(self, prompt: str = "") -> str:
+        """Mock extraction response, taken from the page that was asked about.
 
         The deadline is relative to now: the verify stage rejects past deadlines,
         so a hard-coded date would eventually age into one and fail every run.
         """
         deadline = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+        title, organisation, url = self._page_facts(prompt)
         return json.dumps({
-            "title": "Software Engineering Intern",
-            "organization_name": "TechCorp India",
+            "title": title,
+            "organization_name": organisation,
             "opportunity_type": "Internship",
             "location": "Bangalore",
             "work_mode": "Hybrid",
@@ -112,12 +113,52 @@ class MockLLMClient(LLMClient):
             "graduation_years": [2026, 2027],
             "skills_required": ["Python", "JavaScript", "SQL"],
             "how_to_apply": "Apply through the company portal",
-            "apply_url": "https://example.com/apply",
+            "apply_url": url,
             "field_evidence": {
-                "title": "Software Engineering Intern - TechCorp",
+                "title": title,
                 "stipend_min": "Stipend: Rs. 15,000 - 20,000 per month",
             }
         })
+
+    @staticmethod
+    def _page_facts(prompt: str) -> tuple[str, str, str]:
+        """The page's own title, its site, and its URL.
+
+        The extraction prompt carries the page URL and the page text, so the
+        mock can report the page it was given instead of the same invented
+        internship for every result.
+        """
+        title = "Internship opportunity"
+        organisation = "Unknown organisation"
+        url = ""
+
+        for line in prompt.splitlines():
+            line = line.strip()
+            if line.startswith("Page URL:"):
+                url = line[len("Page URL:") :].strip()
+                break
+
+        if url:
+            host = url.split("//")[-1].split("/")[0]
+            if host.startswith("www."):
+                host = host[4:]
+            name = host.split(".")[0] if host else ""
+            if name:
+                organisation = name.replace("-", " ").title()
+
+        # The page text follows a marker; its first line is the page's title
+        # in most extractions.
+        marker = "Page text:"
+        if marker in prompt:
+            text = prompt.split(marker, 1)[1]
+            for line in text.splitlines():
+                line = line.strip()
+                if len(line) > 8 and not line.endswith(":"):
+                    # A page's first line is often a whole sentence, and a
+                    # title is not a paragraph.
+                    title = line.split(". ")[0].strip()[:120]
+                    break
+        return title, organisation, url
 
     def _mock_verification(self) -> str:
         """Mock verification response."""

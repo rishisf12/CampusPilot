@@ -23,6 +23,7 @@ from .models import (
     OppFeedFeedback,
     OpportunityStatus,
     RunStatus,
+    StepStatus,
 )
 from .schemas import (
     OpportunityCard,
@@ -36,6 +37,7 @@ from .schemas import (
     StateTransitionRequest,
     RunResponse,
     RunListItem,
+    RunStepResponse,
     RunCreateRequest,
     AgentSettingsResponse,
     AgentSettingsUpdateRequest,
@@ -548,6 +550,20 @@ async def admin_list_runs(
     offset = (page - 1) * page_size
     items = session.exec(stmt.offset(offset).limit(page_size)).all()
 
+    from features.oppfeed.runner import pipeline_stage_count
+
+    # How far each run has got, counted in stages: the progress bar is the
+    # pipeline's own stages, not a number the UI made up.
+    steps_by_run: Dict[str, List[RunStep]] = {}
+    if items:
+        run_ids = [r.run_id for r in items]
+        steps = session.exec(
+            select(RunStep).where(RunStep.run_id.in_(run_ids))
+        ).all()
+        for step in steps:
+            steps_by_run.setdefault(step.run_id, []).append(step)
+
+    total_stages = pipeline_stage_count()
     return [
         RunListItem(
             run_id=r.run_id,
@@ -556,7 +572,17 @@ async def admin_list_runs(
             started_at=r.started_at,
             completed_at=r.completed_at,
             opportunities_found=r.opportunities_found,
+            opportunities_verified=r.opportunities_verified,
+            opportunities_rejected=r.opportunities_rejected,
+            opportunities_drafted=r.opportunities_drafted,
             opportunities_published=r.opportunities_published,
+            current_stage=r.current_stage,
+            stages_completed=sum(
+                1
+                for step in steps_by_run.get(r.run_id, [])
+                if step.status == StepStatus.COMPLETED
+            ),
+            total_stages=total_stages,
         )
         for r in items
     ]
@@ -568,18 +594,38 @@ async def admin_create_run(
     session: Session = Depends(get_session),
     admin: User = Depends(get_current_admin),
 ):
-    """Trigger a manual agent run."""
+    """
+    Trigger a manual agent run.
+
+    The run is started, not simulated: the pipeline runs in the background
+    and the run row records what it did, stage by stage, so the admin can
+    watch it work. The response carries the run as it stands now - the
+    detail endpoint is where the progress is read from.
+    """
     import uuid
+
+    from features.oppfeed.runner import start_run
+
+    settings = session.exec(select(AgentSettings)).first()
+    if settings is not None and not settings.enable_agent:
+        raise HTTPException(
+            status_code=400,
+            detail="The agent is disabled. Turn it on in Agent Settings first.",
+        )
+
     run = AgentRun(
         run_id=str(uuid.uuid4()),
         status=RunStatus.PENDING,
         mode=payload.mode,
+        started_at=datetime.now(timezone.utc),
     )
     session.add(run)
     session.commit()
 
-    # TODO: Actually trigger the agent pipeline asynchronously
-    # For now, return the created run
+    # The pipeline runs in the background: it searches the open web and takes
+    # minutes, and the admin's request should return at once.
+    start_run(run.run_id, mode=payload.mode)
+
     return RunResponse(
         run_id=run.run_id,
         status=run.status.value,

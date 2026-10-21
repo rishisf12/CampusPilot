@@ -817,7 +817,14 @@ export interface RunListItem {
   started_at: string | null;
   completed_at: string | null;
   opportunities_found: number;
+  opportunities_verified: number;
+  opportunities_rejected: number;
+  opportunities_drafted: number;
   opportunities_published: number;
+  /** Where the run has got to, and how far it has to go. */
+  current_stage?: string | null;
+  stages_completed?: number;
+  total_stages?: number;
 }
 
 /** Admin: Full run detail. */

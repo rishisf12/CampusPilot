@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { oppfeedApi } from './api';
-import { Badge, Button, Card, Table } from '@/components/ui';
+import { Badge, Button, Card, ProgressBar, Table } from '@/components/ui';
 import ErrorBanner from '@shared/components/ErrorBanner';
 
 export default function AgentRunDetail({
@@ -44,24 +44,37 @@ export default function AgentRunDetail({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await oppfeedApi.getRun(runId);
-      setRun(data);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load run');
-      onError?.(err instanceof Error ? err.message : 'Failed to load run');
-    } finally {
-      setLoading(false);
-    }
-  }, [runId, onError]);
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setLoading(true);
+      try {
+        const data = await oppfeedApi.getRun(runId);
+        setRun(data);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load run');
+        onError?.(err instanceof Error ? err.message : 'Failed to load run');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [runId, onError]
+  );
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Follow a run that is still moving. The pipeline takes minutes, and a
+  // detail screen that only refreshes on demand shows a run frozen at
+  // "pending" for the whole of it.
+  const live = run?.status === 'pending' || run?.status === 'running';
+  useEffect(() => {
+    if (!live) return;
+    const timer = setInterval(() => load(true), 3000);
+    return () => clearInterval(timer);
+  }, [live, load]);
 
   if (loading) {
     return (
@@ -97,6 +110,17 @@ export default function AgentRunDetail({
       </div>
 
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
+
+      {/* The progress of the run */}
+      {live && (
+        <Card className="p-3">
+          <ProgressBar
+            value={run.steps.filter(s => s.status === 'completed').length}
+            max={Math.max(run.steps.length, 1)}
+            label={run.current_stage ?? 'starting'}
+          />
+        </Card>
+      )}
 
       {/* Run summary */}
       <Card className="p-3">

@@ -276,6 +276,130 @@ class RunStep(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
+# The agent's own tables
+#
+# The agent package declares these on its own registry so it can be imported
+# without the web layer. It runs inside this app, though, in this database, so
+# the app owns the tables: they are created here, migrated here, and the
+# agent finds them through the same search_path as everything else. The
+# columns mirror the agent's exactly - the agent's queries are unqualified,
+# so the two must agree on the names.
+# ---------------------------------------------------------------------------
+
+class OppFeedOpportunityDraft(SQLModel, table=True):
+    """The drafts the agent saves before they become opportunities."""
+
+    __tablename__ = "oppfeed_opportunity_draft"
+    __table_args__ = ({"schema": "core"},)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    slug: str = Field(index=True, unique=True, max_length=100)
+    status: OpportunityStatus = Field(default=OpportunityStatus.DRAFT)
+    title: str = Field(max_length=500)
+    organization_name: str = Field(max_length=200)
+    opportunity_type: OpportunityType = Field(default=OpportunityType.INTERNSHIP)
+    short_summary: Optional[str] = Field(default=None, max_length=2000)
+    full_description: Optional[str] = Field(default=None, max_length=5000)
+    location: Optional[str] = Field(default=None, max_length=200)
+    work_mode: Optional[WorkMode] = Field(default=None)
+    duration: Optional[str] = Field(default=None)
+    start_date: Optional[datetime] = Field(default=None)
+    stipend_min: Optional[int] = Field(default=None)
+    stipend_max: Optional[int] = Field(default=None)
+    stipend_currency: str = Field(default="INR", max_length=10)
+    stipend_period: Optional[str] = Field(default=None)
+    registration_deadline: Optional[datetime] = Field(default=None)
+    deadline_type: str = Field(default="fixed")
+    education_levels: List[str] = Field(default=[], sa_column=Column(JSON))
+    allowed_branches: List[str] = Field(default=[], sa_column=Column(JSON))
+    graduation_years: List[int] = Field(default=[], sa_column=Column(JSON))
+    min_cgpa_or_percentage: Optional[float] = Field(default=None)
+    other_criteria: Optional[str] = Field(default=None, max_length=2000)
+    skills_required: List[str] = Field(default=[], sa_column=Column(JSON))
+    perks_benefits: List[str] = Field(default=[], sa_column=Column(JSON))
+    selection_process: Optional[str] = Field(default=None, max_length=2000)
+    documents_required: List[str] = Field(default=[], sa_column=Column(JSON))
+    how_to_apply: Optional[str] = Field(default=None, max_length=2000)
+    apply_url: str = Field(max_length=1000)
+    secondary_sources: List[str] = Field(default=[], sa_column=Column(JSON))
+    contact_email: Optional[str] = Field(default=None, max_length=200)
+    source_domain: Optional[str] = Field(default=None, max_length=200)
+    verification_report: Optional[dict] = Field(default={}, sa_column=Column(JSON))
+    confidence_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    field_evidence: Optional[dict] = Field(default={}, sa_column=Column(JSON))
+    llm_provider: str = Field(default="mock", max_length=50)
+    llm_model: str = Field(default="mock", max_length=200)
+    prompt_version: str = Field(default="1.0", max_length=50)
+    tags: List[str] = Field(default=[], sa_column=Column(JSON))
+    version: int = Field(default=1)
+    created_by_run_id: Optional[str] = Field(default=None, max_length=100)
+    created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now()))
+
+
+class OppFeedOpportunityVerify(SQLModel, table=True):
+    """What the agent's duplicate check compares against."""
+
+    __tablename__ = "oppfeed_opportunity_verify"
+    __table_args__ = ({"schema": "core"},)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_name: str = Field(max_length=200)
+    title: str = Field(max_length=500)
+    apply_url: str = Field(max_length=1000)
+    status: OpportunityStatus = Field(default=OpportunityStatus.DRAFT)
+
+
+class OppFeedOpportunityFewshot(SQLModel, table=True):
+    """The approved examples the agent prompts with."""
+
+    __tablename__ = "oppfeed_opportunity_fewshot"
+    __table_args__ = ({"schema": "core"},)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    slug: str = Field(index=True, unique=True, max_length=100)
+    status: OpportunityStatus = Field(default=OpportunityStatus.DRAFT)
+    title: str = Field(max_length=500)
+    organization_name: str = Field(max_length=200)
+    opportunity_type: OpportunityType = Field(default=OpportunityType.INTERNSHIP)
+    short_summary: Optional[str] = Field(default=None, max_length=2000)
+    full_description: Optional[str] = Field(default=None, max_length=5000)
+    location: Optional[str] = Field(default=None, max_length=200)
+    work_mode: Optional[WorkMode] = Field(default=None)
+    duration: Optional[str] = Field(default=None)
+    start_date: Optional[datetime] = Field(default=None)
+    stipend_min: Optional[int] = Field(default=None)
+    stipend_max: Optional[int] = Field(default=None)
+    stipend_currency: str = Field(default="INR", max_length=10)
+    stipend_period: Optional[str] = Field(default=None)
+    registration_deadline: Optional[datetime] = Field(default=None)
+    deadline_type: str = Field(default="fixed")
+    education_levels: List[str] = Field(default=[], sa_column=Column(JSON))
+    allowed_branches: List[str] = Field(default=[], sa_column=Column(JSON))
+    graduation_years: List[int] = Field(default=[], sa_column=Column(JSON))
+    min_cgpa_or_percentage: Optional[float] = Field(default=None)
+    other_criteria: Optional[str] = Field(default=None, max_length=2000)
+    skills_required: List[str] = Field(default=[], sa_column=Column(JSON))
+    perks_benefits: List[str] = Field(default=[], sa_column=Column(JSON))
+    selection_process: Optional[str] = Field(default=None, max_length=2000)
+    documents_required: List[str] = Field(default=[], sa_column=Column(JSON))
+    how_to_apply: Optional[str] = Field(default=None, max_length=2000)
+    apply_url: str = Field(max_length=1000)
+    secondary_sources: List[str] = Field(default=[], sa_column=Column(JSON))
+    contact_email: Optional[str] = Field(default=None, max_length=200)
+    source_domain: Optional[str] = Field(default=None, max_length=200)
+    verification_report: Optional[dict] = Field(default={}, sa_column=Column(JSON))
+    confidence_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    field_evidence: Optional[dict] = Field(default={}, sa_column=Column(JSON))
+    llm_provider: str = Field(default="mock", max_length=50)
+    llm_model: str = Field(default="mock", max_length=200)
+    prompt_version: str = Field(default="1.0", max_length=50)
+    tags: List[str] = Field(default=[], sa_column=Column(JSON))
+    version: int = Field(default=1)
+    created_by_run_id: Optional[str] = Field(default=None, max_length=100)
+    created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now()))
+
+
+# ---------------------------------------------------------------------------
 # Settings, SourceRule, SearchQuery
 # ---------------------------------------------------------------------------
 

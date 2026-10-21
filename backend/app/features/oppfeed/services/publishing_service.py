@@ -55,6 +55,11 @@ class PublishingService:
 
         if not enabled:
             return False
+        if (opportunity.llm_provider or "").lower() == "mock":
+            # A mock extraction is a placeholder, not a finding. It stands in
+            # for a provider that is not there, so it must never reach the
+            # students' feed - an invented opportunity is worse than none.
+            return False
         if opportunity.confidence_score is None:
             return False
         if opportunity.confidence_score < threshold:

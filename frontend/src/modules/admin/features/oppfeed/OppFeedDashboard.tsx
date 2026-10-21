@@ -30,6 +30,7 @@ export default function OppFeedDashboard({ onError }: { onError?: (m: string) =>
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,6 +58,9 @@ export default function OppFeedDashboard({ onError }: { onError?: (m: string) =>
   const triggerRun = async () => {
     try {
       await oppfeedApi.createRun({ mode: 'manual' });
+      // The run works in the background and takes minutes. Say so, rather
+      // than leaving the button to look like it did nothing.
+      setMessage('Run started — watch it under Agent Runs.');
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to trigger run');
@@ -90,6 +94,18 @@ export default function OppFeedDashboard({ onError }: { onError?: (m: string) =>
       </div>
 
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      {message && (
+        <p
+          className="rounded-lg px-3 py-2 text-sm"
+          style={{
+            background: 'var(--cp-surface)',
+            color: 'var(--cp-success)',
+            border: '1px solid rgba(163,177,198,.25)',
+          }}
+        >
+          {message}
+        </p>
+      )}
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

@@ -268,7 +268,15 @@ class RunListItem(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     opportunities_found: int = 0
+    opportunities_verified: int = 0
+    opportunities_rejected: int = 0
+    opportunities_drafted: int = 0
     opportunities_published: int = 0
+    #: Where the run has got to, and how far it has to go. The progress bar
+    #: is counted in stages, and the stages are the pipeline's own.
+    current_stage: Optional[str] = None
+    stages_completed: int = 0
+    total_stages: int = 0
 
 
 class RunCreateRequest(BaseModel):

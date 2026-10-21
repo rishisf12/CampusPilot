@@ -5,7 +5,7 @@ import logging
 import os
 import random
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -117,6 +117,19 @@ class LLMRouter:
             max_concurrency=5,
         )
         self.cache = LLMCacheManager(ttl_hours=self.settings.LLM_CACHE_TTL_HOURS)
+        self.quota_checker = QuotaChecker(self.clients)
+        self._setup_clients(self.settings)
+
+    def set_chain(self, chain: Sequence[str]) -> None:
+        """
+        Use a provider chain from the settings rather than the environment.
+
+        The chain the admin sets in the app is the chain the run should use -
+        the environment is for the agent on its own, where there is no
+        settings table to read.
+        """
+        self.settings.llm_provider_chain = [name for name in chain if name]
+        self.clients = {}
         self.quota_checker = QuotaChecker(self.clients)
         self._setup_clients(self.settings)
 

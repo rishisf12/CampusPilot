@@ -37,7 +37,7 @@ def run_daily_agent_job() -> None:
     """Trigger the daily OppFeed agent pipeline run.
 
     Creates a run record, checks for active runs, then launches the
-    agent pipeline asynchronously.
+    agent pipeline in the background.
     """
     with Session(engine) as db:
         # Check for existing active runs
@@ -63,23 +63,14 @@ def run_daily_agent_job() -> None:
         db.add(run)
         db.commit()
         print(f"Created scheduled run: {run.run_id}")
+        run_id = run.run_id
 
-    # Execute the pipeline after the session is closed
-    # The pipeline manages its own sessions per stage
-    try:
-        pipeline = _load_pipeline()()
-        pipeline.run(run_id=run.run_id, mode="scheduled")
-    except Exception as e:
-        print(f"Pipeline execution failed: {e}")
-        # Update run status to failed
-        with Session(engine) as db:
-            run = db.exec(select(AgentRun).where(AgentRun.run_id == run.run_id)).first()
-            if run:
-                run.status = RunStatus.FAILED
-                run.completed_at = datetime.now(timezone.utc)
-                run.errors = {"error": str(e)}
-                db.add(run)
-                db.commit()
+    # The pipeline runs in the background and records its own progress: the
+    # same path a manual run takes, so the admin sees the same run either
+    # way.
+    from features.oppfeed.runner import start_run
+
+    start_run(run_id, mode="scheduled")
 
 
 def schedule_daily_agent_job() -> None:

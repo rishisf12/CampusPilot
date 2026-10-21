@@ -21,11 +21,18 @@ def _get_settings():
     def _str(name: str, default: str = "") -> str:
         return os.environ.get(name, default)
 
-    def _str_list(name: str, default: str = "") -> List[str]:
-        val = os.environ.get(name, default)
-        if val:
-            return [m.strip() for m in val.split(",") if m.strip()]
-        return default
+    def _str_list(name: str, default: Optional[List[str]] = None) -> List[str]:
+        """
+        A comma-separated environment variable, as a list.
+
+        The default is a list, not a string: reading the variable as a string
+        and splitting it afterwards would try to split the default itself,
+        and a list has no ``split``.
+        """
+        val = os.environ.get(name)
+        if val is None:
+            return list(default or [])
+        return [m.strip() for m in val.split(",") if m.strip()]
 
     def _int(name: str, default: int = 30) -> int:
         try:
@@ -37,7 +44,7 @@ def _get_settings():
         return os.environ.get(name, default)
 
     return type("OpenCodeSettings", (), {
-        "opencode_models": _str_list("OPENCODE_MODELS", [""]),
+        "opencode_models": _str_list("OPENCODE_MODELS", []),
         "OPENCODE_TIMEOUT_S": _int("OPENCODE_TIMEOUT_S", 30),
         "OPENCODE_MODE": _str("OPENCODE_MODE", "cli"),
     })()
