@@ -299,12 +299,16 @@ Owns prompt task 8.
 Verify: preflight passes on this repo; `docker run --rm <backend-image> ls .opencode` fails.
 
 Implemented:
-- `scripts/preflight.py` — nine checks, one line each, exit 1 on any failure.
+- `scripts/preflight.py` - ten checks, one line each, exit 1 on any failure.
   It reads the real files (the compose file, the Dockerfile, the
   `.dockerignore`, the migrations) and the real database when one is
   reachable; a check that cannot run reports SKIP rather than pretending to
   pass, and `--strict` turns a skip into a failure. On this repository it
-  reports **9 passed, 0 failed, 0 skipped**.
+  reports **10 passed, 0 failed, 0 skipped**.
+  Two of the ten were added later and are worth naming: one asserts the
+  allowlist is exactly the two hosted free providers and that no local model
+  setting survives in the compose file or the env example, and one asserts
+  the seven monitoring containers and their volumes stay gone.
 - **Image hygiene.** `.dockerignore` excludes `.opencode/` explicitly, and
   the Dockerfile asserts it after the copies (`RUN test ! -e /app/.opencode`)
   so widening the copy list cannot quietly put a shell MCP server into a
@@ -353,7 +357,7 @@ Implemented:
 - `README.md` — the new environment variables, how provider routing works,
   how to run the preflight, and how to record a demo scan.
 
-### Phase 10 — Legacy removal (v1 parity gate) — DONE (commit `pending`)
+### Phase 10 — Legacy removal (v1 parity gate) — DONE (commit `a0ad466`)
 Directive 1. The 7 monitoring containers and their volumes are deleted in ONE
 commit, with the rollback being a revert of that commit.
 
@@ -527,13 +531,16 @@ justified for size (psutil, prometheus_client already carried this bar).
       metric and a bogus `change_pct` each fail the scan.
 - [x] Executor rejects non-enum action; audit row exists for every proposal.
       `tests/test_reactor.py`.
-- [x] `docker compose config` shows required networks + internal flag.
+- [x] `docker compose config` shows required networks + internal flag, and the
+      monitoring containers are gone from it. `app-internal` is
+      `internal: true`, and the preflight asserts the containers and their
+      volumes stay gone.
       `app-internal: internal: true`; the monitoring stack is off `edge`.
 - [x] `docker run --rm <backend-image> ls .opencode` fails (dev files absent).
       `.dockerignore` excludes `.opencode/`, the Dockerfile asserts it after
       the copies, and the built image was checked.
 - [x] `scripts/preflight.py` passes on this repo.
-      9 passed, 0 failed, 0 skipped; wired into CI.
+      10 passed, 0 failed, 0 skipped; wired into CI.
 - [x] One end-to-end demo scan recorded: subsection filled, audit rows show provider = nvidia_nim, `bytes_out` = redacted payload size.
       `docs/observability/DEMO-SCAN.md` (recorded by `scripts/demo_scan.py`).
 - [x] All new + existing tests green; README and SCAN-AGENT.md updated.
