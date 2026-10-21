@@ -1,7 +1,8 @@
 # Scan agent contract
 
-This file is referenced by `opencode.json` (`instructions` + each agent's
-`prompt`). It has four parts:
+This file is the system prompt and the contract the scan runtime holds the
+model to: `mcp/agent/runtime.py` loads §1 as the system prompt, and the
+output is validated against §2's schema. It has four parts:
 
 1. The system prompt
 2. The JSON Schema the output must satisfy
@@ -306,9 +307,11 @@ not the model's transcription:
    On timeout: `{ok: false, error: "timeout"}` → lands in `confidence.tools_failed`.
 3. **No network.** The tools container sits on an internal Docker network with no
    route to the internet. Enforced by compose, not by a comment.
-4. **Table allowlist.** `sqlite_ro` refuses `auth_*`, `*_token`, `password_hash`,
-   and anything not in `SQL_ALLOWLIST`. Without this a scan can read credential
-   hashes and report them as a "security finding".
+4. **Table allowlist.** The SQL guard (`mcp.core.queries.assert_read_query`)
+   refuses `auth_*`, `*_token`, `password_hash` and anything else outside the
+   allowlist, and the agent's database role (`monitoring_ro`) can only
+   SELECT. Without this a scan could read credential hashes and report them
+   as a "security finding".
 5. **Row cap** of 10,000 per call, and a 20,000-character SQL length limit.
 6. **Every call is audited** into `tool_call_audit` before the response is
    returned to the model, so the log is complete even if the model misbehaves.

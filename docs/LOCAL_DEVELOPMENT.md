@@ -45,7 +45,6 @@ CampusPilot/
 │   ├── package.json
 │   ├── Dockerfile              # Serves on container port 80
 │   └── tsconfig.json
-├── mcp-crash-monitor/          # Read-only MCP server over monitoring tables
 │   └── src/index.ts
 ├── ops/                        # Observability configs (Prometheus, Grafana, Alertmanager)
 └── docs/                       # Documentation
@@ -454,34 +453,6 @@ docker system prune -f
 - **VS Code terminal** preserves environment across splits — use splits for parallel processes.
 - **Python 3.10 is mandatory** — the `as const` assertions and some typing features behave differently in 3.11+.
 - **Docker Desktop on Windows** can be flaky — if `docker compose` fails to connect, restart Docker Desktop and wait 60s.
-
----
-
-## Optional: Crash-Monitor MCP Server
-
-`mcp-crash-monitor/` is a read-only MCP server over the app's own monitoring
-tables, so crash and telemetry analysis needs no third-party hosted service.
-It connects with the same PostgreSQL you already run.
-
-```powershell
-cd mcp-crash-monitor
-npm install
-npm run build     # tsc — dist/ is gitignored, so a fresh clone must build
-npm start
-```
-
-Configuration lives in `.env` (copy from `.env.example`):
-
-```bash
-DATABASE_URL=postgresql://campuspilot:campuspilot@localhost:5432/campuspilot
-```
-
-In a shared environment point `DATABASE_URL` at a `SELECT`-only role (for
-example `monitoring_ro`, created by migration
-`0c60d501467d`) rather than the application role.
-
-It is registered in `docs/observability/opencode.json` as the `crash-monitor`
-MCP server, and runs `node dist/index.js` from `./mcp-crash-monitor`.
 
 ---
 

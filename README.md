@@ -301,7 +301,6 @@ CampusPilot/
 │       │   └── time.ts
 │       └── tests/
 │           └── passkey.test.js
-├── mcp-crash-monitor/            # Read-only MCP server over the monitoring tables
 │   └── src/index.ts
 └── tools/                        # Maintenance scripts (not part of the app)
 ```

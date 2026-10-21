@@ -737,7 +737,6 @@ This alone gives you §A and §B. **Most of the value, no LLM required.**
 | File | What |
 |---|---|
 | `docs/observability/ARCHITECTURE.md` | this document |
-| `docs/observability/opencode.json` | full scan-runner config with MCP wiring |
 | `docs/observability/SCAN-AGENT.md` | system prompt, JSON Schema, reconciliation logic |
 | `docs/observability/TOOL-MATRIX.md` | §3 as a standalone matrix (for code-gen) |
 

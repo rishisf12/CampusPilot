@@ -393,6 +393,17 @@ containers were hiding:
   acknowledge, resolve) but nothing ever evaluated a rule or delivered a
   notification, so an alert could not have fired even in principle.
 
+**The v1 agent stack is gone too.** `.opencode/` held the eight v1 scan
+agents and their eight MCP servers — `metrics` (Prometheus), `logs`
+(VictoriaLogs), `grafana`, `sqlite-ro`, `crash-monitor`, and a **shell**
+server — and `mcp-crash-monitor/` was the v1 TypeScript MCP server over the
+monitoring tables. With the containers gone, every one of those servers
+pointed at something that no longer exists, and the shell server was
+exactly what the "no terminal for agents" rule forbids. Both are deleted;
+the Python `mcp/` package (the registry, the aggregate tools, the alerting
+tools and the shared read-only contract) is their replacement, and the
+tool matrix is now generated from the registry.
+
 **The 7-day parity week was overridden by the operator**, who decided the
 containers cost storage and cannot be deployed for free. The parity *rows*
 are all `verified` (below), which is the part the wait was for; what the
