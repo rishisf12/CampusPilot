@@ -105,7 +105,10 @@ def sync_courses_from_timetable(session: Session, owner: Optional[int] = None) -
             session.add(course)
             created += 1
 
-    session.commit()
+    # Commit only when something was actually created: this runs on every
+    # exam request, and an empty sync should not open a write transaction.
+    if created:
+        session.commit()
     logger.info("Synced courses from timetable: %d unique codes", len(codes_in_timetable))
     return created
 

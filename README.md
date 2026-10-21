@@ -373,9 +373,12 @@ CampusPilot/
 
 - **Quick Roll Lookup**: roll prefilled from the signed-in user (cached, with
   `/auth/me` as fallback), *Find Room* button, results as compact cards with
-  course code, room, date, day and time. Exams dated today get a blue card and a
-  `● TODAY` badge. Duplicate rooms are collapsed and the last result set is
-  restored after a refresh.
+  course code, room, date, day and time. The cards are the account's own
+  papers — the same list the Exam Timetable tab shows — so a course the
+  student does not sit never appears and one they do sit is never missing.
+  Exams dated today get a blue card and a `● TODAY` badge. Duplicate rooms are
+  collapsed, and the last result set is restored after a refresh and
+  re-checked against the server, so a corrected exam is never shown stale.
 - Two upload cards — *Exam Timetable* and *Exam Seating Index* — side by side
   while empty, stacked once populated. Each shows its own *"Uploaded (N
   entries)"* with a red Remove behind a confirm dialog. Upload errors appear
@@ -384,7 +387,9 @@ CampusPilot/
   *Synced with profile* badge, a hint for how many rows are hidden, and rows
   grouped as *Day-1 Monday* with Date | Time | Course Code | Instructor.
 - Exam Seating Index view: grouped by date and time with Lecture Hall | Course
-  Code | Roll Numbers, 20-row preview and *Show All*.
+  Code | Roll Numbers, 20-row preview and *Show All*. It is the index as a
+  document, so it is listed even where the index does not cover the reader —
+  and it says so rather than claiming nothing was uploaded.
 - Refetches automatically when `profile_version` changes.
 
 ---
@@ -645,9 +650,9 @@ All paths are relative to `http://127.0.0.1:8001`. 🔒 requires
 | 🔒 `POST` | `/exam/seating/upload` | Seating index PDF/CSV |
 | 🔒 `POST` | `/exam/upload` | Legacy alias of the seating upload |
 | 🔒 `GET` | `/exam/timetable` | Day-grouped, filtered to your profile |
-| 🔒 `GET` | `/exam/seating` | Day-grouped seating rows |
-| 🔒 `GET` | `/exam/lookup?roll=` | Three-rule lookup; reports which rules ran |
-| 🔒 `GET` | `/exam/quick-lookup?roll=` | Unfiltered, only date/room/course code |
+| 🔒 `GET` | `/exam/seating` | Day-grouped seating rows; `?roll=` narrows to one roll |
+| 🔒 `GET` | `/exam/lookup?roll=` | Your papers, with the hall that roll sits in |
+| 🔒 `GET` | `/exam/quick-lookup?roll=` | The same, trimmed to date/room/course code |
 | 🔒 `GET` | `/exam/pdf?roll=` | Personalised PDF download |
 | 🔒 `GET` | `/exam/status` | Row counts, drives the upload badges |
 | 🔒 `DELETE` | `/exam/timetable` · `/exam/seating` | Clear |
@@ -771,18 +776,22 @@ course codes. Handled:
 
 **Mid-sem timetable** — columns `Date | Time | Course Code | Semester` with
 `DAY 1` / `DAY 2` markers. It carries **no room column**, so halls are joined in
-from the seating index on course code + date, preferring the hall that covers the
-most students on that date.
+from the seating index on course code + date, preferring the block the reader's
+own roll sits in, then the hall that covers the most students in that band.
 
 The current PDFs yield **705 seating rows and 75 timetable rows** with zero
 unknown course codes.
 
 ### The three lookup rules
 
-`GET /exam/lookup?roll=` applies, in order:
+`GET /exam/lookup?roll=` answers with **the account's own papers** — the same
+list the *Exam Timetable* tab shows, so the two screens can never disagree
+about what the student sits. The roll decides the hall.
 
-1. **Profile sync** — rows are filtered to your branch family, semester and
-   elective codes.
+1. **Profile sync** — the papers are the timetable's courses that the
+   profile's subjects give the student: their branch, their semester and the
+   electives they opted into. A course they do not sit is not their exam, even
+   when the index says their roll sits in its hall.
 2. **Continuous range → exact room** — an unbroken roll range (≤ 400 students)
    gives the precise hall.
 3. **Extra courses** — `OE…` rows are shared across branches. They are filtered
@@ -791,6 +800,28 @@ unknown course codes.
 
 Each returned exam reports which `rule` produced it, so the UI can distinguish
 exact matches from estimates.
+
+### One exam, two documents
+
+The timetable says *when* a paper is; the seating index says *where* it is and
+*who* sits there. They are uploaded separately, so they can disagree — a typo
+in one, a header the parser read differently in the other.
+
+The timetable is the published document, so it decides the slot:
+
+- a seating row is moved onto the timetable's band **for the same day** — the
+  day is the anchor, because a mid-sem timetable and an end-sem index share
+  course codes and a paper is never moved to another day;
+- a course the timetable places in two bands that day is left alone: choosing
+  between two real exams would be a guess, and a wrong exam is worse than the
+  document's own wording;
+- a course the timetable does not mention keeps the slot the index gave it —
+  the rule never invents an exam.
+
+The rule is applied when a seating index is uploaded (the rows are aligned as
+they are stored), when a roll is looked up, and when the index is listed, so
+all three views tell the same story. Migration `024` brought the rows that
+predate it into line.
 
 ---
 
@@ -986,10 +1017,12 @@ These are real limitations rather than bugs:
    another browser or device.
 2. **No instructor data.** The exam timetable rows carry no instructor field, so
    the Instructor column renders `—`.
-3. **Profile filtering on exam lookup is approximate.** Branch and semester are
-   inferred from the roll-number prefix and the course code, so a row's inferred
-   branch can disagree with the paper's real branch. The UI states when a
-   result set has been narrowed to your profile.
+3. **The exam hall for a paper is a guess until the index says otherwise.** A
+   paper's hall is borrowed from the seating index — the block the reader's own
+   roll sits in, else the hall that covers the most students in that band. The
+   index is the document about seats, so where the two disagree the index
+   wins, but a paper the index does not cover has no exact hall to give. The
+   UI says when a result set has been narrowed to your profile.
 4. **Verification codes are in-memory.** They are lost on backend restart and are
    not shared across workers. Use Redis for multi-worker deployments.
 5. **Timetable and exam uploads are global.** One timetable and one seating index

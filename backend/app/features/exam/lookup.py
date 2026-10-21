@@ -15,12 +15,13 @@ Implements the three agreed rules, in order:
 import logging
 from collections import Counter
 from datetime import date as date_type
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from models import ExamSeating, MidSemSchedule
+from features.exam.reconcile import align_rows, timetable_slots
 from features.exam.parser import (
     branch_family,
     exam_row_visible,
@@ -49,9 +50,9 @@ def _row_to_dict(row: ExamSeating) -> Dict[str, Any]:
     }
 
 
-def _account_scope(owner_id: Optional[int]):
+def owner_scope(model, owner_id: Optional[int]):
     """
-    Where clause scoping seating rows to one account's view.
+    Where clause scoping exam rows to one account's view.
 
     Rows an individual uploaded live in their account; everyone reads the
     public (admin-uploaded) rows, ``uploaded_by`` ``NULL``. ``owner_id=None``
@@ -60,7 +61,7 @@ def _account_scope(owner_id: Optional[int]):
     """
     if owner_id is None:
         return None
-    return or_(ExamSeating.uploaded_by.is_(None), ExamSeating.uploaded_by == owner_id)
+    return or_(model.uploaded_by.is_(None), model.uploaded_by == owner_id)
 
 
 def find_candidate_rows(
@@ -69,7 +70,7 @@ def find_candidate_rows(
     """Every stored row whose roll range contains ``roll``."""
     prefix, num = parse_roll(roll)
     query = select(ExamSeating).where(ExamSeating.roll_start_prefix == prefix.upper())
-    scope = _account_scope(owner_id)
+    scope = owner_scope(ExamSeating, owner_id)
     if scope is not None:
         query = query.where(scope)
     rows = session.exec(query).all()
@@ -90,8 +91,8 @@ def estimate_extra_room(
     Both sources are scoped to the account doing the lookup.
     """
     course_code = (row.course_code or "").upper()
-    scope_schedule = _account_scope(owner_id)
-    scope_seating = _account_scope(owner_id)
+    scope_schedule = owner_scope(MidSemSchedule, owner_id)
+    scope_seating = owner_scope(ExamSeating, owner_id)
     if course_code:
         query = select(MidSemSchedule).where(MidSemSchedule.course_code == course_code)
         if scope_schedule is not None:
@@ -149,6 +150,12 @@ def lookup_roll(
     dicts = [_row_to_dict(row) for row in candidates]
     extras = list(profile.get("elective_codes") or []) if profile else []
 
+    # The timetable decides when a paper is; the index says who sits where.
+    # A row stored against a slot the timetable contradicts is moved onto the
+    # timetable's slot, so the lookup cannot answer with a time the published
+    # timetable does not carry.
+    align_rows(dicts, timetable_slots(session, owner_id=owner_id))
+
     # --- Rule 1: keep the filter in sync with the profile -------------------
     visible = [d for d in dicts if exam_row_visible(d, profile, extras)]
     profile_filter_applied = bool(visible) and len(visible) < len(dicts)
@@ -184,6 +191,7 @@ def lookup_roll(
         profile_filter_applied = False
         rules_used = [2]
 
+    exams = _dedupe(exams)
     exams.sort(key=lambda e: (e["date"] or "", e["start_time"] or "", e["course_code"] or ""))
     return {
         "roll": roll,
@@ -191,6 +199,32 @@ def lookup_roll(
         "profile_filter_applied": profile_filter_applied,
         "rules_used": sorted(set(rules_used)),
     }
+
+
+def _dedupe(exams: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    One paper once.
+
+    The same upload can sit in the store twice - the admin's public copy and
+    the copy in one account - and both are in view for that account. They are
+    the same paper, so the student should be told once: a repeated card
+    reads as two exams, and the second one is usually the one that looks
+    wrong.
+    """
+    seen = set()
+    unique: List[Dict[str, Any]] = []
+    for exam in exams:
+        key = (
+            (exam.get("course_code") or "").upper(),
+            exam.get("date"),
+            exam.get("start_time"),
+            (exam.get("room") or "").strip().upper(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(exam)
+    return unique
 
 
 def is_continuous_range_dict(row: Dict[str, Any]) -> bool:
@@ -242,45 +276,107 @@ def fill_rooms_from_seating(
     session: Session,
     rows: List[Dict[str, Any]],
     owner_id: Optional[int] = None,
+    roll: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Fill in rooms for timetable rows that have none.
+    Resolve the hall for each timetable row.
 
-    The mid-sem timetable PDF lists only date/time/course, while the seating
-    index is the document that names the hall.  Matching on course code and date
-    therefore gives each exam its room without a second upload step. Candidate
-    hall rows come from the account's view of the index: the public rows plus
-    the reader's own.
+    The mid-sem timetable PDF lists only date/time/course - sometimes with a
+    hall of its own - while the seating index is the document that names the
+    hall a roll sits in. Candidate hall rows come from the account's view of
+    the index: the public rows plus the reader's own.
+
+    The hall is taken from the *same slot* first - the course, the day and the
+    band - so a course that runs in more than one band gets the hall of the
+    band it runs in, not the hall of another one.
+
+    When the reader's own roll is given, the block that holds that roll wins:
+    that is the reader's hall, and it beats both a hall printed in the
+    timetable and a course-wide guess. A reader's own block and the
+    timetable's printed hall disagreeing is a question about one student, and
+    the seating index is the document about seats.
     """
-    missing = [r for r in rows if not r.get("room") and r.get("course_code")]
-    if not missing:
+    if not rows:
         return rows
 
-    codes = {r["course_code"] for r in missing}
-    query = select(ExamSeating).where(ExamSeating.course_code.in_(codes))
-    scope = _account_scope(owner_id)
-    if scope is not None:
-        query = query.where(scope)
-    seatings = session.exec(query).all()
+    codes = {r["course_code"] for r in rows if r.get("course_code")}
+    seatings = []
+    if codes:
+        query = select(ExamSeating).where(ExamSeating.course_code.in_(codes))
+        scope = owner_scope(ExamSeating, owner_id)
+        if scope is not None:
+            query = query.where(scope)
+        seatings = session.exec(query).all()
 
+    # course code -> (date, start, end) -> {room: count}
+    by_slot: Dict[str, Dict[Tuple[str, str, str], Dict[str, int]]] = {}
     # course code -> date -> {room: count}
-    by_course: Dict[str, Dict[str, Dict[str, int]]] = {}
+    by_date: Dict[str, Dict[str, Dict[str, int]]] = {}
     for seating in seatings:
         if not seating.room or not seating.seating_date:
             continue
-        per_date = by_course.setdefault(seating.course_code, {})
-        per_date.setdefault(seating.seating_date.isoformat(), {})
-        counts = per_date[seating.seating_date.isoformat()]
-        counts[seating.room] = counts.get(seating.room, 0) + 1
-
-    for row in missing:
-        per_date = by_course.get(row["course_code"])
-        if not per_date:
-            continue
-        # Prefer the hall used on the same date; fall back to the most common one.
-        counts = per_date.get(row.get("schedule_date")) or max(
-            per_date.values(), key=lambda c: max(c.values())
+        room = seating.room
+        slot_key = (
+            seating.seating_date.isoformat(),
+            seating.start_time.strftime("%H:%M") if seating.start_time else "",
+            seating.end_time.strftime("%H:%M") if seating.end_time else "",
         )
+        per_slot = by_slot.setdefault(seating.course_code, {}).setdefault(slot_key, {})
+        per_slot[room] = per_slot.get(room, 0) + 1
+        per_date = by_date.setdefault(seating.course_code, {}).setdefault(
+            seating.seating_date.isoformat(), {}
+        )
+        per_date[room] = per_date.get(room, 0) + 1
+
+    # The reader's own block, when their roll is given: their hall, not a
+    # guess. Keyed by the band too, so a course that runs in two bands gives
+    # the hall of the band it runs in.
+    own: Dict[Tuple[str, str, str, str], str] = {}
+    if roll:
+        try:
+            for seating in find_candidate_rows(session, roll, owner_id=owner_id):
+                if not seating.room or not seating.seating_date:
+                    continue
+                key = (
+                    seating.course_code,
+                    seating.seating_date.isoformat(),
+                    seating.start_time.strftime("%H:%M") if seating.start_time else "",
+                    seating.end_time.strftime("%H:%M") if seating.end_time else "",
+                )
+                own.setdefault(key, seating.room)
+        except ValueError:
+            own = {}
+
+    for row in rows:
+        course = row.get("course_code")
+        if not course:
+            continue
+        slots = by_slot.get(course) or {}
+        slot_key = (
+            row.get("schedule_date") or "",
+            row.get("start_time") or "",
+            row.get("end_time") or "",
+        )
+        # The reader's own block in this band: their hall, whatever the
+        # timetable printed and whatever the course-wide guess would be.
+        own_room = own.get((course, slot_key[0], slot_key[1], slot_key[2]))
+        if own_room:
+            row["room"] = own_room
+            continue
+        if row.get("room"):
+            continue
+        # The hall of that exact band, else the hall of that day, else the
+        # course's commonest hall.
+        counts = slots.get(slot_key)
+        if not counts:
+            counts = (by_date.get(course) or {}).get(row.get("schedule_date"))
+        if not counts:
+            merged: Counter = Counter()
+            for per_slot in slots.values():
+                merged.update(per_slot)
+            counts = dict(merged)
+        if not counts:
+            continue
         row["room"] = max(counts.items(), key=lambda kv: kv[1])[0]
     return rows
 

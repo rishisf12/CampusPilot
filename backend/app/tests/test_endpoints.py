@@ -180,16 +180,23 @@ def test_timetable_options_lists_discovered_values(client):
     assert 5 in body["semesters"]
 
 
-def test_exam_lookup_finds_the_seeded_range(client):
-    """Rule 2: a continuous range yields the exact room."""
+def test_exam_lookup_shows_the_students_own_papers(client):
+    """
+    The lookup answers with the papers the student sits.
+
+    The seating index says this roll sits in a hall for a course of another
+    semester. A course they do not sit is not their exam, so the lookup does
+    not offer it - and the paper they do sit is there, with its hall.
+    """
     test_client, token = client
     body = test_client.get("/exam/lookup?roll=23BCS050", headers=auth(token)).json()
     assert body["exams"], body
     exam = body["exams"][0]
-    assert exam["room"] == "L-201"
-    assert exam["course_code"] == "CS8036"
+    assert exam["course_code"] == "CS5031"
+    assert exam["room"] == "L-103"
     assert exam["rule"] == 2
-    assert exam["date"] == "2026-09-21"
+    assert exam["date"] == "2025-09-29"
+    assert "CS8036" not in [e["course_code"] for e in body["exams"]]
 
 
 def test_exam_timetable_is_grouped_by_day(client):

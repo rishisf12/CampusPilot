@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import { CalendarDays, CheckCircle2, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, Input, Select, Table, Tabs } from '@/components/ui';
 import { authApi, examApi } from '@/api';
@@ -135,9 +135,12 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
    * The saved result is restored so a refresh does not lose it, but it is
    * re-fetched on the next search, never treated as current data.
    */
+  const restoredLookup = useRef<LookupResult | null>(null);
+
   useEffect(() => {
     const saved = readQuickLookup();
     if (saved) {
+      restoredLookup.current = saved;
       setLookup(saved);
       setRoll(saved.roll);
       return;
@@ -193,32 +196,42 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
       .filter(day => day.exams.length > 0);
   }, [timetable]);
 
+  /**
+   * The server's answer for a roll, in the shape the card shows.
+   *
+   * Paired codes are split into the papers they are, and one paper is shown
+   * once even when the index carries it twice.
+   */
+  const fetchLookup = async (target: string): Promise<LookupResult | null> => {
+    const data = await examApi.lookup(target.trim().toUpperCase());
+    const seen = new Set<string>();
+    const exams = (data.exams || [])
+      .flatMap((exam: ExamRow) =>
+        splitCourseCodes(exam.course_code).map(code => ({ ...exam, course_code: code }))
+      )
+      .filter((exam: ExamRow) => {
+        const key = `${exam.course_code}|${exam.date}|${normaliseRoom(exam.room)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    return {
+      roll: data.roll,
+      exams,
+      // True when the backend narrowed the list to the signed-in profile.
+      profileFiltered: Boolean(data.profile_filter_applied),
+      profile: timetable?.profile || null,
+    };
+  };
+
   const runLookup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!roll.trim()) return;
     setLooking(true);
     setLookupError(null);
     try {
-      const data = await examApi.lookup(roll.trim().toUpperCase());
-      // Drop duplicate rooms for the same course/date, and split paired codes.
-      const seen = new Set<string>();
-      const exams = (data.exams || [])
-        .flatMap((exam: ExamRow) =>
-          splitCourseCodes(exam.course_code).map(code => ({ ...exam, course_code: code }))
-        )
-        .filter((exam: ExamRow) => {
-          const key = `${exam.course_code}|${exam.date}|${normaliseRoom(exam.room)}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-      const result: LookupResult = {
-        roll: data.roll,
-        exams,
-        // True when the backend narrowed the list to the signed-in profile.
-        profileFiltered: Boolean(data.profile_filter_applied),
-        profile: timetable?.profile || null,
-      };
+      const result = await fetchLookup(roll);
+      if (!result) return;
       setLookup(result);
       // Cached so a refresh can restore it; the server remains the source.
       // Skipped when the student has turned the cache off in Privacy & Data.
@@ -230,6 +243,33 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
       setLooking(false);
     }
   };
+
+  /**
+   * The saved copy is a convenience, not an authority.
+   *
+   * The exam data can change under it - a corrected timetable, a re-uploaded
+   * index - so the server is asked again and its answer replaces the saved
+   * one. A student must never be shown a stale exam.
+   */
+  useEffect(() => {
+    const saved = restoredLookup.current;
+    if (!saved || !timetable) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const fresh = await fetchLookup(saved.roll);
+        if (cancelled || !fresh) return;
+        setLookup(fresh);
+        if (rememberLookup) writeQuickLookup(fresh);
+      } catch {
+        /* the server cannot be reached: keep the saved copy */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timetable]);
 
   const removeData = async (kind: 'timetable' | 'seating') => {
     const label = kind === 'timetable' ? 'exam timetable' : 'seating index';
@@ -408,6 +448,7 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
           showAll={showAll.seating}
           setShowAll={value => setShowAll(prev => ({ ...prev, seating: value }))}
           onLoad={loadSeating}
+          uploadedRows={status.seating_rows}
         />
       )}
     </div>
@@ -550,9 +591,11 @@ interface SeatingViewProps {
   showAll: boolean;
   setShowAll: (value: boolean) => void;
   onLoad: () => void;
+  /** How many rows the index holds, so an empty list can be explained. */
+  uploadedRows?: number;
 }
 
-function SeatingView({ data, showAll, setShowAll, onLoad }: SeatingViewProps) {
+function SeatingView({ data, showAll, setShowAll, onLoad, uploadedRows = 0 }: SeatingViewProps) {
   const [semester, setSemester] = useState('');
   const [branch, setBranch] = useState('');
 
@@ -597,7 +640,14 @@ function SeatingView({ data, showAll, setShowAll, onLoad }: SeatingViewProps) {
   if (!data.total) {
     return (
       <Card className="text-center py-10 text-sm" style={{ color: 'var(--cp-muted)' }}>
-        No seating index uploaded yet. Add the seating index PDF above.
+        {uploadedRows ? (
+          <>
+            The seating index holds {uploadedRows} rows, but none of them is a paper of yours. Your
+            hall is on the Quick Roll Lookup card above.
+          </>
+        ) : (
+          'No seating index uploaded yet. Add the seating index PDF above.'
+        )}
       </Card>
     );
   }

@@ -71,6 +71,7 @@ def collect_student_exams(
     roll: str,
     profile: Optional[Dict[str, Any]] = None,
     owner_id: Optional[int] = None,
+    papers: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     The student's own exams, de-duplicated per course and time slot.
@@ -81,15 +82,27 @@ def collect_student_exams(
          "start_time": "15:00", "end_time": "17:00",
          "rooms": ["L-104"], "is_extra": True}
 
+    ``papers`` are the account's own exam papers, as the timetable and the
+    profile give them. When they are supplied, they are the list: a paper the
+    student does not sit is not theirs, and a paper the seating index does
+    not cover is still theirs. Without them the seating index alone answers,
+    which is what a direct service call gets.
+
     Open electives and extra courses are kept only when the student has declared
     them, because an index lists every branch's elective papers and they are not
     all the student's.
     """
-    result = lookup_roll(session, roll.strip().upper(), profile, owner_id=owner_id)
+    if papers is not None:
+        from features.exam.service import papers_for_roll
+
+        rows = papers_for_roll(session, roll.strip().upper(), papers, owner_id=owner_id)
+    else:
+        result = lookup_roll(session, roll.strip().upper(), profile, owner_id=owner_id)
+        rows = result.get("exams", [])
     declared = declared_course_codes(session, profile)
 
     exams: Dict[tuple, Dict[str, Any]] = {}
-    for exam in result.get("exams", []):
+    for exam in rows:
         if not exam.get("date"):
             continue
         code = (exam["course_code"] or "").upper()
@@ -127,6 +140,7 @@ def detect_student_exam_clashes(
     roll: str,
     profile: Optional[Dict[str, Any]] = None,
     owner_id: Optional[int] = None,
+    papers: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Return the student's overlapping exams, grouped by date and time band.
@@ -138,7 +152,9 @@ def detect_student_exam_clashes(
          "courses": [{"course_code": "OE3E33", "rooms": ["L-104"]},
                      {"course_code": "HS1001", "rooms": ["L-105"]}]}
     """
-    exams = collect_student_exams(session, roll, profile, owner_id=owner_id)
+    exams = collect_student_exams(
+        session, roll, profile, owner_id=owner_id, papers=papers
+    )
     if len(exams) < 2:
         return []
 

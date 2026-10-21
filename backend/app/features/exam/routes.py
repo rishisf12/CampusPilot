@@ -21,17 +21,17 @@ from features.exam.clash import (
     collect_student_exams,
     detect_student_exam_clashes,
 )
-from features.exam.lookup import fill_rooms_from_seating, lookup_roll
+from features.exam.lookup import lookup_roll
+from features.exam.reconcile import align_rows, timetable_slots
+from features.exam.service import papers_for_roll, student_papers
 from features.exam.parser import (
     exam_row_visible,
     is_open_elective,
     parse_mid_sem_file,
     parse_seating_index_file,
     roll_in_range,
-    split_course_codes,
 )
 from features.exam.pdf import generate_exam_pdf
-from features.attendance.service import get_subjects, sync_courses_from_timetable
 from features.profile.service import elective_codes, get_profile_for_user, profile_to_filter
 
 logger = logging.getLogger(__name__)
@@ -155,18 +155,33 @@ async def upload_seating_index(
         )
 
     session.exec(delete(ExamSeating).where(_delete_scope(ExamSeating, owner)))
+    # The timetable decides when a paper is; the index says who sits where.
+    # Aligning the rows as they are stored keeps the index and the timetable
+    # telling the same story from the moment the file lands.
+    moved = align_rows(rows, timetable_slots(session, owner_id=user.id))
     for row in rows:
         session.add(ExamSeating(uploaded_by=owner, **row))
     session.commit()
     _record_upload(session, "seating", saved_path, file.filename, owner)
 
     stats = result["stats"]
-    logger.info("Seating index stored: %s rows (%s skipped)", stats["rows_parsed"], stats.get("rows_skipped"))
+    logger.info(
+        "Seating index stored: %s rows (%s skipped, %s aligned to the timetable)",
+        stats["rows_parsed"],
+        stats.get("rows_skipped"),
+        moved,
+    )
     note = "" if owner is None else " (visible only in your account)"
+    aligned = (
+        f" - {moved} row(s) moved onto the exam timetable's slots"
+        if moved
+        else ""
+    )
     return {
-        "message": f"Seating index uploaded: {stats['rows_parsed']} rows parsed{note}",
+        "message": f"Seating index uploaded: {stats['rows_parsed']} rows parsed{note}{aligned}",
         "rows_inserted": stats["rows_parsed"],
         "rows_skipped": stats.get("rows_skipped", 0),
+        "rows_aligned": moved,
     }
 
 
@@ -304,45 +319,23 @@ def list_exam_timetable(
     The profile decides: papers show only for courses the student's subjects
     list gives them - the synced course_code + instructor set the Profile
     screen shows - with the instructor carried onto each row.
+
+    The same list is what the roll lookup answers from, so the two screens
+    can never disagree about what the student sits.
     """
     profile = get_profile_for_user(session, user)
     profile_filter = profile_to_filter(profile, session)
-    study = _student_course_map(session, profile_filter)
 
-    stored = session.exec(
-        select(MidSemSchedule).where(_account_scope(MidSemSchedule, user))
-    ).all()
-    rows: List[Dict[str, Any]] = []
-    for item in stored:
-        row = {
-            "id": item.id,
-            "schedule_date": item.schedule_date.isoformat() if item.schedule_date else None,
-            "day": item.schedule_date.strftime("%A") if item.schedule_date else None,
-            "start_time": item.start_time.strftime("%H:%M") if item.start_time else None,
-            "end_time": item.end_time.strftime("%H:%M") if item.end_time else None,
-            "course_code": item.course_code,
-            "room": item.room,
-            "branch": item.branch,
-            "semester": item.semester,
-            "is_extra": bool(item.group and str(item.group).upper().startswith("OE")),
-            "instructor": None,
-        }
-        # The profile decides: a paper lists only when its course is one the
-        # student's subjects list gives them - instructor attached. The old
-        # branch/semester gate is intentionally gone: the exam index records
-        # the batch year where the timetable records the semester number, so
-        # the semester comparison hid genuine papers (ME3010 sits at sem 3 on
-        # the index and sem 5 on the profile).
-        codes = split_course_codes(item.course_code or "")
-        mine = next((c for c in codes if c.upper() in study), None)
-        if mine is None:
-            continue
-        row["instructor"] = study[mine.upper()]
-        rows.append(row)
-
-    # The timetable PDF has no hall column; borrow rooms from the seating index
-    # the account reads - public plus its own - never someone else's.
-    fill_rooms_from_seating(session, rows, owner_id=user.id)
+    # The papers come from the timetable, narrowed to the student's courses;
+    # the hall is borrowed from the seating index (the timetable PDF has no
+    # hall column) - the block holding the student's own roll when there is
+    # one, since that is their hall rather than a course-wide guess.
+    rows = student_papers(
+        session,
+        profile_filter,
+        owner_id=user.id,
+        roll=(user.roll_number or None),
+    )
 
     grouped = _group_by_day(rows, "schedule_date")
     return {
@@ -353,34 +346,6 @@ def list_exam_timetable(
             for key, exams in grouped.items()
         ],
     }
-
-
-def _student_course_map(
-    session: Session,
-    profile_filter: Dict[str, Any],
-) -> Dict[str, str]:
-    """
-    The courses the student's profile section lists, as ``code -> instructor``.
-
-    The Profile/Subjects screen builds its list with
-    ``sync_courses_from_timetable`` plus ``get_subjects`` - branch family and
-    semester matching for core courses, opted-in open electives, extra courses
-    and a resolved instructor. The exam timetable intersects against that very
-    list so all three views agree on what the student attends; a profile with
-    no subjects therefore yields an empty exam list rather than the old
-    branch-wide one.
-    """
-    sync_courses_from_timetable(session)
-    subjects = get_subjects(session, profile_filter)
-    by_code: Dict[str, str] = {}
-    for subject in subjects:
-        code = (subject.get("course_code") or "").strip().upper()
-        if not code:
-            continue
-        instructor = (subject.get("instructor") or "").strip()
-        if code not in by_code:
-            by_code[code] = instructor
-    return by_code
 
 
 def _weekday(iso_date: str) -> Optional[str]:
@@ -416,8 +381,20 @@ def list_exam_clashes(
         )
 
     profile = profile_to_filter(get_profile_for_user(session, user))
-    clashes = detect_student_exam_clashes(session, target, profile, owner_id=user.id)
-    exams = collect_student_exams(session, target, profile, owner_id=user.id)
+    # The same papers the roll lookup and the timetable screen use: a clash
+    # between two papers the student does not sit is not a clash of theirs.
+    papers = student_papers(
+        session, profile, owner_id=user.id, roll=(user.roll_number or None)
+    )
+    try:
+        clashes = detect_student_exam_clashes(
+            session, target, profile, owner_id=user.id, papers=papers or None
+        )
+        exams = collect_student_exams(
+            session, target, profile, owner_id=user.id, papers=papers or None
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {
         "roll": target,
@@ -445,20 +422,30 @@ def list_exam_seating(
 
     1. **Profile sync filter** - rows are filtered against the student's branch,
        semester and elective codes so only papers that are theirs appear.
-    2. **Roll number range match** - each row's roll range is checked against the
-       target roll (the ``roll`` query parameter, or the student's own roll
-       number from their profile). Only rows whose range contains the roll pass.
+    2. **Roll number range match** - when a roll is asked for (``roll`` query
+       parameter), each row's roll range is checked against it and only rows
+       whose range contains the roll pass.
+
+    The roll is *not* taken from the profile by default: the index is a
+    document that covers many batches, and a student whose roll the index
+    does not cover would be shown an empty index and told nothing was
+    uploaded. Asking for a roll is how you narrow it to one person.
     """
     profile = get_profile_for_user(session, user)
     profile_filter = profile_to_filter(profile, session)
     extras = elective_codes(profile)
 
-    # Layer 2 target roll: query parameter wins, then the profile's own roll.
-    target_roll = (roll or (user.roll_number or "")).strip().upper() or None
+    # Layer 2 target roll: only when one is asked for.
+    target_roll = (roll or "").strip().upper() or None
 
     stored = session.exec(
         select(ExamSeating).where(_account_scope(ExamSeating, user))
     ).all()
+    # The index is stored against the slot the document gave it; the timetable
+    # is the published one. Showing the timetable's slot keeps this list, the
+    # timetable screen and the roll lookup on the same answer even for a file
+    # uploaded before the two were reconciled.
+    slots = timetable_slots(session, owner_id=user.id)
     rows: List[Dict[str, Any]] = []
     for item in stored:
         row = {
@@ -475,6 +462,28 @@ def list_exam_seating(
             "semester": item.semester,
             "is_extra": bool(item.is_extra),
         }
+        aligned = {
+            "course_code": row["course_code"],
+            "seating_date": item.seating_date,
+            "start_time": item.start_time,
+            "end_time": item.end_time,
+        }
+        if align_rows([aligned], slots):
+            row["seating_date"] = (
+                aligned["seating_date"].isoformat()
+                if aligned["seating_date"]
+                else None
+            )
+            row["start_time"] = (
+                aligned["start_time"].strftime("%H:%M")
+                if aligned["start_time"]
+                else None
+            )
+            row["end_time"] = (
+                aligned["end_time"].strftime("%H:%M")
+                if aligned["end_time"]
+                else None
+            )
 
         # Layer 1: profile sync (branch / semester / electives).
         if not exam_row_visible(row, profile_filter, extras):
@@ -497,6 +506,11 @@ def list_exam_seating(
 
         rows.append(row)
 
+    # The same upload can sit in the store twice - the admin's public copy and
+    # the copy in one account - and both are in view for that account. They are
+    # the same block, so the student should be shown it once.
+    rows = _dedupe_seating_rows(rows)
+
     grouped = _group_by_day(rows, "seating_date")
     return {
         "total": len(rows),
@@ -511,6 +525,28 @@ def list_exam_seating(
             for key, exams in grouped.items()
         ],
     }
+
+
+def _dedupe_seating_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """One block once: the same course, hall, band and roll range."""
+    seen = set()
+    unique: List[Dict[str, Any]] = []
+    for row in rows:
+        key = (
+            row.get("course_code"),
+            row.get("seating_date"),
+            row.get("start_time"),
+            row.get("end_time"),
+            (row.get("room") or "").upper(),
+            row.get("roll_start_prefix"),
+            row.get("roll_start_num"),
+            row.get("roll_end_num"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique
 
 
 # ---------------------------------------------------------------------------
@@ -631,24 +667,39 @@ def lookup_exam(
     """
     Roll-based exam lookup.
 
-    When the roll matches the signed-in student the three-rule profile filter is
-    applied; otherwise every matching range is returned.  Each exam exposes the
-    date, room and course code used by the Quick Roll Lookup card.
+    The papers are the account's own: the same list the Exam Timetable tab
+    shows, so the two screens can never disagree about what the student
+    sits. The roll decides the hall - the seating index says which block
+    that roll is in, and the block names the room.
+
+    A paper the index has no block for keeps the hall the timetable
+    borrowed, so a paper is never dropped because the index is thin: a
+    missing hall is better than a missing exam.
     """
     roll = roll.strip().upper()
 
-    own_roll = (user.roll_number or "").upper()
-    use_profile = bool(own_roll) and own_roll == roll
-    profile_filter = None
-    if use_profile:
-        profile_filter = profile_to_filter(get_profile_for_user(session, user))
+    profile_filter = profile_to_filter(get_profile_for_user(session, user))
+    papers = student_papers(
+        session, profile_filter, owner_id=user.id, roll=(user.roll_number or None)
+    )
+    if papers:
+        try:
+            exams = papers_for_roll(session, roll, papers, owner_id=user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "roll": roll,
+            "exams": exams,
+            "profile_filter_applied": True,
+            "rules_used": [2],
+        }
 
+    # No papers of their own - no profile, no timetable. The seating index
+    # alone can answer, so the roll still finds its hall.
     try:
-        result = lookup_roll(session, roll, profile_filter, owner_id=user.id)
+        return lookup_roll(session, roll, None, owner_id=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return result
 
 
 @router.get("/quick-lookup")
@@ -658,19 +709,18 @@ def quick_lookup_exam(
     user: User = Depends(get_current_user),
 ):
     """
-    Quick Roll Lookup: only date, room and course code, with no profile filter.
+    Quick Roll Lookup: only date, room and course code.
 
-    Passes an empty profile so every visible range is considered - the public
-    index plus the signed-in account's own upload - regardless of whose roll
-    is looked up.
+    The same answer as ``/exam/lookup``, with the fields trimmed: the
+    account's own papers, and the hall the roll sits in for each.
     """
-    result = lookup_roll(session, roll.strip().upper(), profile={}, owner_id=user.id)
+    result = lookup_exam(roll=roll, session=session, user=user)
     exams = [
         {
-            "date": exam["date"],
-            "day": exam["day"],
-            "room": exam["room"],
-            "course_code": exam["course_code"],
+            "date": exam.get("date"),
+            "day": exam.get("day"),
+            "room": exam.get("room"),
+            "course_code": exam.get("course_code"),
         }
         for exam in result["exams"]
     ]
@@ -690,15 +740,8 @@ def download_exam_pdf(
     """Generate a personalised exam timetable PDF for one roll."""
     roll = roll.strip().upper()
 
-    own_roll = (user.roll_number or "").upper()
-    profile_filter = (
-        profile_to_filter(get_profile_for_user(session, user)) if own_roll == roll else {}
-    )
-
-    try:
-        result = lookup_roll(session, roll, profile_filter, owner_id=user.id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # The same answer the screen shows, so the PDF and the card agree.
+    result = lookup_exam(roll=roll, session=session, user=user)
 
     if not result["exams"]:
         raise HTTPException(
