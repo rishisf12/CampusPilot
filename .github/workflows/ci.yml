@@ -107,7 +107,10 @@ jobs:
       - name: Run tests
         run: |
           cd CampusPilot/frontend
-          npm run test -- --watchAll=false
+          # `npm run test` is `vitest run`, so it is already non-interactive.
+          # The old `--watchAll=false` was a Jest flag: vitest refused it and
+          # the step failed before a single test ran.
+          npm run test
 
   enforce-monitoring:
     runs-on: ubuntu-latest
