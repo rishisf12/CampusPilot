@@ -48,6 +48,14 @@ interface FeedbackReply {
 
 interface AdminPanelProps {
   onError?: (message: string) => void;
+  /**
+   * Which section the panel opens on.
+   *
+   * The panel is reached from the admin's navigation, and the entry it is
+   * reached from names what it shows: an entry called "Users" should land on
+   * the users, not somewhere else with a name of its own.
+   */
+  initialTab?: SubTab;
 }
 
 const SUB_TABS = [
@@ -79,8 +87,8 @@ type SubTab = (typeof SUB_TABS)[number]['id'];
  * reply is stored per feedback and appears at the bottom of the student's own
  * feedback entry.
  */
-export default function AdminPanel({ onError }: AdminPanelProps) {
-  const [tab, setTab] = useState<SubTab>('feedback');
+export default function AdminPanel({ onError, initialTab = 'feedback' }: AdminPanelProps) {
+  const [tab, setTab] = useState<SubTab>(initialTab);
   const [items, setItems] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

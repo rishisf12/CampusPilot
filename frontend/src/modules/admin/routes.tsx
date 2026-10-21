@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Activity, Menu, MessageSquare, X, TrendingUp } from 'lucide-react';
+import { Activity, Menu, Users, X, TrendingUp } from 'lucide-react';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { healthApi } from '@/api';
 import { Badge, Tabs } from '@/components/ui';
@@ -76,15 +76,17 @@ export function AdminRoutes() {
 
   // Admin sub-tabs (Profile removed - accessed via sidebar)
   //
-  // One entry per feature. OppFeed's five screens live under one of them
-  // with a sub-nav of their own, the way the admin panel keeps its sections:
-  // five sibling entries in the main bar said "five features" when they were
-  // one.
+  // One entry per feature. The first opens the admin panel, which carries
+  // its own sections - users, data, control, monitoring, audit - and lands
+  // on the one this entry names. OppFeed's five screens live under one of
+  // them with a sub-nav of their own, the way the admin panel keeps its
+  // sections: five sibling entries in the main bar said "five features"
+  // when they were one.
   const ADMIN_TABS: AdminTab[] = [
     {
       id: 'responses',
-      label: 'Feedback Responses',
-      icon: <MessageSquare size={16} strokeWidth={2} aria-hidden />,
+      label: 'Users',
+      icon: <Users size={16} strokeWidth={2} aria-hidden />,
       hue: 'coral',
     },
     {
@@ -215,7 +217,9 @@ export function AdminRoutes() {
           )}
 
           <Suspense fallback={<ModuleLoading />}>
-            {adminTab === 'responses' && <AdminPanel onError={setConnectionError} />}
+            {adminTab === 'responses' && (
+              <AdminPanel onError={setConnectionError} initialTab="users" />
+            )}
             {adminTab === 'web-monitoring' && <Monitoring platformGroup="Web App Monitoring" />}
             {adminTab === 'oppfeed' && <OppFeed onError={setConnectionError} />}
             {adminTab === 'profile' && <AdminProfile onError={setConnectionError} />}
