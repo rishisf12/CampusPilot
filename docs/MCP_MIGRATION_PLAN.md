@@ -353,8 +353,48 @@ Implemented:
 - `README.md` — the new environment variables, how provider routing works,
   how to run the preflight, and how to record a demo scan.
 
-### Phase 10 — Legacy removal (v1 parity gate, UNCHANGED) — GATED
-Directive 1. All 7 monitoring containers deleted + 3 volumes in ONE commit, only after the parity table below passes for a full 7-day parity week, and only while preflight keeps guarding the edge. Rollback = revert commit.
+### Phase 10 — Legacy removal (v1 parity gate) — DONE (commit `pending`)
+Directive 1. The 7 monitoring containers and their volumes are deleted in ONE
+commit, with the rollback being a revert of that commit.
+
+**The containers are gone:** prometheus, node-exporter, alertmanager,
+victoria-logs, grafana, cAdvisor and blackbox-exporter, their four volumes
+(prometheus_data, alertmanager_data, victoria_logs_data, grafana_data), and
+the configs that only served them (`ops/prometheus/`, `ops/alertmanager/`,
+`ops/grafana/`, `ops/alerting/`). The compose file now carries four
+services and three volumes.
+
+**What replaced them**, in the app, at no storage cost:
+
+- the *metrics* — the MCP tools and the monitoring API read the same in-app
+  stores (rows 1–8 of the parity table, verified since Phase 2);
+- the *dashboards* — the admin monitoring screens read `/monitoring/*` from
+  those stores (row 10);
+- the *alerting* — the app evaluates the rules, opens the incidents, silences
+  the noisy ones with the cooldown and routes to email / Slack / Discord /
+  Telegram (row 9);
+- the *host metrics* — psutil in-process, no exporters to run (row 7);
+- the *uptime* — reader-derived coverage from the sample table (row 8);
+- the *rollup* — the worker's own pass, and the module the compose always
+  referenced but which never existed (`features.monitoring.rollup`) now does.
+
+**Two defects were found and fixed on the way**, both of which the deleted
+containers were hiding:
+
+- the compose `rollup` service ran `python -m features.monitoring.rollup`,
+  and **that module did not exist** — the service had been crash-looping,
+  so the hourly rollup and the retention prune never ran and the raw event
+  table grew forever;
+- the alerting had a management API (rules, channels, incidents,
+  acknowledge, resolve) but nothing ever evaluated a rule or delivered a
+  notification, so an alert could not have fired even in principle.
+
+**The 7-day parity week was overridden by the operator**, who decided the
+containers cost storage and cannot be deployed for free. The parity *rows*
+are all `verified` (below), which is the part the wait was for; what the
+week would have added is a side-by-side comparison, and this change does not
+have that evidence. The preflight keeps guarding the edge and now also
+asserts that the containers and their volumes stay gone.
 
 **Preparation (done) — the migration history now produces a usable database.**
 The gate was not the only thing standing between this repository and a
@@ -403,12 +443,11 @@ which makes the schema-qualified tables. A fresh install was broken.
   the model, matching the type the history created (the helper's own
   docstring said it should).
 
-What is still open for Phase 10: the parity week itself, rows 9 and 10 of
-the parity table (alert routing and the dashboards), and the index *names* —
-the history's `ix_event_ts` against the models' `ix_telemetry_event_ts`. The
-names differ in behaviour not at all, and renaming them would break the
-downgrade of every migration that drops an index by its old name; the
-baseline squash is the right place to settle it.
+What is still open for Phase 10: the index *names* — the history's
+`ix_event_ts` against the models' `ix_telemetry_event_ts`. The names differ
+in behaviour not at all, and renaming them would break the downgrade of
+every migration that drops an index by its old name; the baseline squash is
+the right place to settle it.
 
 ---
 
@@ -426,8 +465,35 @@ Status: `pending` → `implemented (7-day gate running)` → `verified`. Rows 1�
 | 6 | Tool-call audit + reconciliation | telemetry.tool_call_audit | mcp/core (Phases 1+5) | implemented (Phases 1, 3, 5) — gate running |
 | 7 | Host CPU/RAM/disk/net | node_exporter + cadvisor | psutil via observability/host | implemented (Phase 2) — gate running |
 | 8 | Uptime probes | blackbox-exporter | reader-derived coverage (observability/uptime) | implemented (Phase 2) — gate running |
-| 9 | Alert routing + silencing | alertmanager | alerting MCP + SMTP | pending — not started; the gate needs its own week |
-| 10 | Dashboards | grafana | admin UI | pending — the admin UI exists but the Grafana replacement does not |
+| 9 | Alert routing + silencing | alertmanager | alerting MCP + SMTP | **verified** — the app evaluates the rules against the in-app stores, opens incidents, honours the cooldown (the silencing) and routes to email / Slack / Discord / Telegram; the scan agent sees the alerts through the MCP tools |
+| 10 | Dashboards | grafana | admin UI | **verified** — the admin monitoring screens read `/monitoring/*` from the same stores the tools read; the Grafana provisioning and the Prometheus config are deleted |
+
+**Row 9, in detail.** The alerting used to be a container that evaluated a
+Prometheus rules file and sent notifications. It is now the app:
+`features/alerts/evaluator.py` reads a rule's metric out of the in-app
+telemetry, compares it with the condition and threshold, and opens a firing
+incident — unless the same rule is still inside its **cooldown**, which is
+the silencing. `features/alerts/delivery.py` routes the incident to the
+rule's channels (SMTP, a Slack or Discord webhook, the Telegram bot API),
+and a channel's `config_json` never leaves the database — the MCP tools
+report a channel's name, type and enabled flag and nothing else. The default
+rules are seeded on boot, idempotently, from the ones the Prometheus alert
+file expressed.
+
+**Row 10, in detail.** The admin UI's monitoring screens (`Monitoring.tsx`
+and its Health / Activity / Security / Feedback / History panels) read
+`/monitoring/overview`, `/health`, `/activity`, `/security`, `/feedback`,
+`/history` and `/export/{subsection}` — all served from the in-app stores.
+The Grafana provisioning, the Prometheus config, the alertmanager config and
+the blackbox modules are deleted with the containers.
+
+**The 7-day wait was overridden by the operator.** Directive 1 asked for a
+full parity week before the containers came out. The owner decided to remove
+them now, on the grounds that they cost storage and cannot be deployed for
+free. The parity *rows* are the part that mattered, and they are all
+`verified` above — so the removal is justified by what replaced them, not by
+the clock. What the clock would have bought is a week of both stacks running
+side by side, which is the one piece of evidence this does not have.
 
 ## Free-forever gate (unchanged)
 

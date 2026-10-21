@@ -303,8 +303,6 @@ CampusPilot/
 │           └── passkey.test.js
 ├── mcp-crash-monitor/            # Read-only MCP server over the monitoring tables
 │   └── src/index.ts
-├── ops/
-│   └── prometheus/               # Prometheus config, alert rules, blackbox modules
 └── tools/                        # Maintenance scripts (not part of the app)
 ```
 
@@ -459,8 +457,9 @@ python -c "import secrets; print(secrets.token_hex(32))"
 echo 'TELEMETRY_PEPPER=<the value above>' >> .env
 echo 'TELEMETRY_ENABLED=true'           >> .env
 
-# 3. Bring up the metrics stack.
-docker compose --profile monitoring up -d
+# 3. Start the app. There is no metrics stack to bring up: the monitoring
+#    data, the dashboards and the alerting all live in the app now.
+docker compose up -d
 ```
 
 `/metrics` is served by default (`METRICS_ENABLED=true`) and needs no telemetry.
@@ -469,23 +468,25 @@ docker compose --profile monitoring up -d
 
 | Profile | Adds | Extra RAM | Use when |
 |---|---|---|---|
-| *(default)* | postgres, backend, frontend | — | Normal operation |
-| `monitoring` | + Prometheus, node_exporter | ~400 MB | 2–4 GB VPS |
-| `monitoring-full` | + cAdvisor, blackbox_exporter | ~1.5 GB | 8 GB+ VPS |
+| *(default)* | postgres, adminer, backend, frontend | — | Normal operation |
 | `rollup` | + standalone hourly rollup worker | ~50 MB | Multiple backend replicas |
 
-None of the monitoring ports are published to the host. Prometheus reaches the
-exporters over the compose network; exposing them would put internal route names
-and request counts on the open internet.
+There is no monitoring profile any more, and no monitoring ports to publish:
+Prometheus, node-exporter, Alertmanager, VictoriaLogs, Grafana, cAdvisor and
+blackbox-exporter are gone, and what they did is done by the app — the
+monitoring tools answer from the same stores the dashboards read, the admin
+UI is the dashboard, and the alert rules are evaluated by the app's own
+worker and routed to email, Slack, Discord or Telegram.
 
-Verify collection actually works — a valid config and a working scrape are
-different claims:
+Verify the replacement actually works:
 
 ```bash
-# From the host, if you publish Prometheus; otherwise pipe it into a container
-# already on the compose network (which is the default setup):
-Get-Content backend/backend/tools/check_prometheus.py -Raw |
-  docker compose exec -T -e PROMETHEUS_URL=http://prometheus:9090 backend python -
+# The preflight checks the whole arrangement, including that the containers
+# are really gone and the egress gate is still wired.
+python scripts/preflight.py
+
+# And the data path itself: one pass of the monitoring worker.
+docker compose exec backend python -m features.monitoring.rollup --prune
 ```
 
 ### The hourly rollup
@@ -501,11 +502,15 @@ miss a window or double-run once and every dashboard inherits the error forever.
 
 ```bash
 # One-off rebuild (this is also the "Rebuild rollup" button in the UI)
-docker compose exec backend python -m features.monitoring.rollup --hours 48
+docker compose exec backend python -m features.monitoring.rollup
 
-# Apply the 90-day retention window as well
+# The same pass, plus the 90-day retention window on the raw events
 docker compose exec backend python -m features.monitoring.rollup --prune
 ```
+
+The worker also evaluates the alert rules and routes the incidents that
+fire, so alerting needs no second service: the rules live in the same
+database as the data, and the cooldown on a rule is the silencing.
 
 ### What is deliberately not there
 

@@ -323,28 +323,46 @@ def check_agent_db_role_read_only() -> Result:
     return Result(name, PASS, "monitoring_ro exists and is read-only by default")
 
 
-def check_monitoring_off_the_edge() -> Result:
-    """Prometheus and Grafana must not be on the edge network."""
-    name = "monitoring-stack-off-the-edge"
+def check_monitoring_stack_removed() -> Result:
+    """The monitoring containers are gone, and so are their volumes.
+
+    They were replaced by the in-app stack: the MCP tools answer from the
+    same stores, the admin UI is the dashboard, and the alert rules are
+    evaluated by the app's own worker. Leaving the containers running would
+    mean paying for (in disk, RAM and attention) a second source of truth
+    that nothing reads.
+    """
+    name = "monitoring-stack-removed"
     try:
         compose = _load_compose()
     except Exception as exc:  # noqa: BLE001
         return Result(name, SKIP, f"could not read docker-compose.yml: {exc}")
-    offenders = []
-    for service in OFF_EDGE_SERVICES:
-        spec = (compose.get("services") or {}).get(service)
-        if not spec:
-            continue
-        networks = spec.get("networks") or []
-        if isinstance(networks, dict):
-            names = list(networks)
-        else:
-            names = [str(n) for n in networks]
-        if "edge" in names:
-            offenders.append(service)
-    if offenders:
-        return Result(name, FAIL, f"on the edge network: {sorted(offenders)}")
-    return Result(name, PASS, f"the monitoring stack is off the edge network")
+    removed_services = {
+        "prometheus",
+        "node-exporter",
+        "alertmanager",
+        "victoria-logs",
+        "grafana",
+        "cAdvisor",
+        "blackbox-exporter",
+    }
+    present = sorted(removed_services & set(compose.get("services") or {}))
+    if present:
+        return Result(name, FAIL, f"still in the compose file: {present}")
+    volumes = set(compose.get("volumes") or {})
+    leftovers = sorted(
+        volume
+        for volume in (
+            "prometheus_data",
+            "alertmanager_data",
+            "victoria_logs_data",
+            "grafana_data",
+        )
+        if volume in volumes
+    )
+    if leftovers:
+        return Result(name, FAIL, f"their volumes are still declared: {leftovers}")
+    return Result(name, PASS, "the monitoring containers and their volumes are gone")
 
 
 def check_egress_audit_rows() -> Result:
@@ -461,7 +479,7 @@ CHECKS: tuple[Callable[[], Result], ...] = (
     check_no_local_model_provider,
     check_opencode_not_in_image,
     check_agent_db_role_read_only,
-    check_monitoring_off_the_edge,
+    check_monitoring_stack_removed,
     check_egress_audit_rows,
 )
 

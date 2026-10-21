@@ -63,7 +63,7 @@ def test_the_static_checks_pass_on_this_repository(preflight):
         preflight.check_no_shell_mcp_in_prod_config,
         preflight.check_admin_mcp_off_by_default,
         preflight.check_no_app_secrets_in_other_services,
-        preflight.check_monitoring_off_the_edge,
+        preflight.check_monitoring_stack_removed,
     ):
         result = check()
         assert result.status == preflight.PASS, f"{result.name}: {result.detail}"
@@ -119,7 +119,8 @@ def test_a_secret_outside_the_backend_fails_the_check(preflight, tmp_path, monke
     assert "agent" in result.detail
 
 
-def test_grafana_on_the_edge_fails_the_check(preflight, tmp_path, monkeypatch):
+def test_a_monitoring_container_left_behind_fails_the_check(preflight, tmp_path, monkeypatch):
+    """The containers were removed; one coming back is a failure."""
     compose = tmp_path / "docker-compose.yml"
     compose.write_text(
         "services:\n"
@@ -130,9 +131,22 @@ def test_grafana_on_the_edge_fails_the_check(preflight, tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr(preflight, "COMPOSE", compose)
-    result = preflight.check_monitoring_off_the_edge()
+    result = preflight.check_monitoring_stack_removed()
     assert result.status == preflight.FAIL
     assert "grafana" in result.detail
+
+
+def test_a_monitoring_volume_left_behind_fails_the_check(preflight, tmp_path, monkeypatch):
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text(
+        "services:\n  backend:\n    image: backend\n"
+        "volumes:\n  grafana_data:\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(preflight, "COMPOSE", compose)
+    result = preflight.check_monitoring_stack_removed()
+    assert result.status == preflight.FAIL
+    assert "grafana_data" in result.detail
 
 
 def test_the_preflight_exits_zero_when_everything_passes(preflight, monkeypatch, capsys):
@@ -145,7 +159,7 @@ def test_the_preflight_exits_zero_when_everything_passes(preflight, monkeypatch,
             preflight.check_no_shell_mcp_in_prod_config,
             preflight.check_admin_mcp_off_by_default,
             preflight.check_no_app_secrets_in_other_services,
-            preflight.check_monitoring_off_the_edge,
+            preflight.check_monitoring_stack_removed,
         ),
     )
     code = preflight.main([])
