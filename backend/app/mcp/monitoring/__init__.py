@@ -132,3 +132,8 @@ REGISTRY.register(
 
 # Phase 5: the curated aggregate tools - counts and summaries only.
 register_aggregates(REGISTRY)
+
+# The alerting tools: what is firing, what is watched, where it would go.
+from mcp.alerting import register_alerting  # noqa: E402 - avoids an import cycle
+
+register_alerting(REGISTRY)

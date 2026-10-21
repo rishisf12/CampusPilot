@@ -72,6 +72,18 @@ async def lifespan(app: FastAPI):
         flag_engine.load(session)
         maintenance_mode.load(session)
 
+        # The default alert rules, so alerting works on a fresh install
+        # instead of waiting for somebody to create them. Idempotent: a rule
+        # that already exists is left alone.
+        try:
+            from features.alerts.seed import seed_default_rules
+
+            created = seed_default_rules(session)
+            if created:
+                logger.info("seeded %d default alert rule(s)", created)
+        except Exception as e:  # noqa: BLE001 - a missing rule must not stop the boot
+            logger.warning("Failed to seed the default alert rules: %s", e)
+
     # Instruments DB_QUERY_DURATION / DB_QUERIES, which are otherwise declared
     # and never incremented, and which the health sampler reads.
     from features.monitoring.infrastructure import db_instrumentation
