@@ -932,7 +932,7 @@ function CalendarModal({ subject, onClose, onMark }: CalendarModalProps) {
                     ? 'bg-gray-300 text-gray-700'
                     : isPast
                       ? 'bg-gray-100 text-gray-400 border border-dashed border-gray-300'
-                      : 'bg-white text-gray-600 border border-gray-200';
+                      : 'bg-[var(--cp-surface)] text-gray-600 border border-gray-200';
               return (
                 <button
                   key={date}
@@ -963,7 +963,10 @@ function CalendarModal({ subject, onClose, onMark }: CalendarModalProps) {
               className="bg-gray-100 border border-dashed border-gray-300"
               label="Not marked"
             />
-            <Legend className="bg-white border-2 border-primary-500" label="Extra / multi-period" />
+            <Legend
+              className="bg-[var(--cp-surface)] border-2 border-primary-500"
+              label="Extra / multi-period"
+            />
           </div>
         </>
       )}

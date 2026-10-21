@@ -24,8 +24,14 @@
 }
 
 :root {
-  --cp-bg: #faf8f5;
-  --cp-surface: #ffffff;
+  /* The wall and the card.
+     A pure-white card on a near-white page is glare: the eye reads a bright
+     slab rather than a surface, and the neumorphic shadow - the whole
+     reason a card looks raised - has nothing to sit against. So the page is
+     a warm stone and the cards are a soft ivory above it: never white, but
+     clearly lighter than the page, which is what makes "raised" read. */
+  --cp-bg: #e8e3da;
+  --cp-surface: #f7f4ee;
   --cp-text: #1f2937;
   --cp-muted: #6b7280;
   --cp-primary: #0f766e;
