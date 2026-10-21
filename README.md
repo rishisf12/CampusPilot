@@ -144,11 +144,14 @@ without a separate step. It is a no-op when the version table already says
 "head", and it refuses to start rather than half-apply.
 
 **Before the first real login**, create the administrator account — signup
-only ever makes students:
+only ever makes students. Sign up first, then promote that account:
 
 ```bash
-docker compose exec backend python tools/make_admin.py <college-email>
+docker compose exec backend python scripts/admin/make_admin.py <college-email>
 ```
+
+(The script is in the image under `scripts/admin/`, and the same file runs
+from a checkout with `python scripts/admin/make_admin.py <email>`.)
 
 Then check the deployment the way the project checks itself:
 
