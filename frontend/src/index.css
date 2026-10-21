@@ -39,8 +39,14 @@
      chrome: the header and footer bands. The previous warm-sand palette
      read as retro, and a beige page is a beige page no matter how many
      cards float on it. */
-  --cp-bg: #f1f4f9;
-  --cp-surface: #fbfcfe;
+  /* The page, in the same colour family as the band.
+     The header and the footer are a teal-to-emerald gradient; the section
+     between them is one flat colour from that family - pale mint - so the
+     page and its bars read as one picture. Flat, not a gradient of its
+     own: a second gradient under a gradient is noise, and the cards need
+     a quiet ground to sit on. */
+  --cp-bg: #e9f1ef;
+  --cp-surface: #fbfdfc;
   /* The chrome: the bright band the header and footer wear. Saturated
      enough to be the one place the app is allowed to shout, and dark
      enough that white text sits on it comfortably. */
@@ -78,7 +84,7 @@
 }
 
 .dark {
-  --cp-bg: #14171c;
+  --cp-bg: #141a1c;
   --cp-surface: #1d2229;
   /* The same band, a shade deeper so it does not glare on a dark page. */
   --cp-chrome: linear-gradient(90deg, #0b5e56 0%, #0f766e 45%, #0d9488 100%);
