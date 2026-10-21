@@ -560,3 +560,52 @@ justified for size (psutil, prometheus_client already carried this bar).
       model/migration drift) are fixed, and the underlying defect they were
       pointing at — a database built from the migration history alone was
       not usable by the app — is fixed too (migrations 021 and 022).
+
+---
+
+## After the plan — the scan stopped guessing about uptime
+
+The plan was closed and the stack was running, and the first scan the
+operator ran said something the dashboard contradicted: *"Uptime critical"*.
+
+It was not wrong. The dev API had been down for 19 of the last 24 hours
+(switched off overnight), and the coverage-based uptime said so. But the
+finding was useless: it did not say *why*, it blamed *"service downtime or
+health check failures"* for a service that had not been running at all, and
+it could not tell that case apart from the one that really is a defect —
+**the sampler stalling while the API keeps serving**.
+
+So the coverage now carries its explanation (`observability.uptime
+.coverage_detail`): the reader runs inside the API, so if the newest
+sample is several intervals old while the scan is being served, the sampler
+stalled; otherwise the gap is the process not running. The rule engine
+reports the two differently:
+
+- *"Health sampling stalled while the API was serving"* — critical, and it
+  is a real defect (`investigate_data_pipeline`);
+- *"API was not running for 18.1h of the window"* — critical, honest, and
+  about the deployment rather than the service.
+
+`SCAN_UPTIME_FLOOR_PCT` (default 99, a production SLA) lets a development
+box say *"the API is only up while somebody is using it"*; the number is
+still reported either way.
+
+Three more defects surfaced while fixing that, all of them real:
+
+- **A missing narrative key failed the whole scan.** A provider on the
+  allowlist whose credential is not set raised the same error as a provider
+  that is not allowed, and the scan 500'd instead of returning the rule
+  verdict it had already measured. `LLMKeyMissing` is now its own error:
+  the scan degrades to the rule engine and says why (*"No LLM enhancement:
+  provider 'nvidia_nim' is named but no key is set"*), while a provider
+  *outside* the allowlist still refuses loudly.
+- **The narrative's prose was discarded.** The scan returned the rule
+  engine's sentence even when the model had written a summary - the model
+  was called, paid for, and dropped. The prose now leads and the measured
+  facts follow it in brackets, so the model writes the sentence and never
+  the numbers.
+- **Two scans in the same second collided.** The scan id was a timestamp,
+  and the unique constraint on `scan_result.scan_id` turned a double click
+  on "Scan now" into a 500. The id now carries a short random suffix.
+
+Tests: `tests/test_scan_uptime_rule.py` (7) and `tests/test_scan_llm_narrative.py` (4).

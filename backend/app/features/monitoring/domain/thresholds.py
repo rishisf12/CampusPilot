@@ -40,6 +40,9 @@ class ScanVerdict:
     actions: list[str]
     confidence: str  # "high", "medium", "low"
     missing_data: list[str]
+    #: The narrative's prose, when there was one. The rules own the status
+    #: and the findings; this is the one field a model may fill.
+    summary: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +58,12 @@ def evaluate_a_w_health(
     disk_pct: Optional[float],
     db_query_p95_ms: Optional[float],
     ssl_expiry_days: Optional[int],
+    # The three facts that explain an uptime number. Optional, so every
+    # existing caller keeps working.
+    uptime_sampler_stalled: bool = False,
+    uptime_downtime_s: int = 0,
+    uptime_window_hours: int = 24,
+    uptime_floor_pct: float = 99.0,
 ) -> ScanVerdict:
     """Evaluate A-W Health rules."""
     findings: list[Finding] = []
@@ -90,16 +99,60 @@ def evaluate_a_w_health(
         elif http_5xx_pct > 0.5:
             findings.append(Finding("HTTP 5xx rate above healthy", "info", "http_5xx_pct", http_5xx_pct, "%", 0.5, "current", "health_metric"))
 
-    # Uptime
+    # Uptime.
+    #
+    # The coverage number says how much of the window the API was running,
+    # but not *why* it was not. Two different things need different answers:
+    #
+    # - the sampler stopped while the API kept serving (a real defect - the
+    #   app is up and blind), and
+    # - the process was simply not running for part of the window (the host
+    #   was off, the service was stopped) - an availability fact about the
+    #   deployment, not a fault in the service.
+    #
+    # The reader is running inside the API, so it can tell them apart. The
+    # finding says which one it is, because "Uptime critical" on its own
+    # leaves an operator guessing.
     if uptime_pct is None:
         missing.append("uptime_pct")
-    else:
-        if uptime_pct < 99.0:
-            findings.append(Finding("Uptime critical", "critical", "uptime_pct", uptime_pct, "%", 99.0, "current", "health_metric"))
-            root_causes.append("Service downtime or health check failures")
-            actions.append("investigate_endpoint")
-        elif uptime_pct < 99.9:
-            findings.append(Finding("Uptime below target", "warning", "uptime_pct", uptime_pct, "%", 99.9, "current", "health_metric"))
+    elif uptime_sampler_stalled:
+        findings.append(
+            Finding(
+                "Health sampling stalled while the API was serving",
+                "critical",
+                "uptime_pct",
+                uptime_pct,
+                "%",
+                uptime_floor_pct,
+                "current",
+                "health_metric",
+            )
+        )
+        root_causes.append(
+            "The health sampler stopped reporting while the API kept serving"
+        )
+        actions.append("investigate_data_pipeline")
+    elif uptime_pct < uptime_floor_pct:
+        downtime_h = uptime_downtime_s / 3600.0
+        findings.append(
+            Finding(
+                f"API was not running for {downtime_h:.1f}h of the window",
+                "critical",
+                "uptime_pct",
+                uptime_pct,
+                "%",
+                uptime_floor_pct,
+                f"{uptime_window_hours}h window, {downtime_h:.1f}h down",
+                "health_metric",
+            )
+        )
+        root_causes.append(
+            "The process was not running for part of the window - the service "
+            "was not up, rather than being up and failing"
+        )
+        actions.append("investigate_data_pipeline")
+    elif uptime_pct < 99.9:
+        findings.append(Finding("Uptime below target", "warning", "uptime_pct", uptime_pct, "%", 99.9, "current", "health_metric"))
 
     # System resources
     if cpu_pct is not None and cpu_pct > 85:

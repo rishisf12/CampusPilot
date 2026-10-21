@@ -149,6 +149,14 @@ class Settings(BaseSettings):
     #: or call the tools - a student token gets an empty list.
     enable_admin_mcp: bool = Field(default=False, alias="ENABLE_ADMIN_MCP")
 
+    #: The uptime below which a scan calls the window an incident. 99% is a
+    #: production SLA: the API is expected to be up. A development box, where
+    #: the API only runs while somebody is using it, is a different
+    #: deployment - set this to 0 there and the scan stops reporting the
+    #: hours the machine was switched off as an outage. The finding still
+    #: appears, with the downtime spelled out, so the number is never hidden.
+    scan_uptime_floor_pct: float = Field(default=99.0, alias="SCAN_UPTIME_FLOOR_PCT")
+
     @field_validator("llm_provider")
     @classmethod
     def _provider_must_be_free(cls, value: str) -> str:

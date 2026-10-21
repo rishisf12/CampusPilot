@@ -69,6 +69,18 @@ class LLMConfigError(RuntimeError):
     """No usable free provider, or a non-allowlisted provider was requested."""
 
 
+class LLMKeyMissing(LLMConfigError):
+    """The provider is allowed, but its credential is not set.
+
+    Its own class, because it is a different kind of problem from "that
+    provider is not allowed": a missing key is a deployment that has not
+    finished being set up, and the scan's *rule* verdict - the part that
+    actually measures the system - must not be lost because a narrative
+    credential is absent. A provider outside the allowlist stays a hard
+    error, and the app refuses to start with one (the settings validator).
+    """
+
+
 @dataclass(frozen=True)
 class ResolvedLLM:
     """An OpenAI-compatible endpoint, ready to hand to an HTTP client."""
@@ -113,7 +125,7 @@ def resolve(provider: str | None = None, model: str | None = None) -> ResolvedLL
             if provider is not None:
                 # Explicitly named provider, but its credentials are absent:
                 # say so plainly instead of falling back to a surprise provider.
-                raise LLMConfigError(
+                raise LLMKeyMissing(
                     f"provider {candidate!r} is named but no key is set "
                     f"(looked for {list(key_envs)})"
                 )

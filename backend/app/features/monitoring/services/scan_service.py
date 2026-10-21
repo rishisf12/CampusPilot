@@ -19,6 +19,7 @@ import inspect
 import time
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -78,12 +79,12 @@ from features.monitoring.services.llm_client import (
     resolve_llm_config,
     LLMError,
 )
-from llms import LLMConfigError
+from llms import LLMConfigError, LLMKeyMissing
 from mcp.core import redact as _redaction
 from mcp.core.registry import assert_redaction_wired, salt_for
 from features.monitoring.domain.models import ToolCallAudit
-from observability.uptime import coverage_pct
-from core.config import get_settings
+from observability.uptime import coverage_detail
+from core.config import get_settings, settings
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +145,12 @@ def _collect_a_w_health_data(session: Session, start: datetime, end: datetime, p
     # it is derived from sample coverage at read time (observability/uptime.py)
     # - the gaps in the table are the downtime. An explicit row value (only
     # ever pushed externally) wins when coverage is unknowable in this window.
-    uptime_pct = coverage_pct(session, platform=platform, start=start, end=end)
+    #
+    # The detail carries *why* the coverage is what it is: the process was
+    # not running for part of the window, or the sampler stopped while the
+    # API kept serving. Those are different findings.
+    detail = coverage_detail(session, platform=platform, start=start, end=end)
+    uptime_pct = detail.coverage_pct
     if uptime_pct is None and latest is not None:
         uptime_pct = latest.uptime_pct
 
@@ -155,6 +161,7 @@ def _collect_a_w_health_data(session: Session, start: datetime, end: datetime, p
     # window raised "missing 8 required positional arguments" - a crash, rather
     # than the verdict the evaluator is designed to return when data is absent.
     # All eight parameters are Optional precisely so "no data" is expressible.
+    window_hours = max(1, int((end - start).total_seconds() // 3600))
     return {
         "http_p95_ms": latest.response_time_p95_ms if latest else None,
         "http_5xx_pct": latest.http_5xx_pct if latest else None,
@@ -164,6 +171,10 @@ def _collect_a_w_health_data(session: Session, start: datetime, end: datetime, p
         "disk_pct": latest.disk_pct if latest else None,
         "db_query_p95_ms": latest.db_query_p95_ms if latest else None,
         "ssl_expiry_days": latest.ssl_expiry_days if latest else None,
+        "uptime_sampler_stalled": detail.sampler_stalled,
+        "uptime_downtime_s": detail.downtime_s,
+        "uptime_window_hours": window_hours,
+        "uptime_floor_pct": settings.scan_uptime_floor_pct,
     }
 
 
@@ -470,7 +481,13 @@ def run_stage2_scan(
     Returns the stored ScanResult.
     """
     settings = get_settings()
-    scan_id = f"{subsection}-{int(datetime.now(timezone.utc).timestamp())}"
+    # The id has to be unique, not merely timestamped: two scans started in
+    # the same second - an operator double-clicking "Scan now", or a retry -
+    # used to collide on the unique constraint and fail the second one.
+    scan_id = (
+        f"{subsection}-{int(datetime.now(timezone.utc).timestamp())}-"
+        f"{uuid.uuid4().hex[:6]}"
+    )
     start, end = queries.window(window_days)
 
     # Determine platform from the subsection id.
@@ -514,6 +531,7 @@ def run_stage2_scan(
     # contract (see `llm_client`), which is not something to put in front of an
     # admin clicking "Scan now". Off by default; turn it on deliberately.
     llm_verdict = None
+    narrative_note: Optional[str] = None
     if settings.scan_enabled and settings.scan_llm_enabled:
         try:
             # `_run_llm_stage` is a coroutine and this function is synchronous.
@@ -526,6 +544,16 @@ def run_stage2_scan(
             llm_verdict = asyncio.run(
                 _run_llm_stage(subsection, verdict, collected_data, start, end, scan_id=scan_id)
             )
+        except LLMKeyMissing as e:
+            # The provider is allowed, but its credential is not set. The
+            # rules still measured the system, and that verdict is the
+            # product; a missing narrative key must not throw it away.
+            narrative_note = (
+                f"No LLM enhancement: {e} - the rule verdict below is the whole scan."
+            )
+            import logging
+
+            logging.warning("LLM stage skipped for %s: %s", subsection, e)
         except LLMConfigError:
             raise  # a misconfigured provider/refused job is not a degradation:
             # the operator named something off the allowlist - failing loudly
@@ -544,10 +572,8 @@ def run_stage2_scan(
     # `stage2.status`, a field the narrow narrative shape deliberately does not
     # have.
     schema = _verdict_to_schema(
-        _merge_verdicts(verdict, llm_verdict), scan_id, subsection
+        _merge_verdicts(verdict, llm_verdict), scan_id, subsection, narrative_note
     )
-    if llm_verdict is not None:
-        schema.summary = llm_verdict.summary
 
     # 5. Reconciliation pass
     # Note: reconciliation happens in the schema validation + _reconcile_findings
@@ -664,13 +690,21 @@ def run_stage2_scan(
     return scan_result
 
 
-def _verdict_to_schema(verdict: ScanVerdict, scan_id: str, subsection: str) -> ScanResultSchema:
+def _verdict_to_schema(
+    verdict: ScanVerdict,
+    scan_id: str,
+    subsection: str,
+    narrative_note: Optional[str] = None,
+) -> ScanResultSchema:
     """Convert a Stage 1 rule verdict into the same schema the LLM returns.
 
     This is what makes "no LLM available" a supported configuration rather than
     a degraded one: Stage 1 already produces a complete verdict, so it is
     rendered through the same contract the storage layer and the API expect,
     with every number taken from the rule engine and nothing invented.
+
+    When the narrative did run, its prose leads and the measured facts follow
+    in brackets - the model may write the sentence, never the numbers.
     """
     priority = {
         ScanStatus.CRITICAL: 1,
@@ -679,16 +713,22 @@ def _verdict_to_schema(verdict: ScanVerdict, scan_id: str, subsection: str) -> S
         ScanStatus.ERROR: 1,
     }.get(verdict.status, 3)
 
+    facts = (
+        f"Rule engine verdict: {verdict.status.value}. "
+        f"{len(verdict.findings)} finding(s), "
+        f"{len(verdict.missing_data)} metric(s) missing."
+    )
+    if verdict.summary:
+        # The model's prose, with the measured facts kept alongside it.
+        summary = f"{verdict.summary} ({facts})"
+    else:
+        summary = f"{facts} {narrative_note or 'No LLM enhancement was applied to this scan.'}"
+
     return ScanResultSchema(
         scan_id=scan_id,
         subsection=subsection,
         status=SchemaStatus(verdict.status.value),
-        summary=(
-            f"Rule engine verdict: {verdict.status.value}. "
-            f"{len(verdict.findings)} finding(s), "
-            f"{len(verdict.missing_data)} metric(s) missing. "
-            "No LLM enhancement was applied to this scan."
-        ),
+        summary=summary,
         findings=[
             SchemaFinding(
                 title=f.title,
@@ -742,6 +782,10 @@ def _merge_verdicts(stage1: ScanVerdict, stage2: Optional[ScanNarrative]) -> Sca
         ],
         confidence=stage1.confidence,
         missing_data=stage1.missing_data,
+        # The narrative's prose, which used to be dropped on the floor: the
+        # scan returned the rule text even when the model had written a
+        # summary. The rules still own the status and the findings.
+        summary=stage2.summary or stage1.summary,
     )
 
 

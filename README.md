@@ -443,6 +443,29 @@ operator, never performed by the system.
   its state (`proposed`, `executed` or `rejected`), next to the tool calls
   and model requests that led to it.
 
+### What a scan reports
+
+A scan is the rule engine first. The numbers - the status, the findings,
+the evidence - are measured, never written by a model. The LLM narrative
+stage adds prose *around* them, and only when a free allowlisted provider is
+configured with its key:
+
+- **Uptime says why it is low.** The number is the coverage of the health
+  samples over the window, and the reader is running *inside* the API, so it
+  can tell the two cases apart: *"the API was not running for 18.1h of the
+  window"* (the host was off) and *"health sampling stalled while the API was
+  serving"* (a real defect). The second one is the one that deserves an
+  incident. On a development box, where the API only runs while somebody is
+  using it, set `SCAN_UPTIME_FLOOR_PCT=0` and the hours the machine was
+  switched off stop being reported as an outage - the number is still shown.
+- **A missing narrative key does not cost you the scan.** With
+  `SCAN_LLM_ENABLED=true` but no credential for the named provider, the
+  scan still runs and says so: *"No LLM enhancement: provider 'nvidia_nim'
+  is named but no key is set"*. A provider *outside* the allowlist is
+  different - the app refuses to start with one.
+- **The narrative never touches the numbers.** The model's sentence leads;
+  the measured facts follow it in brackets.
+
 ### Turning it on
 
 Nothing is on by default. The dashboards say *"no data yet"* rather than showing
