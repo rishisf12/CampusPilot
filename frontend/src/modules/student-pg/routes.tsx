@@ -10,6 +10,7 @@ import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 import { Sidebar } from '@shared/components/Sidebar';
 import { Tabs } from '@/components/ui';
 import ThemeToggle from '@/components/layout/ThemeToggle';
+import { MailInbox } from '@shared/features/mail';
 import { greetingFor } from '@shared/lib/time';
 
 /** Lazy-loaded features */
@@ -366,14 +367,7 @@ export function StudentPGRoutes() {
             </div>
           )}
 
-          {section === 'important' && (
-            <div className="text-center py-12" style={{ color: 'var(--cp-muted)' }}>
-              <p className="text-lg font-medium">
-                {IMPORTANT_TABS.find(item => item.id === importantTab)?.label ?? 'Important'}
-              </p>
-              <p className="mt-2">Content coming soon.</p>
-            </div>
-          )}
+          {section === 'important' && <MailInbox section={importantTab} />}
 
           {section === 'feedback' && <Feedback />}
 

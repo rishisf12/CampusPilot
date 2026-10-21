@@ -40,7 +40,13 @@ def group_for_programme(programme: Optional[str]) -> Optional[str]:
     """The mailbox a programme's students read, or None if unknown."""
     if not programme:
         return None
-    return PROGRAMME_GROUPS.get(str(programme).strip().upper())
+    # Case-insensitive on purpose: profiles store "BTech" and a lookup that
+    # uppercased the query would have matched nothing.
+    wanted = str(programme).strip().upper()
+    for name, group in PROGRAMME_GROUPS.items():
+        if name.upper() == wanted:
+            return group
+    return None
 
 
 def is_group(value: Any) -> bool:

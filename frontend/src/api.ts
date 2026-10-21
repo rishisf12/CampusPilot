@@ -82,7 +82,23 @@ import type {
   LLMTestResponse,
   OppFeedFeedbackResponse,
   OppFeedFeedbackCreateRequest,
+  MailGroupInfo,
+  MailSectionInfo,
+  MailListResponse,
+  MailMessageResponse,
+  MailComposeRequest,
 } from './shared/types/api';
+
+/** Query parameters for the mail list; all optional. */
+export interface MailListParams {
+  section?: string;
+  search?: string;
+  starred?: boolean;
+  direction?: string;
+  group?: string;
+  page?: number;
+  size?: number;
+}
 
 const API_BASE = '';
 
@@ -1253,6 +1269,39 @@ export const oppfeedApi = {
       method: 'POST',
       body: data,
     }),
+};
+
+// ---------------------------------------------------------------- mail
+export const mailApi = {
+  /** The sections with their unread counts, for the inbox navigation. */
+  sections: () =>
+    request<{ groups: MailGroupInfo[]; sections: MailSectionInfo[] }>('/mail/sections'),
+
+  /** The messages of the viewer's group, filtered and paged. */
+  list: (params: MailListParams = {}) => {
+    const search = new URLSearchParams();
+    if (params.section) search.set('section', params.section);
+    if (params.search) search.set('search', params.search);
+    if (params.starred !== undefined) search.set('starred', String(params.starred));
+    if (params.direction) search.set('direction', params.direction);
+    if (params.group) search.set('group', params.group);
+    if (params.page) search.set('page', String(params.page));
+    if (params.size) search.set('size', String(params.size));
+    const query = search.toString();
+    return request<MailListResponse>(`/mail/messages${query ? `?${query}` : ''}`);
+  },
+
+  get: (id: number) => request<MailMessageResponse>(`/mail/messages/${id}`),
+
+  markRead: (id: number, read = true) =>
+    request<MailMessageResponse>(`/mail/messages/${id}/read?read=${read}`, { method: 'POST' }),
+
+  /** Toggles: a second call unstars. */
+  toggleStar: (id: number) =>
+    request<MailMessageResponse>(`/mail/messages/${id}/star`, { method: 'POST' }),
+
+  compose: (data: MailComposeRequest) =>
+    request<MailMessageResponse>('/mail/compose', { method: 'POST', body: data }),
 };
 
 // ------------------------------------------------------------ telemetry

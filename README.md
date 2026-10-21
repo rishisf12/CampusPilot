@@ -212,8 +212,14 @@ MAIL_MAILBOXES_JSON={"ug":{"imap_host":"imap.gmail.com","imap_port":993,
  "imap_user":"ug@college.ac.in","imap_password":"<app password>",
  "ingest_secret":"<secret>","sections":{"academics":"ug-academics@college.ac.in",
  "placement":"ug-placement@college.ac.in","cultural":"ug-cultural@college.ac.in",
- "technical":"ug-technical@college.ac.in","sports":"ug-sports@college.ac.in"}}}
+ "technical":"ug-technical@college.ac.in","sports":"ug-sports@college.ac.in",
+ "other":"ug-other@college.ac.in"}}}
 ```
+
+Read by the poller `scripts/ops/imap_mail_poller.py`, which logs in to each
+group's mailbox and posts unread messages to `/mail/ingest`; deploy it on the
+`campuspilot-imap-mail-poller.timer` from `deploy/`. The poller posts to
+`MAIL_INGEST_URL` (default `http://127.0.0.1:8000/mail/ingest`).
 
 Mail endpoints (see `/docs` for schemas): `GET /mail/sections`,
 `GET /mail/messages`, `GET/POST /mail/messages/{id}/read|star`,

@@ -33,8 +33,15 @@ class MailMessage(SQLModel, table=True):
 
     __tablename__ = "mail_message"
     __table_args__ = (
+        # Named here on purpose: alembic 029 creates these very names, and an
+        # index that SQLModel names by default ("ix_<schema>_<table>_<col>")
+        # would make the two paths disagree and the downgrade fail.
         Index("ix_mail_message_section_received", "section", "received_at"),
         Index("ix_mail_message_message_id", "message_id", unique=True),
+        Index("ix_mail_message_group", "group"),
+        Index("ix_mail_message_section", "section"),
+        Index("ix_mail_message_received_at", "received_at"),
+        Index("ix_mail_message_created_by", "created_by"),
         {"schema": "core"},
     )
 
@@ -43,10 +50,10 @@ class MailMessage(SQLModel, table=True):
     message_id: str = Field(max_length=255)
     #: The mailbox it came from: ug or pg. The college sends the master's and
     #: the undergraduates their own mail, and each group reads only its own.
-    group: str = Field(default="ug", index=True, max_length=16)
+    group: str = Field(default="ug", max_length=16)
     #: The section it belongs to: academics, placement, cultural, technical,
     #: sports or other.
-    section: str = Field(default="other", index=True, max_length=32)
+    section: str = Field(default="other", max_length=32)
     #: inbox or sent.
     direction: str = Field(default=MailDirection.INBOX.value, max_length=16)
 
@@ -61,7 +68,7 @@ class MailMessage(SQLModel, table=True):
 
     received_at: Optional[datetime] = Field(
         default=None,
-        sa_column=Column("received_at", DateTime(timezone=True), index=True),
+        sa_column=Column("received_at", DateTime(timezone=True)),
     )
     is_read: bool = Field(default=False)
     is_starred: bool = Field(default=False)
@@ -73,7 +80,7 @@ class MailMessage(SQLModel, table=True):
     #: Free-form labels the mail carried (Gmail labels, mostly).
     labels: List[str] = Field(default=[], sa_column=Column(JSON))
     #: The account that composed it, for a sent message.
-    created_by: Optional[int] = Field(default=None, index=True)
+    created_by: Optional[int] = Field(default=None)
 
     created_at: Optional[datetime] = Field(
         default=None,
