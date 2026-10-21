@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CampusPilot Backend — Interactive Data Flow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', -apple-system, Roboto, sans-serif;
+    background: #0f172a;
+    color: #f8fafc;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .app { height: 100vh; display: flex; flex-direction: column; }
+  header {
+    background: #1e293b;
+    padding: 12px 20px;
+    border-bottom: 1px solid #334155;
+    display: flex; align-items: center; gap: 10px; z-index: 100;
+    flex-shrink: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand-box { width: 26px; height: 26px; border-radius: 5px; background: linear-gradient(135deg,#2563eb,#22d3ee); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+  .sub { font-size: 10.5px; color: #94a3b8; font-weight: 400; }
+  .controls { margin-left: auto; display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+  .btn {
+    background: #334155; border: 1px solid #475569; color: #e2e8f0;
+    padding: 4px 9px; border-radius: 4px; font-size: 10.5px; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn:hover { background: #475569; border-color: #64748b; }
+  .btn.flow { background: #059669; border-color: #10b981; }
+  .btn.flow:hover { background: #10b981; }
+
+  main { flex: 1; position: relative; overflow: hidden; background: #0f172a; display: flex; }
+  #stage { flex: 1; position: relative; min-width: 0; }
+  svg { width: 100%; height: 100%; display: block; background: #0f172a; }
+
+  /* Toggle panel button */
+  #togglePanel {
+    position: absolute; top: 12px; right: 12px; z-index: 70;
+    background: #1e293b; border: 1px solid #334155; color: #e2e8f0;
+    padding: 6px 10px; border-radius: 5px; font-size: 10px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #togglePanel:hover { background: #334155; }
+
+  /* Info panel - right side, does NOT cover diagram */
+  #panel {
+    position: absolute; top: 0; right: 0; width: 300px; height: 100%;
+    background: #1e293b; border-left: 1px solid #334155;
+    padding: 16px; box-sizing: border-box; overflow-y: auto; z-index: 60;
+    transform: translateX(100%); transition: transform 0.3s ease;
+    display: none;
+  }
+  #panel.open { transform: translateX(0); display: block; }
+  /* Make stage shrink when panel open */
+  #panel.open ~ #stage, body.panel-open #stage { flex: 1; }
+
+  .panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .panel-icon { width: 20px; height: 20px; border-radius: 4px; background: #2563eb; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10px; }
+  .panel-title { font-size: 13px; font-weight: 600; }
+  .panel-desc { font-size: 10.5px; color: #94a3b8; margin-top: 3px; line-height: 1.4; }
+
+  .flow-list { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+  .step {
+    background: #0f172a; border: 1px solid #334155; border-radius: 6px;
+    padding: 8px 11px; animation: stepIn 0.3s ease forwards; opacity: 0;
+  }
+  @keyframes stepIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+  .step.active { border-color: #22d3ee; background: #0b1226; box-shadow: 0 0 0 1px rgba(34,211,238,0.25); }
+  .step-head { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+  .step-num { width: 18px; height: 18px; border-radius: 50%; background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 800; flex-shrink: 0; }
+  .step.active .step-num { background: #22d3ee; color: #0f172a; }
+  .step-name { font-size: 11px; font-weight: 600; color: #e2e8f0; }
+  .step-desc { font-size: 9px; color: #94a3b8; margin-top: 2px; }
+  .step-tags { margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .step-tag { font-size: 7.5px; padding: 1px 5px; border-radius: 3px; background: #334155; color: #94a3b8; }
+  .step-tag.read { background: #166534; color: #bbf7d0; }
+  .step-tag.write { background: #dc2626; color: #fecaca; }
+  .step-tag.redact { background: #a855f7; color: #f0abfc; }
+  .step-tag.audit { background: #0891b2; color: #cffafe; }
+  .step-tag.egress { background: #ea580c; color: #fdba74; }
+  .step-tag.request { background: #3b82f6; color: #bfdbfe; }
+  .step-tag.route { background: #64748b; color: #cbd5e1; }
+
+  .flow-badge {
+    position: absolute; top: 12px; left: 12px; background: #065f46; color: #bbf7d0;
+    padding: 6px 11px; border-radius: 20px; font-size: 10.5px; font-weight: 600;
+    border: 1px solid #10b981; z-index: 60; display: none;
+  }
+  .flow-badge.show { display: block; }
+  .hint { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 10.5px; color: #64748b; pointer-events: none; z-index: 55; }
+
+  /* Nodes */
+  .node { cursor: pointer; transition: all 0.2s; }
+  .node rect { rx: 7; ry: 7; stroke-width: 2; }
+  .node:hover rect { filter: drop-shadow(0 0 7px rgba(99,102,241,0.4)); }
+  .node.selected rect { stroke: #22d3ee; stroke-width: 3; filter: drop-shadow(0 0 11px rgba(34,211,238,0.6)); }
+  .node.active-pulse rect { animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%{stroke-width:2;stroke-opacity:1} 50%{stroke-width:3;stroke-opacity:0.5} 100%{stroke-width:2;stroke-opacity:1} }
+  .ntitle { font-size: 11px; font-weight: 700; fill: #fff; pointer-events: none; user-select: none; }
+  .nsub { font-size: 8.5px; fill: #94a3b8; pointer-events: none; user-select: none; }
+  .ntag { font-size: 8px; fill: #3b82f6; font-weight: 700; pointer-events: none; user-select: none; }
+
+  /* Paths - drawn first so nodes sit on top */
+  .path { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.55; transition: opacity 0.25s; marker-end: url(#arr); filter: drop-shadow(0 0 4px rgba(30,41,59,0.8)); }
+  .path.active { opacity: 1; stroke: #22d3ee; stroke-width: 3; filter: drop-shadow(0 0 8px rgba(34,211,238,0.7)); marker-end: url(#arr-act); }
+  .path.plain { stroke: #64748b; }
+  .path.egress { stroke: #ea580c; opacity: 0.6; }
+
+  /* Packets - animate along actual path */
+  .packet { fill: #22d3ee; stroke: #fff; stroke-width: 1.8; opacity: 0; transition: opacity 0.2s; filter: drop-shadow(0 0 4px rgba(34,211,238,0.6)); }
+  .packet.shown { opacity: 1; }
+
+  /* Boundaries */
+  .boundary { fill: #1e293b; stroke-width: 1.5; stroke-dasharray: 5,4; opacity: 0.18; rx: 6; }
+  .btext { font-size: 9px; font-weight: 700; pointer-events: none; user-select: none; }
+
+  /* Arrowheads - bigger and brighter */
+  #arr polygon { fill: #94a3b8; }
+  #arr-act polygon { fill: #22d3ee; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="brand-box">CP</div>
+      <div>
+        <h1>CampusPilot Backend Pipeline</h1>
+        <div class="sub">Click any node • Demo buttons animate data flow through actual arrows</div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn flow" onclick="runFlow('login')">Login</button>
+      <button class="btn flow" onclick="runFlow('timetable')">Timetable</button>
+      <button class="btn flow" onclick="runFlow('mcp')">MCP Tool</button>
+      <button class="btn flow" onclick="runFlow('telemetry')">Telemetry</button>
+      <button class="btn flow" onclick="runFlow('scan')">Privacy Scan</button>
+      <button class="btn" onclick="resetFlow()">Reset</button>
+    </div>
+  </header>
+
+  <div class="flow-badge" id="badge">📦 Flow Active</div>
+  <div class="hint" id="hint">Click a node to inspect it • Use demo buttons to trace full flow</div>
+
+  <button id="togglePanel" onclick="togglePanel()">▶ Inspect Panel</button>
+
+  <main>
+    <div id="stage">
+      <svg id="svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="5" refX="6" refY="2.5" orient="auto">
+            <polygon points="0 0, 8 2.5, 0 5" fill="#64748b"/>
+          </marker>
+          <marker id="arr-act" markerWidth="8" markerHeight="5" refX="6" refY="2.5" orient="auto">
+            <polygon points="0 0, 8 2.5, 0 5" fill="#22d3ee"/>
+          </marker>
+          <linearGradient id="g-client" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#2563eb"/>
+          </linearGradient>
+          <linearGradient id="g-backend" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#059669"/>
+          </linearGradient>
+          <linearGradient id="g-security" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ef4444"/><stop offset="100%" stop-color="#dc2626"/>
+          </linearGradient>
+          <linearGradient id="g-external" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#6b7280"/><stop offset="100%" stop-color="#4b5563"/>
+          </linearGradient>
+          <linearGradient id="g-mcp" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#7c3aed"/>
+          </linearGradient>
+        </defs>
+
+        <rect width="1200" height="700" fill="#0f172a"/>
+
+        <!-- Boundaries (left area = clients + edge + backend core; right area = DB + MCP + external) -->
+        <rect class="boundary" x="30" y="40" width="500" height="620" stroke="#3b82f6"/>
+        <text class="btext" x="45" y="64" fill="#3b82f6">CLIENTS + EDGE + FASTAPI CORE</text>
+
+        <rect class="boundary" x="550" y="40" width="620" height="620" stroke="#a855f7"/>
+        <text class="btext" x="565" y="64" fill="#a855f7">DATABASE + MCP + EXTERNAL SERVICES</text>
+
+        <!-- CLIENTS (left column) -->
+        <g class="node" id="n-students" transform="translate(60, 100)" onclick="selectNode('students')">
+          <rect width="130" height="60" fill="url(#g-client)" stroke="#3b82f6"/>
+          <text class="ntitle" x="65" y="28" text-anchor="middle">👨‍🎓 Students / Faculty</text>
+          <text class="nsub" x="65" y="44" text-anchor="middle">React + Vite frontend</text>
+        </g>
+        <g class="node" id="n-mobile" transform="translate(60, 180)" onclick="selectNode('mobile')">
+          <rect width="130" height="52" fill="url(#g-client)" stroke="#3b82f6"/>
+          <text class="ntitle" x="65" y="24" text-anchor="middle">📱 Android SDK</text>
+          <text class="nsub" x="65" y="40" text-anchor="middle">Crash & telemetry beacon</text>
+        </g>
+        <g class="node" id="n-admin" transform="translate(60, 252)" onclick="selectNode('admin')">
+          <rect width="130" height="52" fill="url(#g-client)" stroke="#3b82f6"/>
+          <text class="ntitle" x="65" y="24" text-anchor="middle">⚙️ Admin Panel</text>
+          <text class="nsub" x="65" y="40" text-anchor="middle">Monitoring + settings</text>
+        </g>
+
+        <!-- EDGE / FASTAPI (top row center-left) -->
+        <g class="node" id="n-edge" transform="translate(220, 100)" onclick="selectNode('edge')">
+          <rect width="150" height="80" fill="#1e293b" stroke="#3b82f6"/>
+          <text class="ntitle" x="75" y="26" text-anchor="middle">☁️ Edge</text>
+          <text class="nsub" x="75" y="44" text-anchor="middle">campuspilot-edge :443</text>
+          <text class="ntag" x="75" y="64" text-anchor="middle">route to internet</text>
+          <rect x="55" y="72" width="40" height="6" fill="#3b82f6" rx="2"/>
+          <rect x="110" y="72" width="25" height="6" fill="#334155" rx="2"/>
+        </g>
+        <g class="node" id="n-fastapi" transform="translate(400, 100)" onclick="selectNode('fastapi')">
+          <rect width="150" height="80" fill="url(#g-backend)" stroke="#10b981"/>
+          <text class="ntitle" x="75" y="26" text-anchor="middle">⚡ FastAPI</text>
+          <text class="nsub" x="75" y="44" text-anchor="middle">uvicorn :8001</text>
+          <text class="ntag" x="75" y="64" text-anchor="middle">request in-flight</text>
+        </g>
+
+        <!-- MIDDLEWARE / LIFESPAN (second row center-left) -->
+        <g class="node" id="n-middleware" transform="translate(220, 200)" onclick="selectNode('middleware')">
+          <rect width="150" height="72" fill="#1e293b" stroke="#ef4444"/>
+          <text class="ntitle" x="75" y="22" text-anchor="middle">🛡️ Middleware</text>
+          <text class="nsub" x="75" y="40" text-anchor="middle">CORS → Maint → Monitor → Metrics</text>
+          <text class="ntag" x="75" y="60" text-anchor="middle">security check</text>
+        </g>
+        <g class="node" id="n-lifespan" transform="translate(400, 200)" onclick="selectNode('lifespan')">
+          <rect width="150" height="72" fill="#1e293b" stroke="#3b82f6"/>
+          <text class="ntitle" x="75" y="22" text-anchor="middle">🚀 Lifespan</text>
+          <text class="nsub" x="75" y="40" text-anchor="middle">DB init · flags · rollup · OppFeed</text>
+          <text class="ntag" x="75" y="60" text-anchor="middle">boot once</text>
+        </g>
+
+        <!-- AUTH / ROUTERS (third row center-left) -->
+        <g class="node" id="n-auth" transform="translate(220, 292)" onclick="selectNode('auth')">
+          <rect width="150" height="72" fill="url(#g-security)" stroke="#dc2626"/>
+          <text class="ntitle" x="75" y="24" text-anchor="middle">🔐 Auth</text>
+          <text class="nsub" x="75" y="42" text-anchor="middle">JWT · WebAuthn passkeys</text>
+          <text class="ntag" x="75" y="62" text-anchor="middle">bearer token</text>
+        </g>
+        <g class="node" id="n-routers" transform="translate(400, 292)" onclick="selectNode('routers')">
+          <rect width="150" height="100" fill="url(#g-backend)" stroke="#10b981"/>
+          <text class="ntitle" x="75" y="24" text-anchor="middle">📦 Routers (20+)</text>
+          <text class="nsub" x="75" y="42" text-anchor="middle">auth · timetable · exam · schedule</text>
+          <text class="nsub" x="75" y="58" text-anchor="middle">feedback · profile · oppfeed · admin</text>
+          <text class="ntag" x="75" y="82" text-anchor="middle">route prefix per module</text>
+        </g>
+
+        <!-- DATABASE (right side, top) -->
+        <g class="node" id="n-db" transform="translate(620, 120)" onclick="selectNode('db')">
+          <rect width="170" height="140" fill="#1e293b" stroke="#3b82f6"/>
+          <text class="ntitle" x="85" y="32" text-anchor="middle">🗄️ PostgreSQL</text>
+          <text class="nsub" x="85" y="50" text-anchor="middle">core · academic · social · telemetry · public</text>
+          <text class="ntag" x="85" y="70" text-anchor="middle">pool 10 · read-only for scans</text>
+          <text class="nsub" x="85" y="90" text-anchor="middle">User · Course · TimetableSlot ·</text>
+          <text class="nsub" x="85" y="104" text-anchor="middle">Feedback · SecurityEvent · AuditLog</text>
+        </g>
+
+        <!-- MCP (right side, middle) -->
+        <g class="node" id="n-mcp" transform="translate(620, 290)" onclick="selectNode('mcp')">
+          <rect width="170" height="92" fill="url(#g-mcp)" stroke="#a855f7"/>
+          <text class="ntitle" x="85" y="30" text-anchor="middle">🔒 MCP Registry</text>
+          <text class="nsub" x="85" y="48" text-anchor="middle">run_tool · _egress redact+pseudonymize</text>
+          <text class="nsub" x="85" y="64" text-anchor="middle">tool_call_audit · 5s timeout</text>
+          <text class="ntag" x="85" y="84" text-anchor="middle">read-only enforced</text>
+        </g>
+        <g class="node" id="n-mcpapi" transform="translate(620, 412)" onclick="selectNode('mcp-api')">
+          <rect width="170" height="52" fill="#1e293b" stroke="#a855f7" opacity="0.5"/>
+          <text class="ntitle" x="85" y="26" text-anchor="middle">🌐 HTTP MCP Console</text>
+          <text class="nsub" x="85" y="42" text-anchor="middle">/api/mcp · admin-only · off by default</text>
+        </g>
+
+        <!-- EXTERNAL (right column) -->
+        <g class="node" id="n-rollup" transform="translate(830, 100)" onclick="selectNode('rollup')">
+          <rect width="170" height="52" fill="#1e293b" stroke="#f59e0b"/>
+          <text class="ntitle" x="85" y="24" text-anchor="middle">⏰ Rollup Worker</text>
+          <text class="nsub" x="85" y="40" text-anchor="middle">hourly aggregation</text>
+        </g>
+        <g class="node" id="n-ollama" transform="translate(830, 172)" onclick="selectNode('ollama')">
+          <rect width="170" height="52" fill="#1e293b" stroke="#6b7280"/>
+          <text class="ntitle" x="85" y="24" text-anchor="middle">🦙 Ollama</text>
+          <text class="nsub" x="85" y="40" text-anchor="middle">local fallback · no egress</text>
+        </g>
+        <g class="node" id="n-nim" transform="translate(830, 244)" onclick="selectNode('nim')">
+          <rect width="170" height="60" fill="#1e293b" stroke="#ea580c"/>
+          <text class="ntitle" x="85" y="24" text-anchor="middle">🚀 NVIDIA NIM / OpenRouter</text>
+          <text class="nsub" x="85" y="40" text-anchor="middle">free OSS models · allowlist</text>
+          <text class="ntag" x="85" y="58" text-anchor="middle">provider key</text>
+        </g>
+        <g class="node" id="n-smtp" transform="translate(830, 324)" onclick="selectNode('smtp')">
+          <rect width="170" height="52" fill="#1e293b" stroke="#6b7280"/>
+          <text class="ntitle" x="85" y="24" text-anchor="middle">📧 SMTP</text>
+          <text class="nsub" x="85" y="40" text-anchor="middle">verify email · reset · replies</text>
+        </g>
+        <g class="node" id="n-imap" transform="translate(830, 396)" onclick="selectNode('imap')">
+          <rect width="170" height="52" fill="#1e293b" stroke="#6b7280"/>
+          <text class="ntitle" x="85" y="24" text-anchor="middle">📥 IMAP</text>
+          <text class="nsub" x="85" y="40" text-anchor="middle">hackathon feed import</text>
+        </g>
+        <g class="node" id="n-promo" transform="translate(830, 468)" onclick="selectNode('prometheus')">
+          <rect width="170" height="60" fill="#1e293b" stroke="#f59e0b"/>
+          <text class="ntitle" x="85" y="24" text-anchor="middle">📊 Prometheus + Grafana</text>
+          <text class="nsub" x="85" y="40" text-anchor="middle">scrapes /metrics · 30d retention</text>
+          <text class="ntag" x="85" y="58" text-anchor="middle">internal only</text>
+        </g>
+
+        <!-- Path tracks (faint background lines so routes are visible even idle) -->
+        <g id="tracks">
+          <path d="M 190 130 L 220 140" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 190 206 L 220 140" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 190 278 L 220 140" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 370 140 L 400 140" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 400 180 L 370 236" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 295 364 L 295 328" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 370 364 L 400 342" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 550 342 L 620 190" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 620 320 L 550 392" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 550 342 L 620 336" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 790 336 L 790 260" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 790 260 L 790 336" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 790 336 L 830 274" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 830 304 L 790 384" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 550 392 L 830 350" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 550 392 L 830 422" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 790 260 L 830 498" stroke="#334155" stroke-width="2" opacity="0.25"/>
+          <path d="M 370 140 L 830 244" stroke="#ea580c" stroke-width="2" opacity="0.25"/>
+        </g>
+
+        <!-- Paths (drawn after tracks, before nodes) -->
+        <g id="paths">
+          <!-- Clients -> Edge -->
+          <path id="p-s-edge" class="path plain" d="M 190 130 L 220 140" marker-end="url(#arr)"/>
+          <path id="p-m-edge" class="path plain" d="M 190 206 L 220 140" marker-end="url(#arr)"/>
+          <path id="p-a-edge" class="path plain" d="M 190 278 L 220 140" marker-end="url(#arr)"/>
+
+          <!-- Edge -> FastAPI -->
+          <path id="p-edge-api" class="path plain" d="M 370 140 L 400 140" marker-end="url(#arr)"/>
+
+          <!-- FastAPI -> Middleware -->
+          <path id="p-api-mw" class="path plain" d="M 400 180 L 370 236" marker-end="url(#arr)"/>
+
+          <!-- Middleware -> Auth -->
+          <path id="p-mw-auth" class="path plain" d="M 295 364 L 295 328" marker-end="url(#arr)"/>
+
+          <!-- Auth -> Routers -->
+          <path id="p-auth-rtr" class="path plain" d="M 370 364 L 400 342" marker-end="url(#arr)"/>
+
+          <!-- Routers -> DB -->
+          <path id="p-rtr-db" class="path plain" d="M 550 342 L 620 190" marker-end="url(#arr)"/>
+
+          <!-- DB -> Routers -->
+          <path id="p-db-rtr" class="path plain" d="M 620 320 L 550 392" marker-end="url(#arr)"/>
+
+          <!-- Routers -> MCP -->
+          <path id="p-rtr-mcp" class="path plain" d="M 550 342 L 620 336" marker-end="url(#arr)"/>
+
+          <!-- MCP <-> DB -->
+          <path id="p-mcp-db" class="path plain" d="M 790 336 L 790 260" marker-end="url(#arr)"/>
+          <path id="p-db-mcp" class="path plain" d="M 790 260 L 790 336" marker-end="url(#arr)"/>
+
+          <!-- MCP <-> NIM -->
+          <path id="p-mcp-nim" class="path plain" d="M 790 336 L 830 274" marker-end="url(#arr)"/>
+          <path id="p-nim-mcp" class="path plain" d="M 830 304 L 790 384" marker-end="url(#arr)"/>
+
+          <!-- Routers -> SMTP / IMAP -->
+          <path id="p-rtr-smtp" class="path plain" d="M 550 392 L 830 350" marker-end="url(#arr)"/>
+          <path id="p-rtr-imap" class="path plain" d="M 550 392 L 830 422" marker-end="url(#arr)"/>
+
+          <!-- DB -> Prometheus -->
+          <path id="p-db-promo" class="path plain" d="M 790 260 L 830 498" marker-end="url(#arr)"/>
+
+          <!-- Edge -> NIM (egress) -->
+          <path id="p-edge-nim" class="path plain" d="M 370 140 L 830 244" marker-end="url(#arr)" stroke="#ea580c"/>
+        </g>
+
+        <!-- Packets layer -->
+        <g id="packets"></g>
+      </svg>
+    </div>
+
+    <div id="panel">
+      <div class="panel-head">
+        <div class="panel-icon" id="picon">📦</div>
+        <div>
+          <div class="panel-title" id="ptitle">Node Inspector</div>
+          <div class="panel-desc" id="pdesc">Click a node to see details</div>
+        </div>
+      </div>
+      <div class="flow-list" id="flist"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const NODE_POS = {
+  students:  [125, 130], mobile: [125, 206], admin: [125, 278],
+  edge: [295, 140], fastapi: [475, 140],
+  middleware: [295, 236], lifespan: [475, 236],
+  auth: [295, 328], routers: [475, 342],
+  mcp: [705, 336], "mcp-api": [705, 438], db: [705, 190],
+  rollup: [915, 126], ollama: [915, 198], nim: [915, 274],
+  smtp: [915, 350], imap: [915, 422], prometheus: [915, 498],
+};
+
+const NODE_INFO = {
+  students:   {icon:"👨‍🎓",title:"Students / Faculty",desc:"React + Vite frontend — UG/PG student modules",type:"Client"},
+  mobile:     {icon:"📱",title:"Android SDK",desc:"Crash reports, telemetry beacon, push notifications",type:"Client"},
+  admin:      {icon:"⚙️",title:"Admin Panel",desc:"Monitoring dashboards, feature flags, security alerts",type:"Client"},
+  edge:       {icon:"☁️",title:"Edge Network",desc:"campuspilot-edge public HTTPS — route to internet",type:"Infrastructure"},
+  fastapi:    {icon:"⚡",title:"FastAPI :8001",desc:"uvicorn worker — main application entry point",type:"Backend"},
+  middleware: {icon:"🛡️",title:"Middleware Stack",desc:"CORS → Maintenance → RequestMonitoring → Metrics",type:"Security"},
+  lifespan:   {icon:"🚀",title:"Lifespan / Startup",desc:"DB init · alembic · flags · maintenance · rollup · OppFeed scheduler",type:"Backend"},
+  auth:       {icon:"🔐",title:"Auth Layer",desc:"JWT (HS256, 7-day) + WebAuthn passkeys · password_changed_at invalidation",type:"Security"},
+  routers:    {icon:"📦",title:"Feature Routers (20+)",desc:"auth · attendance · timetable · exam · schedule · rooms · feedback · profile · oppfeed · OCR · admin/*",type:"Backend"},
+  mcp:        {icon:"🔒",title:"MCP Tool Registry",desc:"run_tool() · subsection scoping · 5s timeout · _egress redact+pseudonymize · tool_call_audit",type:"Security"},
+  "mcp-api":  {icon:"🌐",title:"HTTP MCP Console",desc:"/api/mcp · ENABLE_ADMIN_MCP=false by default · admin-only tool list",type:"Backend"},
+  db:         {icon:"🗄️",title:"PostgreSQL :5432",desc:"schemas: core · academic · social · telemetry · public · read-only for scans",type:"Database"},
+  rollup:     {icon:"⏰",title:"Rollup Worker",desc:"python -m features.monitoring.rollup --loop · hourly aggregation + pruning",type:"Message Bus"},
+  ollama:     {icon:"🦙",title:"Ollama (optional)",desc:"local LLM fallback · http://ollama:11434/v1 · no egress",type:"External"},
+  nim:        {icon:"🚀",title:"NVIDIA NIM / OpenRouter",desc:"free OSS models · LLM_PROVIDER allowlist · nvidia_nim, openrouter, ollama",type:"External"},
+  smtp:       {icon:"📧",title:"SMTP (Gmail)",desc:"email verification · password reset · feedback replies",type:"External"},
+  imap:       {icon:"📥",title:"IMAP (Gmail INBOX)",desc:"hackathon feed ingestion · App Password · feed_uid cursor",type:"External"},
+  prometheus: {icon:"📊",title:"Prometheus + Grafana",desc:"scrapes /metrics · 30-day retention · app-internal only",type:"Infrastructure"},
+};
+
+const PATH_MAP = {
+  "students-edge":"p-s-edge","mobile-edge":"p-m-edge","admin-edge":"p-a-edge",
+  "edge-fastapi":"p-edge-api","fastapi-middleware":"p-api-mw","middleware-auth":"p-mw-auth",
+  "auth-routers":"p-auth-rtr","routers-db":"p-rtr-db","db-routers":"p-db-rtr",
+  "routers-mcp":"p-rtr-mcp","mcp-db":"p-mcp-db","db-mcp":"p-db-mcp",
+  "mcp-nim":"p-mcp-nim","nim-mcp":"p-nim-mcp","routers-smtp":"p-rtr-smtp",
+  "routers-imap":"p-rtr-imap","db-prometheus":"p-db-promo","edge-nim":"p-edge-nim",
+};
+
+const FLOWS = {
+  login: [
+    {from:"students",to:"edge",label:"HTTPS /api/login",desc:"Student submits credentials",tags:["request"]},
+    {from:"edge",to:"fastapi",label:"route to backend",desc:"Edge forwards request",tags:["route"]},
+    {from:"fastapi",to:"middleware",label:"CORS + maintenance check",desc:"Middleware validates request",tags:["security"]},
+    {from:"middleware",to:"auth",label:"validate JWT / passkey",desc:"Auth verifies token or WebAuthn",tags:["security"]},
+    {from:"auth",to:"routers",label:"get_current_user",desc:"Resolved user passed to router",tags:[]},
+    {from:"routers",to:"db",label:"SELECT user row",desc:"SQLModel query User table",tags:["read"]},
+    {from:"db",to:"routers",label:"return user record",desc:"DB returns authenticated user",tags:["read"]},
+    {from:"routers",to:"middleware",label:"issue JWT response",desc:"Signed JWT in response body",tags:[]},
+    {from:"middleware",to:"edge",label:"HTTP 200 + JWT",desc:"Response through middleware",tags:[]},
+    {from:"edge",to:"students",label:"JSON response",desc:"Client receives token + user data",tags:[]},
+  ],
+  timetable: [
+    {from:"students",to:"edge",label:"GET /timetable",desc:"Student requests weekly timetable",tags:["request"]},
+    {from:"edge",to:"fastapi",label:"route",desc:"Edge forwards to FastAPI",tags:["route"]},
+    {from:"fastapi",to:"middleware",label:"auth + rate limit",desc:"Request monitoring + auth",tags:["security"]},
+    {from:"middleware",to:"auth",label:"verify token",desc:"JWT decoded and user resolved",tags:["security"]},
+    {from:"auth",to:"routers",label:"route to timetable module",desc:"/timetable router handles request",tags:[]},
+    {from:"routers",to:"db",label:"SELECT timetable slots",desc:"Query academic.timetable_slot",tags:["read"]},
+    {from:"db",to:"routers",label:"return slots",desc:"Timetable rows returned",tags:["read"]},
+    {from:"routers",to:"middleware",label:"serialize JSON",desc:"Pydantic schema serialization",tags:[]},
+    {from:"middleware",to:"edge",label:"HTTP 200 timetable",desc:"Response back through middleware",tags:[]},
+    {from:"edge",to:"students",label:"render UI",desc:"Frontend displays timetable grid",tags:[]},
+  ],
+  mcp: [
+    {from:"routers",to:"mcp",label:"tool call via run_tool()",desc:"Admin triggers MCP tool call",tags:["audit"]},
+    {from:"mcp",to:"db",label:"SELECT telemetry rows",desc:"Read-only query against telemetry tables",tags:["read","redact"]},
+    {from:"db",to:"mcp",label:"raw rows",desc:"Database returns result set",tags:["read"]},
+    {from:"mcp",to:"mcp",label:"_egress() gate",desc:"PII redacted · pseudonymized · 50-row cap · audit",tags:["redact","audit"]},
+    {from:"mcp",to:"routers",label:"redacted result",desc:"Safe data returned to caller",tags:["audit"]},
+    {from:"routers",to:"mcp",label:"LLM narrative (Stage 2)",desc:"Redacted prompt sent to NVIDIA NIM / OpenRouter",tags:["egress"]},
+    {from:"nim",to:"mcp",label:"LLM response",desc:"Model returns scan verdict + narrative",tags:["egress"]},
+    {from:"mcp",to:"routers",label:"final ScanResult",desc:"Healthy / Warning / Critical stored",tags:["audit"]},
+  ],
+  telemetry: [
+    {from:"mobile",to:"edge",label:"crash / telemetry beacon",desc:"Android SDK sends crash logs",tags:["request"]},
+    {from:"edge",to:"fastapi",label:"ingest beacon",desc:"Collector endpoint receives events",tags:["route"]},
+    {from:"fastapi",to:"middleware",label:"rate limit (100/batch)",desc:"TELEMETRY_MAX_BATCH enforced",tags:["security"]},
+    {from:"middleware",to:"routers",label:"route to monitoring collector",desc:"Monitoring router handles ingestion",tags:["route"]},
+    {from:"routers",to:"db",label:"INSERT telemetry rows",desc:"Write to telemetry schema tables",tags:["write"]},
+    {from:"db",to:"rollup",label:"hourly aggregation",desc:"Rollup worker aggregates metrics",tags:[]},
+    {from:"rollup",to:"db",label:"store rollup buckets",desc:"Aggregated metrics persisted",tags:["write"]},
+    {from:"db",to:"prometheus",label:"scrape /metrics",desc:"Prometheus scrapes backend metrics",tags:[]},
+  ],
+  scan: [
+    {from:"routers",to:"mcp",label:"admin-triggered scan",desc:"Admin requests subsection scan",tags:["audit"]},
+    {from:"mcp",to:"db",label:"read-only tool query",desc:"SQL within table allowlist",tags:["read","redact"]},
+    {from:"db",to:"mcp",label:"raw query result",desc:"Rows returned to MCP tool",tags:["read"]},
+    {from:"mcp",to:"mcp",label:"_egress() gate",desc:"PII redacted · pseudonymized · audit row",tags:["redact","audit"]},
+    {from:"mcp",to:"nim",label:"redacted prompt",desc:"Only pseudonymized data reaches LLM",tags:["egress"]},
+    {from:"nim",to:"mcp",label:"scan verdict",desc:"Healthy / Warning / Critical + evidence",tags:["egress"]},
+    {from:"mcp",to:"routers",label:"Store ScanResult",desc:"Result persisted with change_pct",tags:["audit"]},
+  ],
+};
+
+let flow=null, idx=0, timer=null, packets=[], activePaths=new Set();
+
+function selectNode(id){
+  document.querySelectorAll(".node").forEach(n=>n.classList.remove("selected","active-pulse"));
+  const el=document.getElementById("n-"+id); if(el){el.classList.add("selected","active-pulse");}
+  const info=NODE_INFO[id];
+  if(!info) return;
+  const panel=document.getElementById("panel");
+  panel.classList.add("open");
+  document.getElementById("picon").textContent=info.icon;
+  document.getElementById("ptitle").textContent=info.icon+" "+info.title;
+  document.getElementById("pdesc").textContent=info.desc;
+  document.getElementById("flist").innerHTML="";
+  document.getElementById("badge").classList.remove("show");
+  document.getElementById("hint").style.display="none";
+}
+
+function togglePanel(){
+  const p=document.getElementById("panel");
+  const btn=document.getElementById("togglePanel");
+  const isOpen=p.classList.contains("open");
+  if(isOpen){ p.classList.remove("open"); btn.textContent="▶ Inspect Panel"; }
+  else { p.classList.add("open"); btn.textContent="◀ Hide Panel"; }
+}
+
+function hidePanel(){
+  const p=document.getElementById("panel"); p.classList.remove("open");
+  document.querySelectorAll(".node").forEach(n=>n.classList.remove("selected","active-pulse"));
+}
+
+function createPacket(){
+  const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  c.setAttribute("r","5"); c.setAttribute("class","packet");
+  c.setAttribute("cx","0"); c.setAttribute("cy","0");
+  document.getElementById("packets").appendChild(c);
+  return c;
+}
+
+function animatePacketAlongPath(pathId, dur, onEnd){
+  const pe=document.getElementById(pathId); if(!pe){if(onEnd)onEnd();return;}
+  pe.classList.add("active"); activePaths.add(pathId);
+  const p=createPacket(); p.classList.add("shown");
+  const len=pe.getTotalLength();
+  let st=null;
+  function step(ts){
+    if(!st)st=ts;
+    const pr=Math.min((ts-st)/dur,1);
+    const pt=pe.getPointAtLength(len*pr);
+    p.setAttribute("cx",pt.x); p.setAttribute("cy",pt.y);
+    if(pr<1) requestAnimationFrame(step);
+    else { p.remove(); packets=packets.filter(q=>q!==p); pe.classList.remove("active"); activePaths.delete(pathId); if(onEnd)onEnd(); }
+  }
+  requestAnimationFrame(step); packets.push(p);
+}
+
+function runFlow(name){
+  resetFlow(); flow=FLOWS[name]; idx=0;
+  document.getElementById("badge").classList.add("show");
+  document.getElementById("hint").style.display="none";
+  document.getElementById("panel").classList.remove("open");
+  const first=flow[0];
+  const el=document.getElementById("n-"+first.from); if(el)el.classList.add("active-pulse");
+  function next(){
+    if(idx>=flow.length){document.getElementById("badge").classList.remove("show");document.getElementById("hint").style.display="block";flow=null;idx=0;return;}
+    const s=flow[idx];
+    const panel=document.getElementById("panel");
+    panel.classList.add("open");
+    document.getElementById("picon").textContent="📦";
+    document.getElementById("ptitle").textContent=s.from+" → "+s.to;
+    document.getElementById("pdesc").textContent=s.desc;
+    const fl=document.getElementById("flist");
+    fl.innerHTML="";
+    const se=document.createElement("div");
+    se.className="step active";
+    se.innerHTML=`
+      <div class="step-head"><div class="step-num">${idx+1}</div><div class="step-name">${s.from} → ${s.to}</div></div>
+      <div class="step-desc">${s.desc}</div>
+      <div class="step-tags">${(s.tags||[]).map(t=>`<span class="step-tag ${t}">${t}</span>`).join("")}</div>
+    `;
+    fl.appendChild(se);
+    document.querySelectorAll(".node").forEach(n=>n.classList.remove("active-pulse"));
+    const fe=document.getElementById("n-"+s.from); const te=document.getElementById("n-"+s.to);
+    if(fe)fe.classList.add("active-pulse"); if(te)te.classList.add("active-pulse");
+    const pid=PATH_MAP[s.from+"-"+s.to];
+    const dur = s.tags.includes("read")||s.tags.includes("write")?700:900;
+    animatePacketAlongPath(pid,dur,()=>{ idx++; timer=setTimeout(next,400); });
+  }
+  next();
+}
+
+function resetFlow(){
+  if(timer)clearTimeout(timer); timer=null; flow=null; idx=0;
+  packets.forEach(p=>p.remove()); packets=[];
+  activePaths.forEach(id=>{const e=document.getElementById(id); if(e)e.classList.remove("active");});
+  activePaths.clear();
+  document.querySelectorAll(".node").forEach(n=>n.classList.remove("selected","active-pulse"));
+  document.getElementById("panel").classList.remove("open");
+  document.getElementById("togglePanel").textContent="▶ Inspect Panel";
+  document.getElementById("badge").classList.remove("show");
+  document.getElementById("hint").style.display="block";
+}
+
+window.runFlow=runFlow; window.resetFlow=resetFlow; window.selectNode=selectNode; window.hidePanel=hidePanel; window.togglePanel=togglePanel;
+</script>
+</body>
+</html>

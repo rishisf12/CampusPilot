@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CampusPilot Backend Pipeline",
+    "subtitle": "FastAPI + SQLModel + PostgreSQL + MCP observability — request flow, security boundaries, and data egress gates",
+    "output": "campuspilot-backend.html",
+    "quality_profile": "showcase",
+    "visual_preset": "classic",
+    "legend": {
+      "mode": "all",
+      "entries": {
+        "frontend": { "label": "Clients / Frontend", "visible": true },
+        "backend": { "label": "FastAPI Application", "visible": true },
+        "database": { "label": "Database / Storage", "visible": true },
+        "security": { "label": "Auth / Access Control", "visible": true },
+        "external": { "label": "External Services", "visible": true },
+        "cloud": { "label": "Infrastructure", "visible": true },
+        "messagebus": { "label": "Background Jobs", "visible": true }
+      }
+    },
+    "viewBox": [0, 0, 1200, 700]
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [40, 40],
+    "cols": 12,
+    "gapX": 22,
+    "gapY": 26,
+    "cellW": 140,
+    "cellH": 78
+  },
+  "components": [
+    { "id": "students", "type": "frontend", "label": "Students / Faculty", "sublabel": "React + Vite frontend", "icon": "person", "pos": [40, 300], "size": [150, 64] },
+    { "id": "mobile", "type": "frontend", "label": "Android SDK / Web Beacon", "sublabel": "Crash & telemetry events", "icon": "person", "pos": [40, 400], "size": [150, 64] },
+    { "id": "admin", "type": "frontend", "label": "Admin Panel", "sublabel": "Monitoring + settings dashboards", "icon": "person", "pos": [40, 500], "size": [150, 64] },
+
+    { "id": "edge", "type": "cloud", "label": "Edge Network", "sublabel": "campuspilot-edge · public HTTPS", "icon": "cloud", "pos": [240, 300], "size": [220, 280], "tag": "route to internet" },
+    { "id": "lb", "type": "cloud", "label": "FastAPI :8001", "sublabel": "uvicorn worker", "icon": "backend", "pos": [500, 300], "size": [160, 64] },
+
+    { "id": "middleware", "type": "security", "label": "Middleware Stack", "sublabel": "CORS · Maintenance · RequestMonitoring · Metrics", "icon": "security", "pos": [700, 100], "size": [170, 96], "tag": "request in-flight" },
+    { "id": "lifespan", "type": "backend", "label": "Lifespan / Startup", "sublabel": "DB init · flags · maintenance · rollup · health · OppFeed scheduler", "icon": "clock", "pos": [700, 240], "size": [170, 96], "tag": "runs once at boot" },
+
+    { "id": "auth", "type": "security", "label": "Auth Layer", "sublabel": "JWT (HS256) + WebAuthn passkeys · get_current_user · get_current_admin", "icon": "security", "pos": [700, 380], "size": [170, 80], "tag": "bearer token" },
+    { "id": "routers", "type": "backend", "label": "Feature Routers (20+)", "sublabel": "auth · attendance · timetable · exam · schedule · rooms · feedback · profile · oppfeed · admin modules · OCR · health · analytics · broadcasts · security · ...", "icon": "briefcase", "pos": [700, 500], "size": [170, 160], "tag": "route prefix per module" },
+
+    { "id": "mcp", "type": "security", "label": "MCP Tool Registry + Egress Gate", "sublabel": "run_tool · _egress(redact+pseudonymize) · tool_call_audit · 5s timeout · row cap", "icon": "security", "pos": [930, 240], "size": [200, 96], "tag": "read-only enforced" },
+    { "id": "mcp-api", "type": "backend", "label": "HTTP MCP Console (/api/mcp)", "sublabel": "ENABLE_ADMIN_MCP=false by default · admin-only tool list", "icon": "backend", "pos": [930, 380], "size": [200, 64], "tag": "off unless flagged" },
+
+    { "id": "db", "type": "database", "label": "PostgreSQL :5432", "sublabel": "schemas: core · academic · social · telemetry · public", "icon": "database", "pos": [930, 500], "size": [200, 160], "tag": "pool size 10" },
+
+    { "id": "rollup", "type": "messagebus", "label": "Hourly Rollup Worker", "sublabel": "python -m features.monitoring.rollup --loop", "icon": "clock", "pos": [1170, 100], "size": [170, 64], "tag": "separate process" },
+    { "id": "ollama", "type": "external", "label": "Ollama (optional)", "sublabel": "local LLM fallback · http://ollama:11434/v1", "icon": "external", "pos": [1170, 220], "size": [170, 64], "tag": "no egress" },
+    { "id": "nim", "type": "external", "label": "NVIDIA NIM / OpenRouter", "sublabel": "free OSS models · LLM_PROVIDER allowlist", "icon": "external", "pos": [1170, 320], "size": [170, 64], "tag": "provider key" },
+    { "id": "smtp", "type": "external", "label": "SMTP (Gmail)", "sublabel": "verify email · password reset · feedback replies", "icon": "external", "pos": [1170, 420], "size": [170, 64], "tag": "outbound mail" },
+    { "id": "imap", "type": "external", "label": "IMAP (Gmail INBOX)", "sublabel": "hackathon feed ingestion · App Password", "icon": "external", "pos": [1170, 520], "size": [170, 64], "tag": "inbound mail" },
+    { "id": "prometheus", "type": "cloud", "label": "Prometheus + Grafana", "sublabel": "scrapes /metrics · 30d retention · app-internal only", "icon": "cloud", "pos": [1170, 620], "size": [170, 64], "tag": "observability" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Edge Network · campuspilot-edge", "wraps": ["lb", "middleware", "auth", "routers", "mcp-api"], "pad": 16 },
+    { "kind": "security-group", "label": "App-Internal Network · campuspilot-internal (internal: true)", "wraps": ["db", "rollup", "ollama", "prometheus"], "pad": 16 },
+    { "kind": "security-group", "label": "MCP Egress Boundary · read-only, redacted, audited", "wraps": ["mcp"], "pad": 14 }
+  ],
+  "connections": [
+    { "id": "students-to-lb", "from": "students", "to": "lb", "label": "HTTPS /api", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "mobile-to-lb", "from": "mobile", "to": "lb", "label": "telemetry beacon", "variant": "default", "fromSide": "right", "toSide": "left" },
+    { "id": "admin-to-lb", "from": "admin", "to": "lb", "label": "HTTPS /admin", "variant": "default", "fromSide": "right", "toSide": "left" },
+    { "id": "lb-to-middleware", "from": "lb", "to": "middleware", "label": "every request", "fromSide": "right", "toSide": "top" },
+    { "id": "middleware-to-auth", "from": "middleware", "to": "auth", "label": "validates JWT / passkey", "variant": "security", "fromSide": "bottom", "toSide": "top", "labelDy": 10 },
+    { "id": "auth-to-routers", "from": "auth", "to": "routers", "label": "get_current_user / admin", "fromSide": "right", "toSide": "left", "labelDx": -40 },
+    { "id": "routers-to-mcp", "from": "routers", "to": "mcp", "label": "tool calls via run_tool", "fromSide": "right", "toSide": "left", "labelDy": 40 },
+    { "id": "mcp-to-db", "from": "mcp", "to": "db", "label": "SELECT only · allowlist", "variant": "security", "fromSide": "bottom", "toSide": "left", "labelDy": 60 },
+    { "id": "routers-to-db", "from": "routers", "to": "db", "label": "SQLModel ORM · session scope", "fromSide": "right", "toSide": "left", "labelDy": 110 },
+    { "id": "lifespan-to-db", "from": "lifespan", "to": "db", "label": "create_db_and_tables / alembic", "fromSide": "bottom", "toSide": "top", "labelDy": -10 },
+    { "id": "mcp-to-mcp-api", "from": "mcp", "to": "mcp-api", "label": "exposes tool list", "variant": "dashed", "fromSide": "top", "toSide": "top", "labelDy": -20 },
+    { "id": "db-to-rollup", "from": "db", "to": "rollup", "label": "hourly aggregation", "variant": "dashed", "fromSide": "top", "toSide": "bottom", "labelDy": -20 },
+    { "id": "mcp-to-llm", "from": "mcp", "to": "nim", "label": "LLM narrative (Stage 2) · redacted only", "variant": "dashed", "fromSide": "right", "toSide": "left", "labelDy": 60 },
+    { "id": "ollama-to-mcp", "from": "ollama", "to": "mcp", "label": "local fallback", "variant": "dashed", "fromSide": "right", "toSide": "left", "labelDy": 60 },
+    { "id": "routers-to-smtp", "from": "routers", "to": "smtp", "label": "email verification / reset", "variant": "dashed", "fromSide": "right", "toSide": "left", "labelDy": 60 },
+    { "id": "routers-to-imap", "from": "routers", "to": "imap", "label": "hackathon feed import", "variant": "dashed", "fromSide": "right", "toSide": "left", "labelDy": 60 },
+    { "id": "db-to-prometheus", "from": "db", "to": "prometheus", "label": "scraped via backend /metrics", "variant": "dashed", "fromSide": "right", "toSide": "left", "labelDy": 60 },
+    { "id": "edge-to-nim", "from": "edge", "to": "nim", "label": "only backend egress path", "variant": "dashed", "fromSide": "right", "toSide": "left", "labelDy": 140 },
+    { "id": "edge-to-smtp", "from": "edge", "to": "smtp", "label": "SMTP outbound", "variant": "dashed", "fromSide": "right", "toSide": "left", "labelDy": 140 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Edge (public)", "items": ["React frontend on :5174 proxies /api → :8001", "Backend is the only service with a route to the internet", "CORS locked to FRONTEND_URL"] },
+    { "dot": "emerald", "title": "Application (FastAPI)", "items": ["Middleware: CORS → Maintenance → RequestMonitoring → Metrics", "Lifespan bootstraps DB, flags, rollup, health, OppFeed scheduler", "20+ feature routers mount under /auth, /timetable, /exam, /admin/..."] },
+    { "dot": "rose", "title": "Security & Privacy", "items": ["JWT HS256 + password_changed_at invalidation on reset", "WebAuthn passkeys: public key stored, private key never leaves device", "MCP egress gate redacts emails/JWTs/IPs before model context", "tool_call_audit records every tool + LLM call (sent_to, bytes_out)"] },
+    { "dot": "violet", "title": "Data & Networks", "items": ["PostgreSQL schemas: core / academic / social / telemetry", "App-internal network (internal: true) blocks all outbound from DB/monitoring", "LLM providers restricted to free allowlist: nvidia_nim, openrouter, ollama"] }
+  ]
+}
