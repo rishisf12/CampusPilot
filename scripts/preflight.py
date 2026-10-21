@@ -470,6 +470,35 @@ def check_no_local_model_provider() -> Result:
     return Result(name, PASS, "the allowlist is hosted free providers only")
 
 
+def check_the_signing_key_is_not_the_published_one() -> Result:
+    """The token signing key must not be the one in the repository.
+
+    The backend signs every token it issues with this key, and an admin
+    token signed with a published key is an admin token anybody can forge.
+    The compose file used to fall back to a development default, so a
+    deployment that forgot to set one would be running on a key that is in
+    this repository's history.
+    """
+    name = "signing-key-is-not-published"
+    published = "dev-secret-change-in-production-min-32-chars"
+    if not COMPOSE.exists():
+        return Result(name, SKIP, "the compose file was not found")
+    text = COMPOSE.read_text(encoding="utf-8")
+    if published in text:
+        return Result(
+            name,
+            FAIL,
+            "the compose file still carries the published development signing key",
+        )
+    if "SECRET_KEY=${SECRET_KEY:?" not in text:
+        return Result(
+            name,
+            FAIL,
+            "the compose file does not require SECRET_KEY to be set",
+        )
+    return Result(name, PASS, "the signing key has to be supplied by the deployment")
+
+
 CHECKS: tuple[Callable[[], Result], ...] = (
     check_no_shell_mcp_in_prod_config,
     check_admin_mcp_off_by_default,
@@ -481,6 +510,7 @@ CHECKS: tuple[Callable[[], Result], ...] = (
     check_agent_db_role_read_only,
     check_monitoring_stack_removed,
     check_egress_audit_rows,
+    check_the_signing_key_is_not_the_published_one,
 )
 
 

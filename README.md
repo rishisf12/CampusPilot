@@ -121,7 +121,59 @@ the `.ts` you are editing has no effect.
 
 ---
 
-## Environment variables
+## Deploying
+
+The compose stack is the deployment: postgres, adminer, backend, frontend.
+
+```bash
+git clone https://github.com/rishisf12/CampusPilot.git && cd CampusPilot
+cp .env.example .env
+
+# The signing key. There is no default: the one that used to be here is in
+# this repository's history, and a token signed with it can be forged.
+echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> .env
+
+# The SMTP credentials signup needs, and a telemetry pepper.
+# TELEMETRY_PEPPER=$(python -c 'import secrets; print(secrets.token_hex(32))')
+
+docker compose up -d --build
+```
+
+The backend runs `alembic upgrade head` on boot, so the schema is migrated
+without a separate step. It is a no-op when the version table already says
+"head", and it refuses to start rather than half-apply.
+
+**Before the first real login**, create the administrator account — signup
+only ever makes students:
+
+```bash
+docker compose exec backend python tools/make_admin.py <college-email>
+```
+
+Then check the deployment the way the project checks itself:
+
+```bash
+python scripts/preflight.py          # 11 checks; non-zero exit on any failure
+```
+
+What has to be true before a deployment is public:
+
+| | |
+|---|---|
+| `SECRET_KEY` | Set, and not the published development one. The compose refuses to start without it. |
+| `POSTGRES_PASSWORD` | Set, if the database is reachable from anywhere but the host. |
+| `SMTP_*` | Real credentials — signup sends the verification code. |
+| `TELEMETRY_PEPPER` | A random value. The API refuses telemetry with the default. |
+| `ALLOWED_EMAIL_DOMAIN` | The college's domain, if it is not `@iiitdmj.ac.in`. |
+| `ENABLE_AGENT` | Off by default. Turning it on needs an LLM key (`NVIDIA_NIM_API_KEY` or `OPENROUTER_API_KEY`) — without one the agent's extraction is a placeholder, and a placeholder is never published. |
+| `ENABLE_SCHEDULER` | Off by default. The daily agent run searches the open web, so it wants a rate limit that will not get the host blocked. |
+
+The two networks in the compose file are the point: the **frontend** and the
+**backend** are on `edge` (the only network with a route out — SMTP and the
+one permitted LLM egress), and everything else is on `app-internal`, which
+has no route to the internet at all.
+
+---
 
 Backend reads `backend/backend/.env` (see `.env.example`).
 
@@ -179,9 +231,10 @@ went to and the size of the redacted payload. The reasoning is in
 ### Preflight
 
 ```bash
-# Nine checks: shell MCP in prod config, admin MCP on, secrets outside the
-# backend, egress gate wired, provider allowlist, .opencode in the image,
-# read-only DB role, monitoring on the edge, egress audit rows after a scan.
+# Eleven checks: shell MCP in prod config, admin MCP on, secrets outside the
+# backend, egress gate wired, provider allowlist, no local model provider,
+# .opencode in the image, read-only DB role, monitoring stack gone, egress
+# audit rows after a scan, and a signing key that is not the published one.
 python scripts/preflight.py
 ```
 
@@ -886,7 +939,7 @@ python -m pytest -q
 ```
 
 Tests that only mean something on PostgreSQL (constraint enforcement, dialect
-DDL) carry the `postgres` marker and are skipped on the SQLite run. CI runs only against PostgreSQL. Migrate a SQLite file with ``docker compose run --rm backend python tools/migrate_sqlite_to_postgres.py`` if you need to move an existing database.
+DDL) carry the `postgres` marker and are skipped on the SQLite run. CI runs only against PostgreSQL. Migrate a SQLite file with ``docker compose run --rm backend python scripts/data/migrate_sqlite_to_postgres.py`` if you need to move an existing database.
 both, plus an `alembic downgrade/upgrade` round-trip and `alembic check` for
 model/migration drift.
 
@@ -900,10 +953,10 @@ docker compose up -d postgres
 docker compose run --rm backend python -m alembic -c /app/backend/alembic.ini upgrade head
 
 # read this output before writing anything
-docker compose run --rm backend python tools/migrate_sqlite_to_postgres.py \
+docker compose run --rm backend python scripts/data/migrate_sqlite_to_postgres.py \
   --source /app/database/classpilot.db --dry-run
 
-docker compose run --rm backend python tools/migrate_sqlite_to_postgres.py \
+docker compose run --rm backend python scripts/data/migrate_sqlite_to_postgres.py \
   --source /app/database/classpilot.db
 
 docker compose up -d

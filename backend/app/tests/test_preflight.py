@@ -34,7 +34,32 @@ def preflight():
 
 def test_the_script_exists_and_answers(preflight):
     assert preflight.REPO_ROOT == REPO
-    assert len(preflight.CHECKS) == 10
+    assert len(preflight.CHECKS) == 11
+
+
+def test_the_signing_key_check_passes_and_catches_a_regression(
+    preflight, tmp_path, monkeypatch
+):
+    """
+    The signing key has to be the deployment's own.
+
+    The compose file used to fall back to a development key that is in this
+    repository's history, so a deployment that forgot to set one would sign
+    its admin tokens with a published key - and anyone could forge an admin.
+    """
+    result = preflight.check_the_signing_key_is_not_the_published_one()
+    assert result.status == preflight.PASS
+
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text(
+        "services:\n  backend:\n    environment:\n"
+        "      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production-min-32-chars}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(preflight, "COMPOSE", compose)
+    failed = preflight.check_the_signing_key_is_not_the_published_one()
+    assert failed.status == preflight.FAIL
+    assert "published" in failed.detail
 
 
 def test_the_local_model_provider_check_passes_and_catches_a_regression(

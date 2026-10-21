@@ -1,0 +1,5 @@
+# The SQLite database's home.
+#
+# The directory has to exist in the backend image for the `database` volume
+# to mount over it, and git does not track an empty directory - hence this
+# file. The database itself is a local artifact and is not tracked.

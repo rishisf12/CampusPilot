@@ -62,7 +62,16 @@ logs/
 *.sqlite3
 
 # Backend uploads (runtime data)
+#
+# The path is `backend/app/uploads` - the one that exists. The old
+# `backend/backend/uploads` matched nothing, so every uploaded timetable and
+# exam index on a developer machine was copied into the build context and
+# into the image: 2351 files, 15 MB, and a student's uploaded document in a
+# production image.
+backend/app/uploads/
 backend/backend/uploads/
+backend/app/uploads
+backend/backend/uploads
 
 # Test artifacts
 *.cover

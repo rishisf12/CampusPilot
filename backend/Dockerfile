@@ -22,7 +22,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./backend
 COPY backend/alembic.ini ./backend/alembic.ini
 COPY backend/alembic ./backend/alembic
-COPY tools ./tools
+
+# The maintenance scripts (the SQLite migration, the account tools). They live
+# under scripts/, which is the tracked directory - the old `tools/` path was
+# never in git, so a fresh clone had no tools/ directory and this COPY failed
+# the build.
+COPY scripts ./scripts
+
+# The SQLite database's home. The directory has to exist in the image for the
+# volume to mount over it, and git does not track an empty directory - hence
+# the .gitkeep.
 COPY database ./database
 
 # Image hygiene: the v1 scan-agent tooling (the opencode config and its shell
