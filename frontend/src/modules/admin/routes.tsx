@@ -1,14 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import {
-  Activity,
-  Menu,
-  MessageSquare,
-  X,
-  TrendingUp,
-  Briefcase,
-  SettingsIcon as SettingsIconLucide,
-  Bot,
-} from 'lucide-react';
+import { Activity, Menu, MessageSquare, X, TrendingUp } from 'lucide-react';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { healthApi } from '@/api';
 import { Badge, Tabs } from '@/components/ui';
@@ -24,11 +15,9 @@ const Monitoring = lazy(() => import('./features/monitoring/Monitoring'));
 // electives), which describes none of this.
 const AdminProfile = lazy(() => import('./features/admin/AdminProfile'));
 const Settings = lazy(() => import('@shared/features/settings/Settings'));
-const OppFeedDashboard = lazy(() => import('./features/oppfeed/OppFeedDashboard'));
-const AgentRunsList = lazy(() => import('./features/oppfeed/AgentRunsList'));
-const OpportunitiesManager = lazy(() => import('./features/oppfeed/OpportunitiesManager'));
-const AgentSettings = lazy(() => import('./features/oppfeed/AgentSettings'));
-const LLMStatus = lazy(() => import('./features/oppfeed/LLMStatus'));
+// OppFeed is one feature with five screens, so it is one entry here and a
+// sub-nav of its own inside.
+const OppFeed = lazy(() => import('./features/oppfeed/OppFeed'));
 
 function ModuleLoading() {
   return (
@@ -86,6 +75,11 @@ export function AdminRoutes() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Admin sub-tabs (Profile removed - accessed via sidebar)
+  //
+  // One entry per feature. OppFeed's five screens live under one of them
+  // with a sub-nav of their own, the way the admin panel keeps its sections:
+  // five sibling entries in the main bar said "five features" when they were
+  // one.
   const ADMIN_TABS: AdminTab[] = [
     {
       id: 'responses',
@@ -100,34 +94,10 @@ export function AdminRoutes() {
       hue: 'sky',
     },
     {
-      id: 'oppfeed-dashboard',
-      label: 'OppFeed Dashboard',
+      id: 'oppfeed',
+      label: 'OppFeed',
       icon: <TrendingUp size={16} strokeWidth={2} aria-hidden />,
       hue: 'emerald',
-    },
-    {
-      id: 'oppfeed-runs',
-      label: 'Agent Runs',
-      icon: <Activity size={16} strokeWidth={2} aria-hidden />,
-      hue: 'sky',
-    },
-    {
-      id: 'oppfeed-opportunities',
-      label: 'Opportunities',
-      icon: <Briefcase size={16} strokeWidth={2} aria-hidden />,
-      hue: 'amber',
-    },
-    {
-      id: 'oppfeed-settings',
-      label: 'Agent Settings',
-      icon: <SettingsIconLucide size={16} strokeWidth={2} aria-hidden />,
-      hue: 'indigo',
-    },
-    {
-      id: 'oppfeed-llm-status',
-      label: 'LLM Status',
-      icon: <Bot size={16} strokeWidth={2} aria-hidden />,
-      hue: 'purple',
     },
   ];
 
@@ -247,13 +217,7 @@ export function AdminRoutes() {
           <Suspense fallback={<ModuleLoading />}>
             {adminTab === 'responses' && <AdminPanel onError={setConnectionError} />}
             {adminTab === 'web-monitoring' && <Monitoring platformGroup="Web App Monitoring" />}
-            {adminTab === 'oppfeed-dashboard' && <OppFeedDashboard onError={setConnectionError} />}
-            {adminTab === 'oppfeed-runs' && <AgentRunsList onError={setConnectionError} />}
-            {adminTab === 'oppfeed-opportunities' && (
-              <OpportunitiesManager onError={setConnectionError} />
-            )}
-            {adminTab === 'oppfeed-settings' && <AgentSettings onError={setConnectionError} />}
-            {adminTab === 'oppfeed-llm-status' && <LLMStatus onError={setConnectionError} />}
+            {adminTab === 'oppfeed' && <OppFeed onError={setConnectionError} />}
             {adminTab === 'profile' && <AdminProfile onError={setConnectionError} />}
             {adminTab === 'settings' && <Settings onOpenProfile={() => setAdminTab('profile')} />}
           </Suspense>

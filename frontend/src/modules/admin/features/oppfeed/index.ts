@@ -1,4 +1,5 @@
 /** OppFeed admin feature module. */
+export { default as OppFeed } from './OppFeed';
 export { default as OppFeedDashboard } from './OppFeedDashboard';
 export { default as AgentRunsList } from './AgentRunsList';
 export { default as AgentRunDetail } from './AgentRunDetail';

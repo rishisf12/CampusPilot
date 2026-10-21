@@ -44,6 +44,18 @@ def _is_transient(error: str) -> bool:
     return any(marker in low for marker in _TRANSIENT_MARKERS)
 
 
+#: The providers the router can actually talk to: the two hosted free ones
+#: (NVIDIA NIM, OpenRouter) plus the local development ones. A chain naming
+#: anything else cannot work, so the seed drops those names from a chain
+#: written before the provider was removed.
+KNOWN_PROVIDERS: tuple[str, ...] = (
+    "nvidia_nim",
+    "opencode_cli",
+    "openrouter",
+    "mock",
+)
+
+
 def _get_settings():
     """Get LLM settings from environment variables with defaults.
 

@@ -23,6 +23,11 @@ from features.oppfeed.models import (
     SourceRule,
     SearchQuery,
 )
+from features.oppfeed.agent.llm.router import KNOWN_PROVIDERS
+
+#: The chain a fresh install starts with: the hosted free providers first,
+#: then the local development ones.
+DEFAULT_CHAIN = ",".join(KNOWN_PROVIDERS)
 
 
 def seed():
@@ -35,7 +40,7 @@ def seed():
                 run_window_end="04:00",
                 auto_publish_enabled=False,
                 auto_publish_threshold=0.85,
-                llm_provider_chain="nvidia_nim,opencode_cli,openrouter,mock",
+                llm_provider_chain=DEFAULT_CHAIN,
                 llm_max_rpm=30,
                 enable_agent=True,
                 enable_scheduler=False,
@@ -46,6 +51,24 @@ def seed():
             db.add(settings)
             db.commit()
             print("Created AgentSettings")
+        else:
+            # Repair a chain written before a provider was removed. The router
+            # cannot talk to a provider it does not know, so such a name is
+            # dead weight in the chain - and dead weight in the admin's own
+            # settings screen, which shows the chain as it stands.
+            chain = [
+                name.strip()
+                for name in (settings.llm_provider_chain or "").split(",")
+                if name.strip() in KNOWN_PROVIDERS
+            ]
+            if chain and ",".join(chain) != (settings.llm_provider_chain or ""):
+                print(
+                    "Dropped unknown provider(s) from the LLM chain: %s"
+                    % (settings.llm_provider_chain or "")
+                )
+                settings.llm_provider_chain = ",".join(chain)
+                db.add(settings)
+                db.commit()
 
         # ---- Source rules ----
         rules = [
