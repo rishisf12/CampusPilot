@@ -31,11 +31,21 @@ export default function Tabs({
   active,
   onChange,
   variant = 'segmented',
+  onChrome = false,
 }: {
   tabs: Tab[];
   active: string;
   onChange: (id: string) => void;
   variant?: TabsVariant;
+  /**
+   * The strip is sitting on the bright header band.
+   *
+   * On the chrome the usual colours are wrong: muted grey on a saturated
+   * band is unreadable, and a teal chip on a teal band disappears. So the
+   * active chip becomes white with the brand colour on it, and the resting
+   * ones become the chrome's own translucent white.
+   */
+  onChrome?: boolean;
 }) {
   const underline = variant === 'underline';
   const listRef = useRef<HTMLDivElement>(null);
@@ -106,11 +116,15 @@ export default function Tabs({
       className={`relative flex gap-1 overflow-x-auto scrollbar-thin ${underline ? 'px-0.5' : 'p-0.5'}`}
       style={
         underline
-          ? { borderBottom: '1px solid rgba(163,177,198,.3)' }
+          ? {
+              borderBottom: onChrome
+                ? '1px solid rgba(255,255,255,.22)'
+                : '1px solid rgba(163,177,198,.3)',
+            }
           : {
               borderRadius: 8,
-              background: 'var(--cp-bg)',
-              boxShadow: 'var(--cp-neu-inset)',
+              background: onChrome ? 'rgba(255,255,255,.16)' : 'var(--cp-bg)',
+              boxShadow: onChrome ? 'none' : 'var(--cp-neu-inset)',
             }
       }
     >
@@ -123,8 +137,8 @@ export default function Tabs({
           width: indicator.width,
           opacity: indicator.visible ? 1 : 0,
           borderRadius: underline ? 3 : 6,
-          background: 'var(--cp-primary)',
-          boxShadow: underline ? undefined : 'var(--cp-clay)',
+          background: onChrome ? '#ffffff' : 'var(--cp-primary)',
+          boxShadow: underline ? undefined : onChrome ? undefined : 'var(--cp-clay)',
         }}
       />
       {tabs.map(t => {
@@ -151,20 +165,30 @@ export default function Tabs({
               // pill to hit, so it can go shorter still.
               minHeight: underline ? 20 : 24,
               borderRadius: 6,
-              color: underline
+              color: onChrome
                 ? on
                   ? 'var(--cp-primary)'
-                  : 'var(--cp-muted)'
-                : on
-                  ? 'var(--cp-on-primary)'
-                  : 'var(--cp-muted)',
+                  : 'var(--cp-chrome-muted)'
+                : underline
+                  ? on
+                    ? 'var(--cp-primary)'
+                    : 'var(--cp-muted)'
+                  : on
+                    ? 'var(--cp-on-primary)'
+                    : 'var(--cp-muted)',
             }}
           >
             {t.icon ? (
               <span
                 aria-hidden
                 style={{
-                  color: on ? (underline ? 'var(--cp-primary)' : 'var(--cp-on-primary)') : hueColor,
+                  color: on
+                    ? onChrome
+                      ? 'var(--cp-primary)'
+                      : underline
+                        ? 'var(--cp-primary)'
+                        : 'var(--cp-on-primary)'
+                    : hueColor,
                   display: 'inline-flex',
                 }}
               >

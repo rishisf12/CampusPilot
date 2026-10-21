@@ -131,8 +131,8 @@ export function StudentUGRoutes() {
       <header
         className="sticky top-0 z-40"
         style={{
-          background: 'var(--cp-surface)',
-          borderBottom: '1px solid rgba(163,177,198,.25)',
+          background: 'var(--cp-chrome)',
+          borderBottom: '1px solid rgba(255,255,255,.18)',
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -141,8 +141,13 @@ export function StudentUGRoutes() {
             {/* Brand */}
             <div className="flex items-center gap-3 shrink-0">
               <div className="leading-tight">
-                <p className="text-lg font-bold text-primary-500">essential</p>
-                <p className="text-[10px] tracking-widest font-semibold text-cyan-600 whitespace-nowrap">
+                <p className="text-lg font-bold" style={{ color: 'var(--cp-chrome-text)' }}>
+                  essential
+                </p>
+                <p
+                  className="text-[10px] tracking-widest font-semibold whitespace-nowrap"
+                  style={{ color: 'var(--cp-chrome-muted)' }}
+                >
                   YOUR CAMPUS ASSISTANT
                 </p>
               </div>
@@ -150,11 +155,14 @@ export function StudentUGRoutes() {
 
             {/* Greeting: personal, truncates on narrow screens instead of wrapping */}
             <div className="flex-1 min-w-0 text-center sm:text-left px-1">
-              <p className="text-sm font-semibold truncate" style={{ color: 'var(--cp-text)' }}>
+              <p
+                className="text-sm font-semibold truncate"
+                style={{ color: 'var(--cp-chrome-text)' }}
+              >
                 {greetingFor()}
                 {firstName ? `, ${firstName}` : ''}
               </p>
-              <p className="text-xs truncate" style={{ color: 'var(--cp-muted)' }}>
+              <p className="text-xs truncate" style={{ color: 'var(--cp-chrome-muted)' }}>
                 {todayLabel}
               </p>
             </div>
@@ -215,7 +223,7 @@ export function StudentUGRoutes() {
           {/* Second row: Main navigation (Classroom, Events, Important, Feedback) */}
           <div
             className="flex items-center justify-center gap-1 py-2 overflow-x-auto"
-            style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
+            style={{ borderTop: '1px solid rgba(255,255,255,.18)' }}
           >
             <nav className="flex items-center gap-1" aria-label="Main sections">
               {(['classroom', 'my-team', 'important', 'feedback'] as const).map(id => {
@@ -259,16 +267,15 @@ export function StudentUGRoutes() {
                       isActive
                         ? {
                             borderRadius: 16,
-                            background: 'var(--cp-primary)',
-                            color: 'var(--cp-on-primary)',
+                            background: '#ffffff',
+                            color: 'var(--cp-primary)',
                             boxShadow: 'var(--cp-clay)',
                           }
                         : {
                             borderRadius: 16,
-                            background: 'var(--cp-surface)',
-                            color: 'var(--cp-muted)',
-                            boxShadow: 'var(--cp-neu-raised-sm)',
-                            border: '1px solid rgba(163,177,198,.3)',
+                            background: 'rgba(255,255,255,.16)',
+                            color: 'var(--cp-chrome-text)',
+                            border: '1px solid rgba(255,255,255,.22)',
                           }
                     }
                   >
@@ -285,7 +292,7 @@ export function StudentUGRoutes() {
               className="flex items-center justify-center gap-1 overflow-x-auto"
               style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
             >
-              <Tabs tabs={CLASSROOM_TABS} active={activeTab} onChange={selectTab} />
+              <Tabs tabs={CLASSROOM_TABS} active={activeTab} onChange={selectTab} onChrome />
             </div>
           )}
 
@@ -304,6 +311,7 @@ export function StudentUGRoutes() {
                 onChange={() => {
                   // Could add tab state for important if needed
                 }}
+                onChrome
               />
             </div>
           )}
@@ -376,13 +384,13 @@ export function StudentUGRoutes() {
       <footer
         className="py-4"
         style={{
-          background: 'var(--cp-surface)',
-          borderTop: '1px solid rgba(163,177,198,.25)',
+          background: 'var(--cp-chrome)',
+          borderTop: '1px solid rgba(255,255,255,.18)',
         }}
       >
         <div
           className="max-w-7xl mx-auto px-4 text-center text-xs"
-          style={{ color: 'var(--cp-muted)' }}
+          style={{ color: 'var(--cp-chrome-muted)' }}
         >
           essential &mdash; your campus assistant
         </div>

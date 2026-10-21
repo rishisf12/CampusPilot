@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useState } from 'react';
 import { Activity, Menu, Users, X, TrendingUp } from 'lucide-react';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { healthApi } from '@/api';
-import { Badge, Tabs } from '@/components/ui';
+import { Tabs } from '@/components/ui';
 import ErrorBanner from '@shared/components/ErrorBanner';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 import { Sidebar } from '@shared/components/Sidebar';
@@ -109,8 +109,8 @@ export function AdminRoutes() {
       <header
         className="sticky top-0 z-40"
         style={{
-          background: 'var(--cp-surface)',
-          borderBottom: '1px solid rgba(163,177,198,.25)',
+          background: 'var(--cp-chrome)',
+          borderBottom: '1px solid rgba(255,255,255,.18)',
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -119,19 +119,27 @@ export function AdminRoutes() {
             {/* Brand */}
             <div className="flex items-center gap-3 shrink-0">
               <div className="leading-tight">
-                <p className="text-lg font-bold" style={{ color: 'var(--cp-primary)' }}>
+                <p className="text-lg font-bold" style={{ color: 'var(--cp-chrome-text)' }}>
                   essential
                 </p>
                 <p
                   className="text-[10px] tracking-widest font-semibold whitespace-nowrap"
-                  style={{ color: 'var(--cp-info)' }}
+                  style={{ color: 'var(--cp-chrome-muted)' }}
                 >
                   YOUR CAMPUS ASSISTANT
                 </p>
               </div>
             </div>
 
-            <Badge tone="primary">Admin</Badge>
+            <span
+              className="rounded-full px-2.5 py-1 text-xs font-semibold"
+              style={{
+                background: 'rgba(255,255,255,.18)',
+                color: 'var(--cp-chrome-text)',
+              }}
+            >
+              Admin
+            </span>
 
             {/* Right side: status indicator + sidebar toggle */}
             <div className="flex items-center gap-3 shrink-0">
@@ -186,7 +194,7 @@ export function AdminRoutes() {
 
           {/* Second row: Admin sub-tabs */}
           <div className="flex items-center justify-center gap-1 py-2 overflow-x-auto">
-            <Tabs tabs={ADMIN_TABS} active={adminTab} onChange={setAdminTab} />
+            <Tabs tabs={ADMIN_TABS} active={adminTab} onChange={setAdminTab} onChrome />
           </div>
         </div>
       </header>
@@ -232,13 +240,13 @@ export function AdminRoutes() {
       <footer
         className="py-4"
         style={{
-          background: 'var(--cp-surface)',
-          borderTop: '1px solid rgba(163,177,198,.25)',
+          background: 'var(--cp-chrome)',
+          borderTop: '1px solid rgba(255,255,255,.18)',
         }}
       >
         <div
           className="max-w-7xl mx-auto px-4 text-center text-xs"
-          style={{ color: 'var(--cp-muted)' }}
+          style={{ color: 'var(--cp-chrome-muted)' }}
         >
           essential &mdash; your campus assistant
         </div>

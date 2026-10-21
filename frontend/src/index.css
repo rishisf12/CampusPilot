@@ -27,11 +27,26 @@
   /* The wall and the card.
      A pure-white card on a near-white page is glare: the eye reads a bright
      slab rather than a surface, and the neumorphic shadow - the whole
-     reason a card looks raised - has nothing to sit against. So the page is
-     a warm stone and the cards are a soft ivory above it: never white, but
-     clearly lighter than the page, which is what makes "raised" read. */
-  --cp-bg: #e8e3da;
-  --cp-surface: #f7f4ee;
+     reason a card looks raised - has nothing to sit against.
+
+     So the page is a warm sand and the cards a brighter cream above it.
+     Never white, but coloured rather than grey: a stone that has no colour
+     in it reads as dull, and the accent colours (teal, amber) need a
+     background with some warmth of its own to sit on. */
+  /* A modern, cool and quiet palette.
+     The page carries no colour of its own - a light blue-grey, the way
+     modern interfaces do - and the one vivid accent in the app is the
+     chrome: the header and footer bands. The previous warm-sand palette
+     read as retro, and a beige page is a beige page no matter how many
+     cards float on it. */
+  --cp-bg: #f1f4f9;
+  --cp-surface: #fbfcfe;
+  /* The chrome: the bright band the header and footer wear. Saturated
+     enough to be the one place the app is allowed to shout, and dark
+     enough that white text sits on it comfortably. */
+  --cp-chrome: linear-gradient(90deg, #0f766e 0%, #0d9488 45%, #10b981 100%);
+  --cp-chrome-text: #ffffff;
+  --cp-chrome-muted: rgba(255, 255, 255, 0.82);
   --cp-text: #1f2937;
   --cp-muted: #6b7280;
   --cp-primary: #0f766e;
@@ -65,6 +80,10 @@
 .dark {
   --cp-bg: #14171c;
   --cp-surface: #1d2229;
+  /* The same band, a shade deeper so it does not glare on a dark page. */
+  --cp-chrome: linear-gradient(90deg, #0b5e56 0%, #0f766e 45%, #0d9488 100%);
+  --cp-chrome-text: #ffffff;
+  --cp-chrome-muted: rgba(255, 255, 255, 0.78);
   --cp-text: #e5e7eb;
   --cp-muted: #9aa3b2;
   --cp-primary: #2dd4bf;
