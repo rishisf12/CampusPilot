@@ -749,7 +749,9 @@ function SubjectCard({
         </div>
       )}
 
-      <div className="flex items-center gap-1 mt-auto pt-1">
+      {/* Wraps, and the buttons can shrink: four of them side by side are
+          wider than the card, and the last one used to end up outside it. */}
+      <div className="flex flex-wrap items-center gap-1 mt-auto pt-1">
         <Button
           type="button"
           variant="success"
