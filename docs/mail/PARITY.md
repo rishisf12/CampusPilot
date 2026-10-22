@@ -19,7 +19,7 @@ row is `done` or `n/a`.**
 | 6.1-5 | Priority Inbox | User picks sections such as "Priority and unread", "Starred", "Everything else", or a label. | Custom section selection persisted | not started | - |
 | 6.1-6 | Multiple inboxes | Extra panes defined by a search or label; used for the All-sections scope. "Show up to N items" per pane + "See all" link. | Pane count vs screen width; empty panes | not started | - |
 | 6.1-7 | Single-section user never sees switcher | A user with access to one section never sees the inbox-type switcher. | Role/section access enforced server-side | not started | - |
-| 6.1-8 | Unread counts in subsection tabs | Each Important subsection tab shows its section's unread count. | Zero count hidden or shown as 0 | not started | - |
+| 6.1-8 | Unread counts in subsection tabs | Each Important subsection tab shows its section's unread count. | Zero count hidden or shown as 0 | Phase 4 (server-side) | `tests/test_mail_read.py` |
 
 ## 6.2 Message (conversation) list
 

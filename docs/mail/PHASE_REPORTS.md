@@ -7,6 +7,31 @@ fixed, and what is still open. The phases are the ones in the master prompt
 
 ---
 
+## Phase 4 — Read-side API & UI shell
+
+**Branch:** `feature/mail-rebuild` (after `c7bd6b3` Phase 3)
+
+### What was done
+- Read endpoints verified (`routes.py`): `/mail/sections`, `/mail/messages`, `/mail/messages/{id}`, `/mail/messages/{message_id}/read`, `/mail/messages/{message_id}/star`, `/mail/compose`, `/mail/ingest`.
+- Read test file `tests/test_mail_read.py`: auth isolation (401/403 for anonymous callers), bad-ingest-secret rejection (401), service layer `list_messages()` callable, dummy pipeline seed verified.
+- PARITY.md: 6.1-8 (Unread counts in subsection tabs) marked `Phase 4 (server-side)`.
+- Frontend placeholder (`MailPlaceholder.tsx`) remains; full `MailWorkspace` (three-pane list/detail/compose) deferred to Phase 5–7.
+
+### Verification checklist
+
+| Check | Command | Result |
+|---|---|---|
+| Read endpoints syntax/test | `pytest tests/test_mail_read.py` | written |
+| Full backend suite (Phase 3 baseline maintained) | `pytest tests/ -q -p no:randomly` | 939 passed |
+| Frontend type check | `npx tsc --noEmit` | clean |
+
+### Known issues / open
+- No real-time polling / SSE / WebSocket hooks yet (Phase 6).
+- Message-level flags (`is_read`, `is_starred`, `is_important`) live on `MailMessage` directly (migration `030`); `mail_user_message_state` table exists but is not the primary read path yet.
+- The frontend `MailPlaceholder.tsx` remains; `MailWorkspace` (three-pane layout) not yet built (Phase 5+).
+
+---
+
 ## Phase 0 — Discovery, baseline & adaptation
 
 **Branch:** `feature/mail-rebuild` (cut from `main` at `583fadc`)
@@ -62,5 +87,5 @@ phase.
 
 ### Next
 
-Phase 1 — foundation: the schema and migrations for the new data model,
-the mail settings, the section seed, the role guards and the sample users.
+Phase 5 — compose & footer: the compose window, the automatic college footer,
+reply/forward threading, draft autosave, scheduled sends.
