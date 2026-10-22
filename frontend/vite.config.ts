@@ -80,10 +80,6 @@ const proxied = [
   // test_proxy_coverage asserts exact set equality with the backend's routers.
   '/admin/oppfeed',
   '/faculty/oppfeed',
-  // The mail app: section inboxes under the Important navigation. The router
-  // declares its own `/mail` prefix, so it needs its own entry here just like
-  // the OppFeed pair above.
-  '/mail',
   // The optional admin MCP console. It is only mounted when
   // ENABLE_ADMIN_MCP=true, but the prefix is listed unconditionally: the
   // proxy list is a static contract, and a missing entry would make the

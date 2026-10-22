@@ -1,10 +1,5 @@
 /**
- * The mail bundle: section inboxes for the Important navigation.
- *
- * A module mounts <MailInbox section={...} /> once per section; the backend
- * scopes every read to the viewer's group, so the same component serves both
- * bundles.
+ * The mail feature placeholder (Phase 1 clean slate). Replaced by the full
+ * mail workspace in Phase 2.
  */
-export { default as MailInbox } from './MailInbox';
-export { default as MailCompose } from './MailCompose';
-export type { ComposeMode } from './MailCompose';
+export { default as MailPlaceholder } from './MailPlaceholder';

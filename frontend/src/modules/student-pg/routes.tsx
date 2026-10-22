@@ -10,7 +10,7 @@ import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 import { Sidebar } from '@shared/components/Sidebar';
 import { Tabs } from '@/components/ui';
 import ThemeToggle from '@/components/layout/ThemeToggle';
-import { MailInbox } from '@shared/features/mail';
+import { MailPlaceholder } from '@shared/features/mail';
 import { greetingFor } from '@shared/lib/time';
 
 /** Lazy-loaded features */
@@ -75,8 +75,6 @@ export function StudentPGRoutes() {
   >('classroom');
   // Tracks whether the Classroom sub-nav is expanded. Only relevant when section === 'classroom'.
   const [classroomExpanded, setClassroomExpanded] = useState(true);
-  // Tracks whether the Important sub-nav is expanded. Only relevant when section === 'important'.
-  const [importantExpanded, setImportantExpanded] = useState(false);
   // Sidebar open state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tab, setTab] = useState(() => {
@@ -84,17 +82,9 @@ export function StudentPGRoutes() {
     return requested && NAV_TABS.some(item => item.id === requested) ? requested : 'live';
   });
 
-  // Important sub-tabs: the five sections the college runs under
-  // "Important", in the order they are taught out.
-  const IMPORTANT_TABS = [
-    { id: 'academics', label: 'Academics' },
-    { id: 'placement', label: 'Placement Cell' },
-    { id: 'cultural', label: 'Cultural' },
-    { id: 'technical', label: 'Technical' },
-    { id: 'sports', label: 'Sports' },
-    { id: 'other', label: 'Other' },
-  ] as const;
-  const [importantTab, setImportantTab] = useState<string>('academics');
+  // Important holds ONE common mailbox now: every receiving id feeds it, and
+  // the sender's registered id files the mail, so the six separate section
+  // inboxes (and their sub-nav) are gone on purpose.
 
   // The bundle this student belongs to decides the classroom tabs.
   // PG students only get 'live' and 'exam' tabs. Chips use the short labels
@@ -254,17 +244,11 @@ export function StudentPGRoutes() {
                           selectTab('live');
                         }
                       } else if (id === 'important') {
-                        // Toggle sub-nav when clicking Important tab
-                        if (section === 'important') {
-                          setImportantExpanded(prev => !prev);
-                        } else {
-                          setSection('important');
-                          setImportantExpanded(true);
-                        }
+                        // Important is one common mailbox: no sub-nav.
+                        setSection('important');
                       } else {
                         setSection(id);
                         setClassroomExpanded(false);
-                        setImportantExpanded(false);
                       }
                     }}
                     aria-current={isActive ? 'page' : undefined}
@@ -299,21 +283,6 @@ export function StudentPGRoutes() {
               style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
             >
               <Tabs tabs={CLASSROOM_TABS} active={activeTab} onChange={selectTab} onChrome />
-            </div>
-          )}
-
-          {/* Fourth row: Important sub-tabs (only when Important is active AND expanded) */}
-          {section === 'important' && importantExpanded && (
-            <div
-              className="flex items-center justify-center gap-1 py-2 overflow-x-auto"
-              style={{ borderTop: '1px solid rgba(163,177,198,.25)' }}
-            >
-              <Tabs
-                tabs={IMPORTANT_TABS.map(item => ({ id: item.id, label: item.label }))}
-                active={importantTab}
-                onChange={setImportantTab}
-                onChrome
-              />
             </div>
           )}
         </div>
@@ -367,7 +336,7 @@ export function StudentPGRoutes() {
             </div>
           )}
 
-          {section === 'important' && <MailInbox section={importantTab} />}
+          {section === 'important' && <MailPlaceholder />}
 
           {section === 'feedback' && <Feedback />}
 

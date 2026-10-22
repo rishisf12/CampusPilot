@@ -82,12 +82,6 @@ import type {
   LLMTestResponse,
   OppFeedFeedbackResponse,
   OppFeedFeedbackCreateRequest,
-  MailGroupInfo,
-  MailSectionInfo,
-  MailListResponse,
-  MailMessageResponse,
-  MailComposeRequest,
-  MailFileInfo,
 } from './shared/types/api';
 
 /** Query parameters for the mail list; all optional. */
@@ -199,37 +193,6 @@ function upload(path: string, file: File, extra: RequestOptions = {}): Promise<u
   const form = new FormData();
   form.append('file', file);
   return request(path, { method: 'POST', body: form, ...extra });
-}
-
-/**
- * A download: fetch one file as bytes, auth included.
- *
- * A plain link cannot carry the JWT, so a download goes through here and
- * ends as an object URL the component saves. Blob is a kind of promise
- * this file keeps: one fetch, one file, no wrapper.
- */
-async function requestBlob(path: string): Promise<Blob> {
-  const headers: Record<string, string> = {};
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${path}`, { headers });
-  } catch {
-    throw new ApiError('Backend offline', 0);
-  }
-  if (!response.ok) {
-    const text = await response.text();
-    let detail: unknown = text;
-    try {
-      const parsed = JSON.parse(text) as { detail?: unknown; message?: unknown };
-      detail = parsed.detail || parsed.message || text;
-    } catch {
-      // The body was not JSON; the raw text tells enough.
-    }
-    throw new ApiError(formatDetail(detail), response.status);
-  }
-  return response.blob();
 }
 
 // ---------------------------------------------------------------- auth
@@ -1317,46 +1280,6 @@ export const oppfeedApi = {
       method: 'POST',
       body: data,
     }),
-};
-
-// ---------------------------------------------------------------- mail
-export const mailApi = {
-  /** The sections with their unread counts, for the inbox navigation. */
-  sections: () =>
-    request<{ groups: MailGroupInfo[]; sections: MailSectionInfo[] }>('/mail/sections'),
-
-  /** The messages of the viewer's group, filtered and paged. */
-  list: (params: MailListParams = {}) => {
-    const search = new URLSearchParams();
-    if (params.section) search.set('section', params.section);
-    if (params.search) search.set('search', params.search);
-    if (params.starred !== undefined) search.set('starred', String(params.starred));
-    if (params.direction) search.set('direction', params.direction);
-    if (params.group) search.set('group', params.group);
-    if (params.page) search.set('page', String(params.page));
-    if (params.size) search.set('size', String(params.size));
-    const query = search.toString();
-    return request<MailListResponse>(`/mail/messages${query ? `?${query}` : ''}`);
-  },
-
-  get: (id: number) => request<MailMessageResponse>(`/mail/messages/${id}`),
-
-  markRead: (id: number, read = true) =>
-    request<MailMessageResponse>(`/mail/messages/${id}/read?read=${read}`, { method: 'POST' }),
-
-  /** Toggles: a second call unstars. */
-  toggleStar: (id: number) =>
-    request<MailMessageResponse>(`/mail/messages/${id}/star`, { method: 'POST' }),
-
-  compose: (data: MailComposeRequest) =>
-    request<MailMessageResponse>('/mail/compose', { method: 'POST', body: data }),
-
-  /** Every attachment the mailbox carries, newest first - the Files view. */
-  files: () => request<MailFileInfo[]>('/mail/files'),
-
-  /** One attachment's bytes, as a Blob the caller saves to disk. */
-  download: (messageId: number, fileId: number) =>
-    requestBlob(`/mail/messages/${messageId}/attachments/${fileId}`),
 };
 
 // ------------------------------------------------------------ telemetry
