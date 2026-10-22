@@ -478,10 +478,10 @@ export default function ScheduleHome({
         </Card>
       )}
 
-      {/* 2 — Up next: one card per class, first then second. The card count
-          is what the caller computed; the countdown is per card, since the
-          second can sit on the same day as the first, only hours later. */}
-      {upcomingList.map((item, idx) => {
+      {/* 2 — Up next: one card, the very next class. The countdown is on it,
+          so it can sit hours away; the class after that never got a card, so
+          the schedule never leads with two at once. */}
+      {upcomingList.slice(0, 1).map(item => {
         const offset = daysUntilWeekday(item.day);
         return (
           <Card
@@ -491,7 +491,7 @@ export default function ScheduleHome({
             <div className="flex items-start gap-2 mb-2">
               <Clock size={16} strokeWidth={2} aria-hidden style={{ color: 'var(--cp-warning)' }} />
               <h3 className="text-sm font-semibold" style={{ color: 'var(--cp-text)' }}>
-                {idx === 0 ? 'Up next' : 'Then'}
+                Up next
               </h3>
               {/* Countdown on top, its alarm right under it - one column so
                   the two stay visually paired. */}
