@@ -72,6 +72,7 @@ from features.security import models as _security_models  # noqa: E402,F401
 from features.settings import models as _settings_models  # noqa: E402,F401
 from features.user_control import models as _user_control_models  # noqa: E402,F401
 from features.oppfeed import models as _oppfeed_models  # noqa: E402,F401
+from features.mail import models as _mail_models  # noqa: E402,F401
 
 from core.config import settings  # noqa: E402
 
