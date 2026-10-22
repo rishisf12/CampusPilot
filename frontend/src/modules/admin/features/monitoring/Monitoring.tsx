@@ -2,10 +2,16 @@
  * Web App Monitoring and Android App Monitoring.
  *
  * Two groups of four subsections, sharing one data fetch. The eight subsections
- * come from the server (`/monitoring/subsections`) rather than a local copy: a
- * hardcoded list would eventually disagree with the backend's scan allowlist,
+ * come from the server (`/api/mcp/panel/subsections`) rather than a local copy:
+ * a hardcoded list would eventually disagree with the backend's scan allowlist,
  * and the visible symptom would be a "Scan now" button that always fails with
  * no obvious cause.
+ *
+ * Every figure on this screen comes from the MCP layer - the same tool
+ * registry, the same egress gate and the same audit trail the scan agent
+ * uses. The reads are `/api/mcp/panel/*`; what is left under `/monitoring`
+ * is the scan history and the rollup trigger, because MCP has no equivalent
+ * for either.
  *
  * Two design commitments are visible throughout:
  *
@@ -21,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, RefreshCw, ScanLine } from 'lucide-react';
 
-import { monitoringApi, adminApi, type ScanResultResponse } from '@/api';
+import { monitoringApi, mcpApi, adminApi, type ScanResultResponse } from '@/api';
 import type { MonitoringSubsection } from '@shared/types/api';
 import { Badge, Button, Card } from '@/components/ui';
 import { ActivityPanel, type ActivityData } from './panels/Activity';
@@ -71,7 +77,7 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
 
   useEffect(() => {
     let cancelled = false;
-    monitoringApi
+    mcpApi
       .subsections()
       .then(
         (r: {
@@ -123,9 +129,9 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
     setError(null);
     const platform = current?.platform ?? 'web';
     const results = await Promise.allSettled([
-      monitoringApi.overview(days, platform),
-      monitoringApi.health(days, platform),
-      monitoringApi.feedback(days),
+      mcpApi.overview(days, platform),
+      mcpApi.health(days, platform),
+      mcpApi.feedback(days),
       monitoringApi.history(selected),
     ]);
     if (results[0].status === 'fulfilled') setOverview(results[0].value as ActivityData);
@@ -161,7 +167,7 @@ export default function Monitoring({ platformGroup }: MonitoringProps) {
     setScanning(true);
     setLastScan(null);
     try {
-      const result = await monitoringApi.scan(selected, days);
+      const result = await mcpApi.scan(selected, days);
       setLastScan(result);
       // The scan is persisted, so the history tab is now stale.
       try {
@@ -475,10 +481,15 @@ function Loading() {
  * "Scan now".
  *
  * `enabled` is the server's SCAN_ENABLED flag, read from the same
- * `/monitoring/subsections` call that supplies the list, so the button is
+ * `/api/mcp/panel/subsections` call that supplies the list, so the button is
  * offered exactly when the backend would accept the request. It was previously
  * hardcoded off and blamed the installation, which stayed wrong the moment
  * scanning was switched on.
+ *
+ * `llmEnabled` reports whether a model is actually reachable. The scan asks
+ * the subsection's tools, hands the answers to the model and reconciles every
+ * number it cited - so without a model there is no scan, and saying so up
+ * front beats a verdict that fails with "no provider configured".
  */
 function ScanButton({
   subsection,
@@ -504,12 +515,12 @@ function ScanButton({
       title={
         !enabled
           ? 'AI scanning is not enabled on this installation (SCAN_ENABLED)'
-          : llmEnabled
-            ? `Scan ${subsection} with the rule engine and the local LLM. On CPU the model can take minutes.`
-            : `Scan ${subsection} with the rule engine only. Every figure comes from measured metrics.`
+          : !llmEnabled
+            ? `No model provider is configured, so a scan of ${subsection} cannot reach one.`
+            : `Scan ${subsection}: the tools answer, the model writes the verdict, and every number it cites is checked against the audit trail.`
       }
     >
-      {scanning ? 'Scanning�' : 'Scan now'}
+      {scanning ? 'Scanning…' : 'Scan now'}
     </Button>
   );
 }
@@ -526,8 +537,8 @@ const SCAN_STATUS_TONES: Record<string, 'success' | 'warning' | 'danger' | 'neut
  *
  * Rendered inline rather than only in the history tab so the answer is where
  * the question was asked. The `model` field is shown verbatim: an admin should
- * be able to see that this verdict came from the rule engine and not from a
- * model, because only one of the two is authoritative on the numbers.
+ * be able to see which model wrote this verdict, because the numbers in it
+ * are only as good as the reconciliation that checked them.
  */
 function ScanOutcome({ result, llmEnabled }: { result: ScanResultResponse; llmEnabled: boolean }) {
   const missing = result.confidence?.missing_data ?? [];
@@ -536,7 +547,7 @@ function ScanOutcome({ result, llmEnabled }: { result: ScanResultResponse; llmEn
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <Badge tone={SCAN_STATUS_TONES[result.status] ?? 'neutral'}>{result.status}</Badge>
         <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
-          {result.model} � {result.duration_ms} ms � {new Date(result.created_at).toLocaleString()}
+          {result.model} · {result.duration_ms} ms · {new Date(result.created_at).toLocaleString()}
         </span>
       </div>
       <p className="text-sm" style={{ color: 'var(--cp-text)' }}>
@@ -544,8 +555,8 @@ function ScanOutcome({ result, llmEnabled }: { result: ScanResultResponse; llmEn
       </p>
       {!llmEnabled && (
         <p className="mt-2 text-xs" style={{ color: 'var(--cp-muted)' }}>
-          Rule engine only. The LLM narrative stage is off, so this summary is generated from the
-          thresholds rather than written by a model.
+          No model provider is configured on this installation, so this scan could not reach one.
+          The verdict below is the honest failure, not a clean bill of health.
         </p>
       )}
       {missing.length > 0 && (
@@ -558,7 +569,7 @@ function ScanOutcome({ result, llmEnabled }: { result: ScanResultResponse; llmEn
           {result.findings.map((f, i) => (
             <li key={`${f.title}-${i}`} className="text-xs">
               <span style={{ color: 'var(--cp-text)' }}>{f.title}</span>
-              <span style={{ color: 'var(--cp-muted)' }}> � {f.severity}</span>
+              <span style={{ color: 'var(--cp-muted)' }}> · {f.severity}</span>
             </li>
           ))}
         </ul>

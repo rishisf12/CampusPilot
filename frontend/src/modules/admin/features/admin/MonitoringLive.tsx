@@ -1,18 +1,34 @@
 import { useEffect, useState } from 'react';
 import { Activity, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
-import { monitoringApi } from '@/api';
+import { mcpApi } from '@/api';
 import { Card, Badge } from '@/components/ui';
 import ErrorBanner from '@shared/components/ErrorBanner';
 
+/**
+ * The compact monitoring strip on the admin panel.
+ *
+ * It reads the same MCP panel endpoints the full Monitoring tab does, so the
+ * two screens cannot disagree: the numbers here are the ones the tool
+ * registry produced, not a second, cheaper source of truth.
+ */
 export default function MonitoringLive({ onError }: { onError?: (m: string) => void }) {
   const [overview, setOverview] = useState<{
-    database?: { status?: string };
-    cpu?: { usage_percent?: number };
-    memory?: { usage_percent?: number };
-    disk?: { usage_percent?: number };
+    mcp?: {
+      health?: {
+        uptime_pct?: number | null;
+        cpu_pct_avg?: number;
+        ram_pct_avg?: number;
+        response_p95_ms_avg?: number;
+        http_5xx_pct_avg?: number;
+      } | null;
+    };
   } | null>(null);
   const [health, setHealth] = useState<{
-    components?: Array<{ name: string; status: string }>;
+    mcp?: {
+      latency?: {
+        endpoints?: Array<{ endpoint: string; p95_ms: number; error_count: number }>;
+      } | null;
+    };
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,20 +36,9 @@ export default function MonitoringLive({ onError }: { onError?: (m: string) => v
   const load = async () => {
     setLoading(true);
     try {
-      const [o, h] = await Promise.all([monitoringApi.overview(), monitoringApi.health()]);
-      setOverview(
-        o as {
-          database?: { status?: string };
-          cpu?: { usage_percent?: number };
-          memory?: { usage_percent?: number };
-          disk?: { usage_percent?: number };
-        }
-      );
-      setHealth(
-        h as {
-          components?: Array<{ name: string; status: string }>;
-        }
-      );
+      const [o, h] = await Promise.all([mcpApi.overview(), mcpApi.health()]);
+      setOverview(o as never);
+      setHealth(h as never);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load');
@@ -70,6 +75,9 @@ export default function MonitoringLive({ onError }: { onError?: (m: string) => v
     }
   };
 
+  const telemetry = overview?.mcp?.health ?? {};
+  const endpoints = health?.mcp?.latency?.endpoints ?? [];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -83,47 +91,58 @@ export default function MonitoringLive({ onError }: { onError?: (m: string) => v
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <h3 className="text-sm font-medium text-gray-500">Database</h3>
-          <p className="text-2xl font-bold">{overview?.database?.status || '—'}</p>
+          <h3 className="text-sm font-medium text-gray-500">Uptime</h3>
+          <p className="text-2xl font-bold">
+            {telemetry.uptime_pct === null || telemetry.uptime_pct === undefined
+              ? '—'
+              : `${telemetry.uptime_pct.toFixed(2)}%`}
+          </p>
         </Card>
         <Card>
           <h3 className="text-sm font-medium text-gray-500">CPU</h3>
-          <p className="text-2xl font-bold">{overview?.cpu?.usage_percent?.toFixed(1) || '—'}%</p>
+          <p className="text-2xl font-bold">
+            {telemetry.cpu_pct_avg === undefined ? '—' : `${telemetry.cpu_pct_avg.toFixed(1)}%`}
+          </p>
         </Card>
         <Card>
           <h3 className="text-sm font-medium text-gray-500">Memory</h3>
           <p className="text-2xl font-bold">
-            {overview?.memory?.usage_percent?.toFixed(1) || '—'}%
+            {telemetry.ram_pct_avg === undefined ? '—' : `${telemetry.ram_pct_avg.toFixed(1)}%`}
           </p>
         </Card>
         <Card>
-          <h3 className="text-sm font-medium text-gray-500">Disk</h3>
-          <p className="text-2xl font-bold">{overview?.disk?.usage_percent?.toFixed(1) || '—'}%</p>
+          <h3 className="text-sm font-medium text-gray-500">HTTP 5xx</h3>
+          <p className="text-2xl font-bold">
+            {telemetry.http_5xx_pct_avg === undefined
+              ? '—'
+              : `${telemetry.http_5xx_pct_avg.toFixed(2)}%`}
+          </p>
         </Card>
       </div>
 
       <Card className="mt-4">
-        <h3 className="text-lg font-semibold mb-4">Component Health</h3>
-        <div className="space-y-2">
-          {health?.components?.map((c: { name: string; status: string }) => (
-            <div
-              key={c.name}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-            >
-              <div className="flex items-center gap-2">
-                {statusIcon(c.status)}
-                <span className="font-medium">{c.name}</span>
-              </div>
-              <Badge
-                tone={
-                  c.status === 'healthy' ? 'success' : c.status === 'warning' ? 'warning' : 'danger'
-                }
+        <h3 className="text-lg font-semibold mb-4">Slowest endpoints</h3>
+        {endpoints.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No slow endpoint recorded in the window. The p95 tool reports none, which means no
+            endpoint crossed its budget - not that the tool failed to answer.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {endpoints.map(e => (
+              <div
+                key={e.endpoint}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
               >
-                {c.status}
-              </Badge>
-            </div>
-          ))}
-        </div>
+                <div className="flex items-center gap-2">
+                  {statusIcon(e.error_count > 0 ? 'warning' : 'healthy')}
+                  <span className="font-medium">{e.endpoint}</span>
+                </div>
+                <Badge tone={e.error_count > 0 ? 'warning' : 'success'}>p95 {e.p95_ms} ms</Badge>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

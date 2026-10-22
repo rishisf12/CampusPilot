@@ -1,10 +1,25 @@
-"""REST API endpoints for Web App Monitoring and Android App Monitoring.
+"""The telemetry ingest endpoints and the admin monitoring surfaces MCP
+does not cover.
 
-All endpoints are admin-only. The eight subsections are:
-  A_W_HEALTH, B_W_ACTIVITY, C_W_SECURITY, D_W_FEEDBACK
-  A_A_HEALTH, B_A_ACTIVITY, C_A_SECURITY, D_A_FEEDBACK
+All endpoints are admin-only, except the `/collect/*` ingest routes, which
+are called by the clients and carry their own rate limits.
 
-Each subsection has its own Scan now button, history, and incident log.
+What lives here:
+
+* `/collect/events`, `/collect/crash`, `/collect/security-signal` - the
+  telemetry sink. MCP has no equivalent: a tool reads, it never receives.
+* `/history` - the scan history, the incident log and the tool-call audit.
+  MCP has no equivalent either: it records what a tool answered, not what
+  the scan concluded.
+* `/rollup` and `/health/sample` - the two writes the dashboard triggers
+  itself, because both rebuild a store the panels read.
+* `/freshness` - the age of the newest data in each monitoring table.
+* `/export/{subsection}` - the raw per-subsection export.
+
+What used to live here and does not any more: the panel reads
+(`/subsections`, `/overview`, `/health`, `/activity`, `/security`,
+`/feedback`) and the scan trigger. Those are now `/api/mcp/panel/*` and
+`/api/mcp/scan/{subsection}` - see `mcp.api.panels`.
 """
 from __future__ import annotations
 
@@ -13,7 +28,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from core.config import get_settings
@@ -32,11 +46,8 @@ from features.monitoring.infrastructure import collector
 from features.monitoring.api.schemas import (
     RollupResponse,
     ScanHistoryResponse,
-    ScanResponse,
-    SubsectionInfo,
-    SubsectionsResponse,
 )
-from features.monitoring.services import queries, rollup, scan_service
+from features.monitoring.services import queries, rollup
 from features.monitoring.domain.models import (
     CrashReport,
     EventHourly,
@@ -236,41 +247,22 @@ def collect_security_signal(
 
 monitoring_router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
-# Only the web platform is monitored.
+# The canonical subsection list lives in `domain.subsections`, because the MCP
+# panel surface serves it to the admin console and the export endpoint below
+# validates against it - and the two must agree, or the console would offer a
+# subsection the export then refuses.
 #
-# The four Android subsections (A_A_HEALTH, B_A_ACTIVITY, C_A_SECURITY,
-# D_A_FEEDBACK) were removed with the Android client they described. There has
-# never been an Android build: every telemetry row this install has collected is
-# platform="web", and android-sdk-snippet was two files nothing imported.
-# C_A_SECURITY went with them, which is the one genuine loss here - it checked
-# for root, emulator, tampering and hooking, none of which a browser app is
-# exposed to. The web half (C_W_SECURITY: failed logins, brute force, security
-# headers, dependency CVEs) is kept, because auth/routes.py really does record
-# those events and brute-force detection has live writers.
-SUBSECTIONS: tuple[dict[str, str], ...] = (
-    {"id": "A_W_HEALTH", "platform": "web", "group": "Web App Monitoring", "title": "Health & Performance"},
-    {"id": "B_W_ACTIVITY", "platform": "web", "group": "Web App Monitoring", "title": "User Activity"},
-    {"id": "C_W_SECURITY", "platform": "web", "group": "Web App Monitoring", "title": "Security Monitoring"},
-    {"id": "D_W_FEEDBACK", "platform": "web", "group": "Web App Monitoring", "title": "Feedback Analysis"},
-)
-
-
-# --------------------------------------------------------------------------
-# Pydantic Schemas
-# --------------------------------------------------------------------------
-
-class ScanRequest(BaseModel):
-    """Request body for triggering a scan.
-
-    Kept here rather than in `schemas` because it carries the per-request model
-    override, which the shared `ScanRequest` does not.
-    """
-    window_days: int = Field(default=7, ge=1, le=90)
-    model: Optional[str] = Field(default=None, description="Override the configured model for this scan")
-
-
-# ScanResponse, SubsectionInfo, SubsectionsResponse, ScanHistoryResponse and
-# RollupResponse are imported from `features.monitoring.api.schemas` above.
+# Only the web platform is monitored. The four Android subsections
+# (A_A_HEALTH, B_A_ACTIVITY, C_A_SECURITY, D_A_FEEDBACK) were removed with the
+# Android client they described. There has never been an Android build: every
+# telemetry row this install has collected is platform="web", and
+# android-sdk-snippet was two files nothing imported. C_A_SECURITY went with
+# them, which is the one genuine loss here - it checked for root, emulator,
+# tampering and hooking, none of which a browser app is exposed to. The web
+# half (C_W_SECURITY: failed logins, brute force, security headers, dependency
+# CVEs) is kept, because auth/routes.py really does record those events and
+# brute-force detection has live writers.
+from features.monitoring.domain.subsections import SUBSECTIONS
 
 
 # --------------------------------------------------------------------------
@@ -315,124 +307,18 @@ def _incident_from_transition(sub: str, t: StatusTransition, next_t: Optional[St
 
 
 # --------------------------------------------------------------------------
-# Subsection List
+# Read endpoints that the MCP layer replaced
 # --------------------------------------------------------------------------
-
-@monitoring_router.get("/subsections", response_model=SubsectionsResponse)
-def list_subsections(_admin=Depends(get_current_admin)):
-    """Return the canonical eight subsections, plus what this install can do.
-
-    The flags come from settings rather than being inferred by the client, so
-    "Scan now" is offered exactly when the backend would accept the request.
-    """
-    settings = get_settings()
-    return {
-        "subsections": [SubsectionInfo(**s) for s in SUBSECTIONS],
-        "scan_enabled": settings.scan_enabled,
-        "scan_llm_enabled": settings.scan_llm_enabled,
-    }
-
-
-# --------------------------------------------------------------------------
-# Overview (single call for all panels)
-# --------------------------------------------------------------------------
-
-@monitoring_router.get("/overview")
-def overview(
-    days: int = Query(default=7),
-    platform: Optional[str] = Query(default=None, pattern="^(web|android)$"),
-    session: Session = Depends(get_session),
-    _admin=Depends(get_current_admin),
-):
-    """One call returns everything the dashboard needs for one platform.
-
-    `days` is clamped here rather than rejected: an over-bounded
-    window is a client bug, not an error the admin needs a 422 for.
-    """
-    days = max(1, min(days, 90))
-    start, end = _window(days)
-
-    return {
-        "window": {"start": start.isoformat(), "end": end.isoformat(), "days": days},
-        "platform": platform,
-        "activity": queries.activity_overview(session, start, end, platform),
-        "security": queries.security_overview(session, start, end, platform),
-        "revenue": queries.revenue_overview(session, start, end, platform),
-        "arpu": queries.arpu_overview(session, start, end, platform),
-        "ads": queries.ads_overview(session, start, end, platform),
-        "crashes": queries.crashes_overview(session, start, end, platform),
-        "health": queries.health_overview(session, start, end, platform),
-        "feedback": queries.feedback_overview(session, start, end, platform),
-        "data_freshness": queries.data_freshness(session),
-    }
-
-
-# --------------------------------------------------------------------------
-# Health & Performance (Subsection A)
-# --------------------------------------------------------------------------
-
-@monitoring_router.get("/health")
-def health(
-    days: int = Query(default=7, ge=1, le=90),
-    platform: str = Query(default="web", pattern="^(web|android)$"),
-    session: Session = Depends(get_session),
-    _admin=Depends(get_current_admin),
-):
-    days = max(1, min(days, 90))
-    start, end = _window(days)
-    return queries.health_detail(session, start, end, platform)
-
-
-# --------------------------------------------------------------------------
-# User Activity & Monetization (Subsection B)
-# --------------------------------------------------------------------------
-
-@monitoring_router.get("/activity")
-def activity(
-    days: int = Query(default=7, ge=1, le=90),
-    platform: Optional[str] = Query(default=None, pattern="^(web|android)$"),
-    session: Session = Depends(get_session),
-    _admin=Depends(get_current_admin),
-):
-    days = max(1, min(days, 90))
-    start, end = _window(days)
-    return queries.activity_detail(session, start, end, platform)
-
-
-# --------------------------------------------------------------------------
-# Security Monitoring (Subsection C - web only)
-# --------------------------------------------------------------------------
-
-# The android platform parameter is gone from this endpoint's sibling queries
-# along with the Android client. C_A_SECURITY (root / emulator / tampering)
-# was removed; this is the web half and it has live writers in auth/routes.py.
-
-@monitoring_router.get("/security")
-def security(
-    days: int = Query(default=7, ge=1, le=90),
-    platform: Optional[str] = Query(default=None, pattern="^web$"),
-    session: Session = Depends(get_session),
-    _admin=Depends(get_current_admin),
-):
-    days = max(1, min(days, 90))
-    start, end = _window(days)
-    return queries.security_detail(session, start, end, platform)
-
-
-# --------------------------------------------------------------------------
-# Feedback Analysis (Subsection D)
-# --------------------------------------------------------------------------
-
-@monitoring_router.get("/feedback")
-def feedback_analysis(
-    days: int = Query(default=30, ge=1, le=365),
-    session: Session = Depends(get_session),
-    _admin=Depends(get_current_admin),
-):
-    days = max(1, min(days, 365))
-    start, end = _window(days)
-    from features.monitoring.services.feedback_analysis import analyse
-    return analyse(session, start, end)
+#
+# `/monitoring/subsections`, `/overview`, `/health`, `/activity`, `/security`
+# and `/feedback` used to live here. They are now `/api/mcp/panel/*`, served
+# by `mcp.api.panels`: the same figures, but sourced through the MCP tool
+# registry - so every one of them is redacted, subsection-scoped and audited,
+# and the admin console reads the same contract the scan agent does.
+#
+# What stayed here is what MCP has no equivalent for: the ingest endpoints
+# under `/collect`, the scan history and the incident log, the rollup and
+# health-sample triggers, the collector's age, and the raw export.
 
 
 # --------------------------------------------------------------------------
@@ -714,67 +600,6 @@ def _get_academic_events(start: datetime, end: datetime) -> list[dict]:
             })
 
     return events
-
-
-# --------------------------------------------------------------------------
-# Scan Trigger (per subsection)
-# --------------------------------------------------------------------------
-
-@monitoring_router.post("/scan/{subsection}", response_model=ScanResponse)
-def trigger_scan(
-    subsection: str,
-    payload: ScanRequest = ScanRequest(),
-    session: Session = Depends(get_session),
-    _admin=Depends(get_current_admin),
-):
-    """Trigger a Stage 1 rule-based scan for one subsection.
-
-    Synchronous on purpose. `run_scan` drives a synchronous rule engine that
-    internally calls the async LLM stage with `asyncio.run`, and that refuses to
-    nest inside a running event loop. FastAPI runs a `def` endpoint in a worker
-    thread, so there is no loop to collide with. Declaring this `async def` made
-    every LLM stage fail with "cannot be called from a running event loop".
-
-    Returns the scan result synchronously. In Phase 3 this will be
-    enqueued via RQ and return a pending status immediately.
-    """
-    # Validate subsection
-    valid_ids = {s["id"] for s in SUBSECTIONS}
-    if subsection not in valid_ids:
-        raise HTTPException(status_code=404, detail=f"Unknown subsection: {subsection}")
-
-    # Check if scanning is enabled
-    settings = get_settings()
-    if not settings.scan_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI scanning is disabled. Set SCAN_ENABLED=true to enable.",
-        )
-
-    # Run the scan
-    result = scan_service.run_scan(
-        session,
-        subsection,
-        window_days=payload.window_days,
-        platform=None,  # Auto-detected from subsection
-    )
-
-    # Convert to ScanResponse
-    return ScanResponse(
-        scan_id=result.scan_id,
-        subsection=result.subsection,
-        status=result.status,
-        summary=result.summary,
-        findings=result.findings,
-        root_causes=result.root_causes,
-        actions=result.actions,
-        confidence=result.confidence,
-        window_start=result.window_start,
-        window_end=result.window_end,
-        duration_ms=result.duration_ms,
-        model=result.model,
-        created_at=result.created_at,
-    )
 
 
 # --------------------------------------------------------------------------

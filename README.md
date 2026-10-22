@@ -116,7 +116,7 @@ Backend reads `backend/backend/.env`. Required first; the rest have defaults.
 | `LLM_PROVIDER` | `off` | `off`, `nvidia_nim` or `openrouter` (see [ADR 0001](docs/ADR-0001-hosted-free-llm.md)) |
 | `NVIDIA_API_KEY` / `OPENROUTER_API_KEY` | empty | LLM credentials |
 | `TELEMETRY_ENABLED` / `TELEMETRY_PEPPER` | `false` / empty | Telemetry ingest; the API refuses the default pepper |
-| `ENABLE_ADMIN_MCP` | `false` | Mounts the admin-only MCP console at `/api/mcp/*` |
+| `ENABLE_ADMIN_MCP` | `false` | Mounts the admin-only MCP tool console at `/api/mcp/tools` and `/api/mcp/call`. The admin Monitoring tab's own endpoints (`/api/mcp/panel/*`, `/api/mcp/scan/{subsection}`) are always mounted. |
 | `ENABLE_AGENT` / `ENABLE_SCHEDULER` | `false` | OppFeed agent and its scheduler |
 | `FEED_IMAP_HOST` / `FEED_IMAP_USER` / `FEED_IMAP_PASSWORD` | empty | Hackathon feed email ingestion |
 | `MAIL_MAILBOXES_JSON` | `{}` | Mail app mailboxes, [see below](#mail-app) |
@@ -262,7 +262,7 @@ Bearer auth on every non-health endpoint. Groups:
 | Teams | `/teams/*`, `/hackathons/*` |
 | Mail | `/mail/*` |
 | OppFeed | `/admin/oppfeed/*` (admin), `/faculty/oppfeed*` (read) |
-| Monitoring | `/monitoring/*` (admin), `/collect/*` (telemetry ingest), `/metrics` |
+| Monitoring | `/api/mcp/panel/*`, `/api/mcp/scan/{subsection}` (admin), `/monitoring/*` (history, rollup, export), `/collect/*` (telemetry ingest), `/metrics` |
 
 Full schemas: <http://127.0.0.1:8000/docs>.
 

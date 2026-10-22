@@ -50,6 +50,50 @@ export interface HealthData {
     rollup_lag_minutes?: number | null;
     latest_crash_at?: string | null;
   };
+  /**
+   * The MCP tool answers behind this panel.
+   *
+   * The live figures above are cumulative-since-start or last-sample; these
+   * are the *window's* shape - the averages and maxima across every sample
+   * in the range, the reader-derived uptime, and the slowest endpoints. They
+   * come from the same tool registry the scan agent reads, so they are
+   * redacted, scoped and audited like everything else here.
+   */
+  mcp?: {
+    tools?: string[];
+    failed?: Record<string, string>;
+    telemetry?: {
+      samples?: number;
+      uptime_pct?: number | null;
+      response_p95_ms_avg?: number;
+      response_p95_ms_max?: number;
+      db_query_p95_ms_avg?: number;
+      http_5xx_pct_avg?: number;
+      http_5xx_pct_max?: number;
+      cpu_pct_avg?: number;
+      ram_pct_avg?: number;
+    } | null;
+    uptime_pct?: number | null;
+    latency?: {
+      endpoints?: Array<{
+        endpoint: string;
+        method: string;
+        p50_ms: number;
+        p95_ms: number;
+        p99_ms: number;
+        request_count: number;
+        error_count: number;
+      }>;
+      worst_p95_ms?: number;
+    } | null;
+    crash_clusters?: Array<{
+      fingerprint: string;
+      exception_type: string;
+      count: number;
+      fatal_count: number;
+      app_versions?: string[];
+    }> | null;
+  };
 }
 
 interface CrashStats {
@@ -359,6 +403,191 @@ export function HealthPanel({ data, loading }: HealthPanelProps) {
           </p>
         )}
       </Panel>
+
+      <McpWindowPanel mcp={data.mcp} />
     </div>
+  );
+}
+
+/**
+ * The window's shape, as the MCP tools report it.
+ *
+ * The panels above answer "what is it like right now" - the last sample, the
+ * counters since the process started. This one answers "what was the window
+ * like", which is the question an admin asks after something went wrong: the
+ * averages and the maxima across every sample in the range, the slowest
+ * endpoints by p95, and the crash fingerprints.
+ *
+ * A tool that refused is named rather than silently absent. "Not measured" and
+ * "measured as zero" are different facts, and only one of them is reassuring.
+ */
+function McpWindowPanel({ mcp }: { mcp?: HealthData['mcp'] }) {
+  const telemetry = mcp?.telemetry;
+  const endpoints = mcp?.latency?.endpoints ?? [];
+  const clusters = mcp?.crash_clusters ?? [];
+  const failed = Object.keys(mcp?.failed ?? {});
+
+  if (!mcp || (!telemetry && endpoints.length === 0 && clusters.length === 0)) {
+    return (
+      <Panel
+        title="Window shape (MCP)"
+        subtitle="The averages and maxima across the whole window, not just the latest sample."
+      >
+        <EmptyState
+          title="No window aggregates"
+          detail="The MCP tools answered with nothing for this window - either no sample was taken, or the tool refused. The panels above still show the live figures."
+        />
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel
+      title="Window shape (MCP)"
+      subtitle="Averages and maxima across every sample in the window, read through the MCP tool registry."
+      actions={
+        failed.length > 0 ? (
+          <span className="text-xs" style={{ color: 'var(--cp-warning)' }}>
+            {failed.join(', ')} refused
+          </span>
+        ) : undefined
+      }
+    >
+      {telemetry && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile
+            label="Uptime"
+            value={
+              mcp?.uptime_pct === null || mcp?.uptime_pct === undefined
+                ? '--'
+                : `${(mcp.uptime_pct as number).toFixed(2)}%`
+            }
+            hint="reader-derived, over the window"
+            hue="mint"
+          />
+          <StatTile
+            label="Latency p95"
+            value={
+              telemetry.response_p95_ms_avg === undefined
+                ? '--'
+                : `${num(telemetry.response_p95_ms_avg)} ms`
+            }
+            hint={
+              telemetry.response_p95_ms_max === undefined
+                ? 'window average'
+                : `avg, max ${num(telemetry.response_p95_ms_max)} ms`
+            }
+          />
+          <StatTile
+            label="Server errors"
+            value={
+              telemetry.http_5xx_pct_avg === undefined
+                ? '--'
+                : `${telemetry.http_5xx_pct_avg.toFixed(2)}%`
+            }
+            hint={
+              telemetry.http_5xx_pct_max === undefined
+                ? 'window average'
+                : `avg, max ${telemetry.http_5xx_pct_max.toFixed(2)}%`
+            }
+            invertDelta
+            hue="coral"
+          />
+          <StatTile
+            label="CPU"
+            value={
+              telemetry.cpu_pct_avg === undefined ? '--' : `${telemetry.cpu_pct_avg.toFixed(1)}%`
+            }
+            hint="window average"
+            hue="slate"
+          />
+          <StatTile
+            label="Memory"
+            value={
+              telemetry.ram_pct_avg === undefined ? '--' : `${telemetry.ram_pct_avg.toFixed(1)}%`
+            }
+            hint="window average"
+            hue="slate"
+          />
+          <StatTile
+            label="DB query p95"
+            value={
+              telemetry.db_query_p95_ms_avg === undefined
+                ? '--'
+                : `${num(telemetry.db_query_p95_ms_avg)} ms`
+            }
+            hint="window average"
+          />
+          <StatTile
+            label="Samples"
+            value={num(telemetry.samples)}
+            hint="health rows in the window"
+          />
+          <StatTile
+            label="Worst endpoint"
+            value={
+              mcp?.latency?.worst_p95_ms === undefined
+                ? '--'
+                : `${num(mcp.latency.worst_p95_ms)} ms`
+            }
+            hint="p95 of the slowest route"
+          />
+        </div>
+      )}
+
+      {endpoints.length > 0 && (
+        <div className="mt-4">
+          <div
+            className="text-xs font-medium uppercase tracking-wide mb-2"
+            style={{ color: 'var(--cp-muted)' }}
+          >
+            Slowest endpoints
+          </div>
+          <div className="space-y-1.5">
+            {endpoints.slice(0, 8).map(e => (
+              <div
+                key={`${e.method} ${e.endpoint}`}
+                className="flex items-center justify-between text-xs px-3 py-1.5"
+                style={{ borderRadius: 8 }}
+              >
+                <code className="truncate" style={{ color: 'var(--cp-muted)' }}>
+                  {e.method} {e.endpoint}
+                </code>
+                <span className="tabular-nums font-medium ml-3" style={{ color: 'var(--cp-text)' }}>
+                  p95 {num(e.p95_ms)} ms · {num(e.error_count)} errors
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {clusters.length > 0 && (
+        <div className="mt-4">
+          <div
+            className="text-xs font-medium uppercase tracking-wide mb-2"
+            style={{ color: 'var(--cp-muted)' }}
+          >
+            Crash clusters
+          </div>
+          <div className="space-y-1.5">
+            {clusters.slice(0, 6).map(c => (
+              <div
+                key={c.fingerprint}
+                className="flex items-center justify-between text-xs px-3 py-1.5"
+                style={{ borderRadius: 8 }}
+              >
+                <code className="truncate" style={{ color: 'var(--cp-muted)' }}>
+                  {c.exception_type}
+                </code>
+                <span className="tabular-nums font-medium ml-3" style={{ color: 'var(--cp-text)' }}>
+                  {num(c.count)} crashes
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }

@@ -1054,18 +1054,18 @@ class TestMetricsEndpoint:
 
 class TestAdminRoutesNeedAuth:
     @pytest.mark.parametrize("path", [
-        "/monitoring/overview",
-        "/monitoring/health",
+        "/api/mcp/panel/overview",
+        "/api/mcp/panel/health",
         "/monitoring/history",
-        "/monitoring/subsections",
+        "/api/mcp/panel/subsections",
     ])
     def test_anonymous_is_rejected(self, anon_client, path):
         r = anon_client.get(path)
         assert r.status_code == 401, f"{path} is readable without a token"
 
     @pytest.mark.parametrize("path", [
-        "/monitoring/overview",
-        "/monitoring/health",
+        "/api/mcp/panel/overview",
+        "/api/mcp/panel/health",
         "/monitoring/history",
     ])
     def test_a_student_is_forbidden(self, anon_client, path, db):
@@ -1117,14 +1117,14 @@ class TestAdminRoutes:
         collects is platform="web". C_W_SECURITY stays - failed logins and brute
         force are recorded by auth/routes.py and are real.
         """
-        body = anon_client.get("/monitoring/subsections", headers=admin).json()
+        body = anon_client.get("/api/mcp/panel/subsections", headers=admin).json()
         assert len(body["subsections"]) == 4
         ids = {s["id"] for s in body["subsections"]}
         assert ids == {"A_W_HEALTH", "B_W_ACTIVITY", "C_W_SECURITY", "D_W_FEEDBACK"}
         assert all(s["platform"] == "web" for s in body["subsections"])
 
     def test_overview_returns_every_section(self, anon_client, admin, db):
-        r = anon_client.get("/monitoring/overview?days=7", headers=admin)
+        r = anon_client.get("/api/mcp/panel/overview?days=7", headers=admin)
         assert r.status_code == 200, r.text
         body = r.json()
         for key in ("window", "activity", "security", "revenue", "arpu",
@@ -1132,21 +1132,21 @@ class TestAdminRoutes:
             assert key in body, f"overview is missing {key}"
 
     def test_overview_on_an_empty_database_reports_zero_not_a_500(self, anon_client, admin, db):
-        r = anon_client.get("/monitoring/overview?days=7", headers=admin)
+        r = anon_client.get("/api/mcp/panel/overview?days=7", headers=admin)
         assert r.status_code == 200
         assert r.json()["activity"]["active_users"] == 0
 
     def test_data_freshness_is_null_when_nothing_has_been_collected(self, anon_client, admin, db):
         """A dashboard showing confident zeros is worse than one saying
         'no data yet': an admin cannot otherwise tell healthy from broken."""
-        fresh = anon_client.get("/monitoring/overview", headers=admin).json()["data_freshness"]
+        fresh = anon_client.get("/api/mcp/panel/overview", headers=admin).json()["data_freshness"]
         assert fresh["latest_rollup_hour"] is None
         assert fresh["rollup_lag_minutes"] is None
 
     def test_data_freshness_reports_the_rollup_lag(self, anon_client, admin, db):
         _ev(db, name="app_open")
         anon_client.post("/monitoring/rollup", headers=admin)
-        fresh = anon_client.get("/monitoring/overview", headers=admin).json()["data_freshness"]
+        fresh = anon_client.get("/api/mcp/panel/overview", headers=admin).json()["data_freshness"]
         assert fresh["latest_rollup_hour"] is not None
         assert 0 <= fresh["rollup_lag_minutes"] <= 120
 
@@ -1161,27 +1161,27 @@ class TestAdminRoutes:
             _sess(db, user=i, started=NOW - timedelta(hours=2), sid=f"s{i}")
         _ev(db, name="app_open", ts=NOW - timedelta(hours=2))
 
-        before = anon_client.get("/monitoring/overview", headers=admin).json()["activity"]
+        before = anon_client.get("/api/mcp/panel/overview", headers=admin).json()["activity"]
         assert before["events"] == 0, "the rollup has not run yet"
         assert before["active_users"] == 5, "user counts do not depend on the rollup"
 
         anon_client.post("/monitoring/rollup", headers=admin)
-        after = anon_client.get("/monitoring/overview", headers=admin).json()["activity"]
+        after = anon_client.get("/api/mcp/panel/overview", headers=admin).json()["activity"]
         assert after["events"] == 1
 
     def test_manual_rollup_is_idempotent(self, anon_client, admin, db):
         for i in range(5):
             _sess(db, user=i, started=NOW - timedelta(hours=2), sid=f"s{i}")
         anon_client.post("/monitoring/rollup", headers=admin)
-        first = anon_client.get("/monitoring/overview", headers=admin
+        first = anon_client.get("/api/mcp/panel/overview", headers=admin
                                 ).json()["activity"]
         anon_client.post("/monitoring/rollup", headers=admin)
-        second = anon_client.get("/monitoring/overview", headers=admin
+        second = anon_client.get("/api/mcp/panel/overview", headers=admin
                                  ).json()["activity"]
         assert first == second
 
     def test_health_endpoint_returns_the_prometheus_shape(self, anon_client, admin, db):
-        body = anon_client.get("/monitoring/health?days=7", headers=admin).json()
+        body = anon_client.get("/api/mcp/panel/health?days=7", headers=admin).json()
         assert "http" in body and "db" in body and "crashes" in body
         assert "requests_by_route" in body["http"]
 
@@ -1224,7 +1224,7 @@ class TestAdminRoutes:
     def test_days_is_clamped(self, anon_client, admin, db):
         """An unbounded window parameter is a trivial way to ask the database
         for its entire history."""
-        r = anon_client.get("/monitoring/overview?days=99999", headers=admin)
+        r = anon_client.get("/api/mcp/panel/overview?days=99999", headers=admin)
         assert r.status_code == 200
         assert r.json()["window"]["days"] == 90
 
@@ -1233,6 +1233,119 @@ class TestAdminRoutes:
         before. Pinned here because the monitoring section sits next to it."""
         r = anon_client.get("/feedback/responses", headers=admin)
         assert r.status_code in (200, 404), r.status_code
+
+
+class TestMcpPanelSurface:
+    """The admin Monitoring tab reads the MCP layer, not the store directly.
+
+    Two things are pinned here. The first is that the panel answers the
+    *same* shape the old `/monitoring/*` reads did - the tab's panels are
+    unchanged, only the source moved. The second is that the figures really
+    do come through the tool registry: the response names the tools that
+    answered, and each of those calls left an audit row behind.
+    """
+
+    @pytest.fixture
+    def admin(self):
+        from features.auth.routes import create_access_token
+        from models import User
+
+        with Session(engine) as session:
+            user = session.exec(select(User).where(User.username == "monadmin")).first()
+            if user is None:
+                user = User(email="mon@iiitdmj.ac.in", password_hash="x",
+                            full_name="Mon Admin", username="monadmin",
+                            roll_number="23BCS999", is_email_verified=True, role="admin")
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+            user_id = user.id
+        return {"Authorization": f"Bearer {create_access_token(user_id, 'monadmin')}"}
+
+    def test_the_removed_reads_are_gone(self, anon_client, admin, db):
+        """The old endpoints must not linger as a second way to read the same
+        figures - two paths to one number is how they drift apart."""
+        for path in ("/monitoring/overview", "/monitoring/health",
+                     "/monitoring/activity", "/monitoring/security",
+                     "/monitoring/feedback", "/monitoring/subsections"):
+            r = anon_client.get(path, headers=admin)
+            assert r.status_code == 404, f"{path} still answers"
+
+    def test_the_scan_moved_to_the_mcp_path(self, anon_client, admin, db):
+        """`/monitoring/scan/{subsection}` is gone; the scan is an MCP action."""
+        r = anon_client.post("/monitoring/scan/A_W_HEALTH", headers=admin, json={})
+        assert r.status_code == 404
+
+        r = anon_client.post("/api/mcp/scan/NOT_A_SUBSECTION", headers=admin, json={})
+        assert r.status_code == 404
+
+    def test_the_overview_names_the_tools_that_answered(self, anon_client, admin, db):
+        body = anon_client.get("/api/mcp/panel/overview?days=7", headers=admin).json()
+        mcp = body["mcp"]
+        assert "daily_active_users" in mcp["tools"]
+        assert "security_signals" in mcp["tools"]
+        assert "telemetry_health" in mcp["tools"]
+        assert "feedback_themes_top5" in mcp["tools"]
+        assert mcp["failed"] == {}
+
+    def test_the_panel_reads_are_audited(self, anon_client, admin, db):
+        """A panel read is a tool call, so it lands in the audit trail.
+
+        This is the whole claim the read-only guarantee rests on: if no write
+        appears in `tool_call_audit`, nothing did one.
+        """
+        from features.monitoring.domain.models import ToolCallAudit
+
+        anon_client.get("/api/mcp/panel/overview?days=7", headers=admin)
+
+        with Session(engine) as session:
+            rows = session.exec(select(ToolCallAudit)).all()
+        assert rows, "the panel read left no audit row"
+        assert {r.tool for r in rows} >= {"daily_active_users", "security_signals"}
+        assert all(r.ok for r in rows)
+
+    def test_a_refused_tool_degrades_one_figure_not_the_panel(self, anon_client, admin, db,
+                                                                monkeypatch):
+        """One tool refusing must not take the whole dashboard down.
+
+        The admin has to be able to tell "this figure was not measured" from
+        "this figure is zero", so the refusal is named in the response.
+        """
+        import mcp.api.panels as panels_mod
+
+        original = panels_mod._Tools.call
+
+        def _fail_one(self, name, subsection, args):
+            if name == "telemetry_health":
+                from mcp.core.registry import ToolError
+
+                self.failed[name] = "refused on purpose"
+                return None
+            return original(self, name, subsection, args)
+
+        monkeypatch.setattr(panels_mod._Tools, "call", _fail_one)
+
+        r = anon_client.get("/api/mcp/panel/overview?days=7", headers=admin)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["mcp"]["health"] is None
+        assert "telemetry_health" in body["mcp"]["failed"]
+        assert body["activity"]["active_users"] == 0
+
+    def test_the_health_panel_carries_the_window_aggregates(self, anon_client, admin, db):
+        body = anon_client.get("/api/mcp/panel/health?days=7", headers=admin).json()
+        # The live half, unchanged from the old endpoint.
+        assert "http" in body and "db" in body and "crashes" in body
+        # The MCP half: the window's shape.
+        assert "telemetry_health" in body["mcp"]["tools"]
+        assert "p95_latency_window" in body["mcp"]["tools"]
+
+    def test_the_feedback_panel_carries_the_collected_mix(self, anon_client, admin, db):
+        body = anon_client.get("/api/mcp/panel/feedback?days=30", headers=admin).json()
+        # The live half, unchanged from the old endpoint.
+        for key in ("total", "sampled", "truncated", "per_day", "coverage", "sentiment"):
+            assert key in body, f"feedback panel is missing {key}"
+        assert "feedback_themes_top5" in body["mcp"]["tools"]
 
 
 if __name__ == "__main__":

@@ -190,12 +190,12 @@ def main() -> None:
         print(f"POST /collect/events -> {r.status_code} {r.json()}")
 
         print("\n--- subsections ---")
-        subs = client.get("/monitoring/subsections", headers=headers).json()["subsections"]
+        subs = client.get("/api/mcp/panel/subsections", headers=headers).json()["subsections"]
         for s in subs:
             print(f"  {s['id']:<16} {s['platform']:<8} {s['group']} / {s['title']}")
 
         print("\n--- overview (web, 30d) ---")
-        ov = client.get("/monitoring/overview?days=30&platform=web", headers=headers).json()
+        ov = client.get("/api/mcp/panel/overview?days=30&platform=web", headers=headers).json()
         a = ov["activity"]
         print(f"  active users      {a['active_users']} (prev {a['active_users_prev']})")
         print(f"  sessions          {a['sessions']} (prev {a['sessions_prev']})")
@@ -207,35 +207,33 @@ def main() -> None:
             f"{c['value']}={c['events']}" for c in a['countries'][:4]))
         print(f"  freshness         rollup={ov['data_freshness']['latest_rollup_hour']} "
               f"lag={ov['data_freshness']['rollup_lag_minutes']}min")
+        print("  mcp tools         " + ", ".join(ov["mcp"]["tools"]))
 
         print("\n--- overview (android, 30d) ---")
-        ova = client.get("/monitoring/overview?days=30&platform=android", headers=headers).json()
+        ova = client.get("/api/mcp/panel/overview?days=30&platform=android", headers=headers).json()
         print(f"  crash-free        {ova['crashes']['android']['crash_free_pct']}% "
               f"({ova['crashes']['android']['crashed_sessions']}/{ova['crashes']['android']['sessions']})")
-        print(f"  top cluster       {ova['crashes']['clusters'][0]}")
+        print(f"  top cluster       {ova['crashes']['top_clusters'][0]}")
         print(f"  revenue           {ova['revenue']}")
         print(f"  arpu              {ova['arpu']}")
         print(f"  ads               {ova['ads']}")
         print(f"  security counts   {ova['security']['counts']}")
 
         print("\n--- health ---")
-        h = client.get("/monitoring/health?days=7&platform=web", headers=headers).json()
+        h = client.get("/api/mcp/panel/health?days=7&platform=web", headers=headers).json()
         print(f"  registry series   {h['http']['registry_series']}")
         print(f"  route series      {len(h['http']['requests_by_route'])}")
         print(f"  active users      {h['db']['active_users']}")
+        print(f"  window uptime     {h['mcp']['uptime_pct']}")
+        print(f"  window p95 avg    {h['mcp']['telemetry']['response_p95_ms_avg']}")
 
         print("\n--- feedback ---")
-        fb = client.get("/monitoring/feedback?days=3650", headers=headers).json()
+        fb = client.get("/api/mcp/panel/feedback?days=3650", headers=headers).json()
         print(f"  total             {fb['total']} (sampled {fb['sampled']}, truncated {fb['truncated']})")
         print(f"  sentiment         {fb['sentiment']}")
         print("  topics            " + ", ".join(f"{t['topic']}={t['count']}" for t in fb['topics'][:5]))
-
-        print("\n--- monetisation ---")
-        mo = client.get("/monitoring/monetisation?days=30", headers=headers).json()
-        print(f"  revenue           {mo['revenue']}")
-        print(f"  ads               {mo['ads']}")
-        print(f"  verify enabled    {mo['store_verification_enabled']}")
-        print(f"  note              {mo['note']}")
+        print("  collected mix     " + ", ".join(
+            f"{t['topic']}={t['count']}" for t in (fb["mcp"]["themes"] or {}).get("topics", [])[:5]))
 
         print("\n--- history (no scans yet) ---")
         hist = client.get("/monitoring/history", headers=headers).json()

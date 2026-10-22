@@ -46,7 +46,8 @@
 | Pipeline | Test | Status |
 |----------|------|--------|
 | Collector → DB → Rollup → Queries | `tests/test_monitoring.py::TestRollup` | ✅ |
-| Scan worker → Stage 1 → Stage 2 LLM → Reconciliation → Storage | `scan_service.run_stage2_scan` | 🔄 (needs test) |
+| Scan → MCP tools → LLM → Reconciliation → Storage | `mcp.agent.runtime.run_scan`, `tests/test_scan_agent_runtime.py` | ✅ |
+| Admin panel reads → MCP registry → audit trail | `tests/test_monitoring.py::TestMcpPanelSurface` | ✅ |
 | Alert pipeline: Prometheus → Alertmanager → Apprise → Telegram | Manual verify | 🔄 |
 | Rollup worker → hourly → prune → query consistency | `rollup.py --loop` | ✅ (smoke) |
 
@@ -120,34 +121,41 @@ tests:
 ### 3.3 Reconciliation Test
 
 ```python
-# tests/test_reconciliation.py
-def test_reconciliation_catches_hallucination():
-    """A model that invents a p99 should fail reconciliation."""
-    from features.monitoring.scan_service import _reconcile_findings
-    from features.monitoring.schemas import ScanResult, Finding, Metric
-    
-    # Craft a result with a fabricated metric
-    fake_result = ScanResult(
-        status="healthy",
-        findings=[Finding(
-            title="Fake latency",
-            severity="info",
-            evidence=[Metric(
-                metric="http_request_duration_seconds_p99",
-                value=999.0,  # Fabricated
-                unit="s",
-                previous_value=0.5,
-                change_pct=199700,
-                window="5m",
-                source="promql"
-            )]
-        )],
-        # ... other fields
+# tests/test_scan_agent_runtime.py
+def test_runtime_stores_error_not_healthy_when_the_model_fabricates(db_session):
+    """A model that invents a number fails reconciliation, and the scan is
+    stored as `error` - never as `healthy`, and never with an unverified
+    finding."""
+    from mcp.agent import run_scan
+    from mcp.agent.reconcile import ReconcileError
+
+    # A model that cites a number no tool returned.
+    async def chat(messages):
+        return {
+            "status": "healthy",
+            "summary": "Everything looks fine, according to the numbers below.",
+            "findings": [{
+                "title": "Invented latency",
+                "severity": "info",
+                "evidence": [{
+                    "metric": "web_health_latest",
+                    "value": 999999.0,   # fabricated
+                    "unit": "ms",
+                    "window": "7d",
+                    "source": "health_latest",
+                }],
+            }],
+            "root_causes": [],
+            "recommended_actions": [],
+            "confidence": {"level": "high"},
+        }
+
+    result = asyncio.run(
+        run_scan(db_session, subsection="A_W_HEALTH", scan_id="s1", chat=chat)
     )
-    
-    # Reconciliation should fail because 999.0 != actual p99
-    with pytest.raises(ScanInvalid):
-        _reconcile_findings(db, fake_result, start, end, "web")
+
+    assert result.status.value == "error"
+    assert result.findings == []
 ```
 
 ---

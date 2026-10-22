@@ -66,21 +66,28 @@ The CampusPilot Admin Platform is a comprehensive control, monitoring, and analy
 
 ---
 
-### 2. Monitoring (`/admin/monitoring`)
+### 2. Monitoring (`/api/mcp/panel/*`)
 **Live Health, Error Tracking, Alerts**
+
+The admin Monitoring tab reads the MCP layer: every figure it shows comes
+through the same tool registry the scan agent uses, so it is redacted,
+subsection-scoped and audited.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `GET /monitoring/live` | GET | Real-time system health |
-| `GET /monitoring/errors` | GET | Error feed with grouping |
-| `PATCH /monitoring/errors/{id}` | PATCH | Update error status |
-| `GET /monitoring/health` | GET | Component health checks |
-| `GET /monitoring/alerts` | GET | List alert rules |
-| `POST /admin/alerts/rules` | POST | Create alert rule |
+| `GET /api/mcp/panel/subsections` | GET | The four scan subsections, plus what this install can do |
+| `GET /api/mcp/panel/overview` | GET | Everything the panels need, one round trip, one window |
+| `GET /api/mcp/panel/health` | GET | Latency, error mix, DB, crashes and the window aggregates |
+| `GET /api/mcp/panel/feedback` | GET | Feedback volume, sentiment and topic mix |
+| `POST /api/mcp/scan/{subsection}` | POST | Run one subsection's scan through the MCP runtime |
+| `GET /monitoring/history` | GET | Scan verdicts, the incident log and the tool-call audit |
+| `POST /monitoring/rollup` | POST | Rebuild the hourly rollup now |
+| `POST /monitoring/health/sample` | POST | Take one health reading immediately |
+| `GET /monitoring/freshness` | GET | The age of the newest data in each monitoring table |
+| `GET /monitoring/export/{subsection}` | GET | Raw per-subsection export (JSON or CSV) |
 
 **Health Checks:**
 - Database connectivity
-- Redis connectivity
 - Disk space
 - Memory usage
 - CPU usage

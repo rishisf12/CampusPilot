@@ -255,8 +255,16 @@ def test_coverage_uses_the_configured_interval(db_session, monkeypatch):
 
 
 def test_sample_once_rows_drive_the_scan_uptime(db_session, monkeypatch):
-    """The A_W collector reads uptime from coverage, not from the row's NULL."""
-    from features.monitoring.services.scan_service import _collect_a_w_health_data
+    """Uptime is read from coverage, not from the row's NULL.
+
+    The health sampler's own `uptime_pct` column is null by design on the
+    web rows - a process cannot write its own downtime. The availability
+    number is computed when it is read, from how much of the window the
+    samples cover, and that is what the MCP uptime tool reports.
+    """
+    from mcp.core.registry import run_tool
+    from mcp.monitoring import REGISTRY
+    from observability.uptime import coverage_pct
 
     monkeypatch.setattr(settings, "health_sample_interval_s", 60)
     start = _utc()
@@ -265,10 +273,29 @@ def test_sample_once_rows_drive_the_scan_uptime(db_session, monkeypatch):
         [start, start + timedelta(seconds=60), start + timedelta(seconds=120)],
     )
 
-    data = _collect_a_w_health_data(
+    coverage = coverage_pct(
         db_session,
+        platform="web",
         start=start,
         end=start + timedelta(seconds=180),
-        platform="web",
     )
-    assert data["uptime_pct"] == 100.0
+    assert coverage == 100.0
+
+    # And the tool the scan asks reports the same number over its own window.
+    now = _utc()
+    _insert_rows(
+        db_session,
+        [
+            now - timedelta(seconds=180),
+            now - timedelta(seconds=120),
+            now - timedelta(seconds=60),
+        ],
+    )
+    result = run_tool(
+        db_session,
+        REGISTRY,
+        subsection="A_W_HEALTH",
+        name="health_uptime_pct",
+        args={"window_hours": 24, "platform": "web"},
+    )
+    assert result.data == 100.0

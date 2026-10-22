@@ -82,8 +82,8 @@ class Settings(BaseSettings):
     #: counters, so only the replica you point the dashboard at is meaningful.
     health_sample_inline: bool = Field(default=False, alias="HEALTH_SAMPLE_INLINE")
 
-    #: Seconds between health samples. One minute is the floor worth using:
-    #: `evaluate_a_w_health` treats 500 ms as the DB-latency warning line, and a
+    #: Seconds between health samples. One minute is the floor worth using: the
+    #: scan reads a 500 ms DB-latency line as its warning threshold, and a
     #: sample that misses a burst is worse than a coarser one that does not.
     health_sample_interval_s: int = Field(default=60, alias="HEALTH_SAMPLE_INTERVAL_S")
 
@@ -92,8 +92,8 @@ class Settings(BaseSettings):
     health_retention_days: int = Field(default=90, alias="HEALTH_RETENTION_DAYS")
 
     #: A query slower than this counts toward `db_slow_queries_count`. Matches
-    #: the 500 ms DB p95 warning in `monitoring/domain/thresholds.py`, so the
-    #: count and the finding move together.
+    #: the 500 ms DB p95 warning the scan reports, so the count and the finding
+    #: move together.
     health_slow_query_ms: float = Field(default=500.0, alias="HEALTH_SLOW_QUERY_MS")
 
     #: Accept the LLM-driven scan subsystem. Requires a reachable LLM endpoint;
@@ -129,15 +129,19 @@ class Settings(BaseSettings):
     #: CPU-hosted model can take a while; hosted providers finish in seconds.
     llm_timeout: float = Field(default=240.0, alias="LLM_TIMEOUT")
 
-    #: Run Stage 2 (the LLM narrative) at all, as opposed to Stage 1 alone.
+    #: Superseded by the MCP scan runtime, and kept only so an existing
+    #: `.env` does not break.
     #:
-    #: Separate from SCAN_ENABLED because the two have very different
-    #: operational profiles. Stage 1 is deterministic, takes ~100ms and always
-    #: answers. Stage 2 needs a local model, and measured on CPU here it took
-    #: 69-509s per call and did not reliably honour `response_format`, so
-    #: enabling it by default would have made every admin-triggered scan feel
-    #: broken. Enabling scans is cheap and useful; enabling the model is a
-    #: deliberate choice with a latency cost.
+    #: It used to separate "Stage 1 only" (the deterministic rule engine) from
+    #: "Stage 1 + Stage 2" (the rule engine plus an LLM narrative), because
+    #: the two had very different operational profiles: the rules took ~100 ms
+    #: and always answered, while the model took minutes on CPU.
+    #:
+    #: The MCP runtime has no Stage 1. It asks the tools, hands the answers to
+    #: the model, and reconciles every number the model cited - so a scan is
+    #: model-driven end to end and there is no rules-only mode to switch off.
+    #: The console now reports whether a model is actually reachable
+    #: (`mcp.api.panels._llm_configured`) instead of reading this flag.
     scan_llm_enabled: bool = Field(default=False, alias="SCAN_LLM_ENABLED")
 
     #: Verify Play Store receipts. Off by default: it needs the Google Play

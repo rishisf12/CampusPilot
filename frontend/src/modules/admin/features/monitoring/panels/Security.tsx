@@ -29,6 +29,34 @@ export interface SecurityData {
     counts?: Record<string, number>;
     blocked?: Record<string, number>;
   };
+  /**
+   * The MCP tool answers behind this panel.
+   *
+   * `security_signals` counts the events by kind and reports how many were
+   * actioned; `failed_logins_by_hour` gives the shape of the failed-login
+   * attempts - how many per hour and how many distinct sources each hour
+   * saw. The sources stay in the database: the tool reports the count, never
+   * the address.
+   */
+  mcp?: {
+    tools?: string[];
+    failed?: Record<string, string>;
+    security?: {
+      events_total?: number;
+      events_blocked?: number;
+      blocked_pct?: number;
+      events_by_kind?: Record<string, { count: number; blocked: number }>;
+      logs_by_severity?: Record<string, number>;
+      root_signals?: number;
+      open_cves_by_severity?: Record<string, number>;
+      failed_logins_by_hour?: Array<{
+        hour: string;
+        failed_logins: number;
+        distinct_sources: number;
+        distinct_users: number;
+      }> | null;
+    };
+  };
 }
 
 interface SecurityPanelProps {
@@ -144,6 +172,8 @@ export function SecurityPanel({ data, loading, awaiting }: SecurityPanelProps) {
         </Panel>
       )}
 
+      <McpSecurityPanel mcp={data.mcp} />
+
       <Panel title="About integrity signals">
         <div className="space-y-2 text-xs" style={{ color: 'var(--cp-muted)' }}>
           <p>
@@ -164,5 +194,104 @@ export function SecurityPanel({ data, loading, awaiting }: SecurityPanelProps) {
         </div>
       </Panel>
     </div>
+  );
+}
+
+/**
+ * The security signals, as the MCP tools report them.
+ *
+ * Two answers the panel above does not give. The first is the *ratio*: how
+ * many of the events the system acted on, which is the number an operator
+ * actually wants and which the per-kind breakdown makes hard to read. The
+ * second is the shape of the failed-login attempts - how many per hour, and
+ * how many distinct sources each hour saw.
+ *
+ * The sources stay in the database. The tool reports how many, never which,
+ * so an admin can see a spray without this screen becoming a list of
+ * addresses to copy.
+ */
+function McpSecurityPanel({ mcp }: { mcp?: SecurityData['mcp'] }) {
+  const signals = mcp?.security;
+  const hours = signals?.failed_logins_by_hour ?? [];
+  const failed = Object.keys(mcp?.failed ?? {});
+
+  if (!signals) {
+    return (
+      <Panel
+        title="Signals (MCP)"
+        subtitle="The actioned ratio and the shape of the failed logins."
+      >
+        <EmptyState
+          title="No signal aggregate"
+          detail="The MCP tools did not answer for this window. The panel above still shows the per-kind counts from the store."
+        />
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel
+      title="Signals (MCP)"
+      subtitle="The actioned ratio, the open CVEs and the shape of the failed logins - read through the MCP tool registry."
+      actions={
+        failed.length > 0 ? (
+          <span className="text-xs" style={{ color: 'var(--cp-warning)' }}>
+            {failed.join(', ')} refused
+          </span>
+        ) : undefined
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile
+          label="Actioned"
+          value={num(signals.events_blocked)}
+          hint={`of ${num(signals.events_total)} events`}
+          hue="sky"
+        />
+        <StatTile
+          label="Actioned ratio"
+          value={signals.blocked_pct === undefined ? '--' : `${signals.blocked_pct.toFixed(1)}%`}
+          hint="of all events, all kinds"
+          hue="slate"
+        />
+        <StatTile
+          label="Open CVEs"
+          value={num(Object.values(signals.open_cves_by_severity ?? {}).reduce((s, v) => s + v, 0))}
+          hint="dependencies with an open advisory"
+          hue="amber"
+        />
+        <StatTile
+          label="Root signals"
+          value={num(signals.root_signals)}
+          hint="from the security log"
+          hue="coral"
+        />
+      </div>
+
+      {hours.length > 0 && (
+        <div className="mt-4">
+          <div
+            className="text-xs font-medium uppercase tracking-wide mb-2"
+            style={{ color: 'var(--cp-muted)' }}
+          >
+            Failed logins by hour
+          </div>
+          <div className="space-y-1.5">
+            {hours.slice(0, 12).map(h => (
+              <div
+                key={h.hour}
+                className="flex items-center justify-between text-xs px-3 py-1.5"
+                style={{ borderRadius: 8 }}
+              >
+                <span style={{ color: 'var(--cp-muted)' }}>{h.hour}</span>
+                <span className="tabular-nums font-medium" style={{ color: 'var(--cp-text)' }}>
+                  {num(h.failed_logins)} failed · {num(h.distinct_sources)} sources
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }

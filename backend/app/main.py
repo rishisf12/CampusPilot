@@ -254,8 +254,18 @@ app.include_router(security_routes.router, tags=["Admin - Security"])
 app.include_router(collect_router)
 app.include_router(monitoring_router)
 
-# The HTTP MCP endpoint is optional and off by default: with the flag false
-# the paths do not exist at all, rather than existing and refusing.
+# The admin monitoring panels are served by the MCP layer and are always
+# mounted: the admin console reads them, and a dashboard is the product, not
+# an opt-in tool. They are admin-only, and every figure they show comes
+# through the MCP tool registry - redacted, subsection-scoped and audited.
+from mcp.api.panels import router as mcp_panel_router
+
+app.include_router(mcp_panel_router, prefix="/api/mcp", tags=["Admin - MCP Panels"])
+
+# The HTTP MCP *console* is optional and off by default: with the flag false
+# the paths do not exist at all, rather than existing and refusing. It is the
+# operator's toolbox - list the tools, call one - and not something an
+# installation should expose without asking for it.
 if settings.enable_admin_mcp:
     from mcp.api.routes import router as mcp_router
 

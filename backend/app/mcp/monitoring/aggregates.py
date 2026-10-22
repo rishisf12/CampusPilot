@@ -416,11 +416,21 @@ def security_signals(
 
 #: Every aggregate tool, with the subsections allowed to ask. Scoping is
 #: server-side: a scan cannot conjure another subsection's tool.
+#:
+#: `crash_clusters` is permitted to the health and feedback subsections of
+#: both platforms, because a crash fingerprint belongs to both questions -
+#: "is the app healthy" and "is the feedback complaining about a crash" -
+#: and the tool takes the platform as an argument, so restricting it to the
+#: android ids would have made the web half unanswerable.
 AGGREGATE_TOOLS = (
     ("failed_logins_by_hour", failed_logins_by_hour, frozenset({"C_W_SECURITY", "C_A_SECURITY"})),
     ("feedback_themes_top5", feedback_themes_top5, frozenset({"D_W_FEEDBACK", "D_A_FEEDBACK"})),
     ("p95_latency_window", p95_latency_window, frozenset({"A_W_HEALTH", "A_A_HEALTH"})),
-    ("crash_clusters", crash_clusters, frozenset({"A_A_HEALTH", "D_A_FEEDBACK"})),
+    (
+        "crash_clusters",
+        crash_clusters,
+        frozenset({"A_W_HEALTH", "A_A_HEALTH", "D_W_FEEDBACK", "D_A_FEEDBACK"}),
+    ),
     ("telemetry_health", telemetry_health, frozenset({"A_W_HEALTH", "A_A_HEALTH"})),
     ("security_signals", security_signals, frozenset({"C_W_SECURITY", "C_A_SECURITY"})),
 )

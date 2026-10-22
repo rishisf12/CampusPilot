@@ -333,9 +333,10 @@ not the model's transcription:
 
 ## 5. Status thresholds per subsection
 
-Concrete numbers, so "Warning" is not a matter of taste. These live in code
-(`obs/thresholds.py`), never in the prompt — the model compares against what the
-tool returns, and the tool decides what counts as a breach.
+Concrete numbers, so "Warning" is not a matter of taste. These live in this
+document and in the configuration (`core/config.py`), never only in the
+prompt — the model compares against what the tool returns, and the operator
+compares against what it is configured to allow.
 
 | Subsection | Healthy | Warning | Critical |
 |---|---|---|---|

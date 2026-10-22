@@ -1109,11 +1109,11 @@ export const adminApi = {
 
 // ------------------------------------------------------------ monitoring
 //
-// The admin reads behind both monitoring sections. Every call here is a GET
-// except `rollup` and the scan triggers, and the subsection list comes from
-// the server rather than being duplicated in the UI - a hardcoded copy would
-// eventually disagree with the backend's allowlist and produce a button that
-// always fails with no obvious cause.
+// The admin Monitoring tab reads the MCP layer's panel endpoints. Every
+// figure it shows comes through the same tool registry the scan agent uses:
+// redacted, subsection-scoped and audited. What is left under `/monitoring`
+// is what MCP has no equivalent for - the scan history, the rollup trigger
+// and the raw export - and those live in `monitoringApi` below.
 export interface ScanResultResponse {
   scan_id: string;
   subsection: string;
@@ -1126,54 +1126,70 @@ export interface ScanResultResponse {
   window_start: string;
   window_end: string;
   duration_ms: number;
-  /** "rule-engine-v1", or "rule-engine-v1+llm" when Stage 2 contributed. */
+  /** The provider and model that answered. */
   model: string;
   created_at: string;
 }
 
-export const monitoringApi = {
+/**
+ * The MCP panel surface - the admin Monitoring tab's data and its scan.
+ *
+ * These replaced the `/monitoring/overview`, `/health`, `/feedback`,
+ * `/subsections` and `/scan/{subsection}` reads. The URLs changed because
+ * the source did: the figures now arrive through the MCP tool registry
+ * rather than from the store directly, so they are redacted, scoped to a
+ * subsection and recorded in the tool-call audit.
+ */
+export const mcpApi = {
   subsections: () =>
     request<{
       subsections: MonitoringSubsection[];
       scan_enabled: boolean;
       scan_llm_enabled: boolean;
-    }>('/monitoring/subsections'),
-
-  /**
-   * Run a scan for one subsection.
-   *
-   * Synchronous on the server and fast in practice: the rule engine answers in
-   * tens of milliseconds. Stage 2 (a local LLM) is off by default, and when
-   * enabled it adds minutes on CPU, so the UI shows a pending state rather
-   * than appearing to have hung.
-   */
-  scan: (subsection: string, windowDays = 7) =>
-    request<ScanResultResponse>(`/monitoring/scan/${subsection}`, {
-      method: 'POST',
-      body: { window_days: windowDays },
-    }),
+    }>('/api/mcp/panel/subsections'),
 
   /** Everything the panels need, one round trip, one consistent window. */
   overview: (days = 7, platform: string | null = null) => {
     const search = new URLSearchParams({ days: String(days) });
     if (platform) search.set('platform', platform);
-    return request<unknown>(`/monitoring/overview?${search}`);
+    return request<unknown>(`/api/mcp/panel/overview?${search}`);
   },
 
   health: (days = 7, platform = 'web') =>
-    request<unknown>(`/monitoring/health?days=${days}&platform=${platform}`),
+    request<unknown>(`/api/mcp/panel/health?days=${days}&platform=${platform}`),
 
+  /** Subsection D: volume, sentiment and topic mix. Read-only. */
+  feedback: (days = 30) => request<unknown>(`/api/mcp/panel/feedback?days=${days}`),
+
+  /**
+   * Run a scan for one subsection.
+   *
+   * The scan is model-driven end to end: the subsection's tools answer, the
+   * model writes the verdict, and every number it cited is reconciled
+   * against the audit trail. It reaches a hosted model, so it is not
+   * instant - the UI shows a pending state rather than appearing to have
+   * hung.
+   */
+  scan: (subsection: string, windowDays = 7) =>
+    request<ScanResultResponse>(`/api/mcp/scan/${subsection}`, {
+      method: 'POST',
+      body: { window_days: windowDays },
+    }),
+};
+
+export const monitoringApi = {
+  /**
+   * Every scan verdict, the incident log and the tool-call audit.
+   *
+   * Still here rather than in the MCP layer: it is the record of what the
+   * scans concluded, and MCP records what the tools answered - two different
+   * things, and the console shows both.
+   */
   history: (subsection: string | null = null, limit = 50) => {
     const search = new URLSearchParams({ limit: String(limit) });
     if (subsection) search.set('subsection', subsection);
     return request<unknown>(`/monitoring/history?${search}`);
   },
-
-  /** Subsection D: volume, sentiment and topic mix. Read-only. */
-  feedback: (days = 30) => request<unknown>(`/monitoring/feedback?days=${days}`),
-
-  /** Purchases and ad revenue, with the verified/unverified split. */
-  monetisation: (days = 30) => request<unknown>(`/monitoring/monetisation?days=${days}`),
 
   /** Rebuild the hourly rollup now, instead of waiting for the timer. */
   rollup: (lookbackHours = 48) =>

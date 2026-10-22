@@ -35,10 +35,7 @@ from features.monitoring.api.schemas import (
 )
 from features.monitoring.domain.models import ScanResult as ScanResultRow
 from features.monitoring.domain.models import StatusTransition
-from features.monitoring.services.llm_client import (
-    SUBSECTION_PROMPTS,
-    load_system_prompt,
-)
+from mcp.agent.prompts import SUBSECTION_PROMPTS, load_system_prompt
 from mcp.agent.reconcile import ReconcileError, reconcile
 
 logger = logging.getLogger(__name__)
@@ -324,6 +321,18 @@ async def run_scan(
             )
         try:
             raw = await transport(messages)
+        except Exception as exc:  # noqa: BLE001 - a provider can fail any way
+            # The model could not be reached at all: no key, no network, a
+            # refusal from the egress gate. That is a failed scan, not a
+            # crashed request - the reason goes into an honest `error`
+            # verdict rather than becoming a 500 with no explanation.
+            reason = f"{type(exc).__name__}: {exc}"
+            logger.warning(
+                "scan %s (%s) attempt %d could not reach a model: %s",
+                scan_id, subsection, attempt + 1, reason,
+            )
+            continue
+        try:
             data = _parse_json(raw)
             data["scan_id"] = scan_id
             data["subsection"] = subsection
