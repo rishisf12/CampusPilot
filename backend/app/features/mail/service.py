@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import func
 from sqlmodel import Session, or_, select
 
-from features.mail.models import MailDirection, MailMessage
+from features.mail.models import MailDirection, MailFile, MailMessage
 from features.mail.sections import GROUP_IDS, classify, is_group, is_section
 
 logger = logging.getLogger(__name__)
@@ -235,6 +235,123 @@ def unread_counts(session: Session, group: Optional[str] = None) -> Dict[str, in
 def starred_count(session: Session, group: Optional[str] = None) -> int:
     """How many starred messages there are."""
     return sum(1 for message in _messages(session, group) if message.is_starred)
+
+
+def get_message(
+    session: Session, group: Optional[str], message_id: int
+) -> Optional[MailMessage]:
+    """One message, if the group may read it."""
+    stmt = select(MailMessage).where(MailMessage.id == message_id)
+    if is_group(group):
+        stmt = stmt.where(MailMessage.group == group)
+    return session.exec(stmt).first()
+
+
+def store_files(
+    session: Session, message: MailMessage, attachments: List[Dict[str, Any]]
+) -> List[MailFile]:
+    """
+    File the bytes of an ingested message's attachments.
+
+    The message's JSON column keeps the description; this keeps what the
+    description describes. An entry carrying base64 ``content`` becomes one
+    row here; an entry without content is only described, because nothing
+    arrived to keep. The rows, in the order the entries were given, come
+    back so the caller can put each file's id next to its description.
+    """
+    import base64
+    import binascii
+
+    stored: List[MailFile] = []
+    for attachment in attachments:
+        raw = attachment.get("content")
+        if not raw:
+            continue
+        try:
+            data = base64.b64decode(raw)
+        except (binascii.Error, ValueError) as exc:
+            logger.warning(
+                "Could not decode attachment %r for message %s: %s",
+                attachment.get("filename"),
+                message.message_id,
+                exc,
+            )
+            continue
+        file = MailFile(
+            message_id=message.id or 0,
+            filename=(attachment.get("filename") or "attachment")[:500],
+            content_type=attachment.get("content_type"),
+            size=len(data),
+            data=data,
+        )
+        session.add(file)
+        stored.append(file)
+    if stored:
+        session.commit()
+        for file in stored:
+            session.refresh(file)
+    return stored
+
+
+def list_files(
+    session: Session, group: Optional[str] = None, limit: int = 200
+) -> List[Dict[str, Any]]:
+    """
+    Every attachment the group's mail carries, newest first.
+
+    This is the Files (Downloads) view: the files are attached to messages
+    that may be read years apart, so the view is one list, not one per
+    conversation. Each row carries what the download button needs and what
+    the row shows - the file's name, who sent its message, and when.
+    """
+    stmt = (
+        select(MailFile, MailMessage)
+        .join(
+            MailMessage,
+            MailFile.message_id == MailMessage.id,
+        )
+        .order_by(MailMessage.received_at.desc(), MailFile.filename)
+        .limit(limit)
+    )
+    if is_group(group):
+        stmt = stmt.where(MailMessage.group == group)
+    rows: List[Dict[str, Any]] = []
+    for file, message in session.exec(stmt).all():
+        rows.append(
+            {
+                "id": file.id,
+                "message_id": message.id,
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "size": file.size,
+                "section": message.section,
+                "group": message.group,
+                "from_email": message.from_email,
+                "from_name": message.from_name,
+                "subject": message.subject,
+                "received_at": message.received_at,
+            }
+        )
+    return rows
+
+
+def get_file(
+    session: Session, group: Optional[str], message_id: int, file_id: int
+) -> Optional[Tuple[MailFile, MailMessage]]:
+    """
+    One file, and its message, if the group may read it.
+
+    An administrator reading both groups passes None; a student passes
+    their own group, so another group's file is an empty lookup.
+    """
+    stmt = select(MailFile, MailMessage).where(
+        MailFile.id == file_id,
+        MailFile.message_id == MailMessage.id,
+        MailMessage.id == message_id,
+    )
+    if is_group(group):
+        stmt = stmt.where(MailMessage.group == group)
+    return session.exec(stmt).first()
 
 
 def _section_ids() -> Tuple[str, ...]:

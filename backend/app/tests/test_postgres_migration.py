@@ -345,6 +345,10 @@ def test_alembic_metadata_matches_models(require_postgres):
             ("DATE", "date"),
             ("TIME", "time"),
             ("ENUM", "enum"),
+            # One binary type, two render names: the model's LargeBinary says
+            # BLOB, Postgres stores and reports BYTEA.
+            ("BYTEA", "bytes"),
+            ("BLOB", "bytes"),
         ):
             if name.startswith(prefix):
                 return family

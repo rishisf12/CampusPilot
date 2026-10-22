@@ -17,7 +17,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Column, DateTime, Index, func
+from sqlalchemy import Column, DateTime, Index, Integer, LargeBinary, func
 from sqlmodel import Field, JSON, SQLModel
 
 
@@ -81,6 +81,46 @@ class MailMessage(SQLModel, table=True):
     labels: List[str] = Field(default=[], sa_column=Column(JSON))
     #: The account that composed it, for a sent message.
     created_by: Optional[int] = Field(default=None)
+
+    created_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(
+            "created_at", DateTime(timezone=True), server_default=func.now()
+        ),
+    )
+
+
+class MailFile(SQLModel, table=True):
+    """The bytes of one attachment.
+
+    The message keeps a description of each attachment (a filename, a type,
+    a size) in its own JSON column; this table keeps what that description
+    describes, so a student can actually download the file. Talking about a
+    file the app never kept would be a mock feature, so ingest and a
+    forward both file the bytes here.
+    """
+
+    __tablename__ = "mail_file"
+    __table_args__ = (
+        # Named here on purpose, like the message's indexes: alembic 030
+        # creates these very names, so the two paths agree.
+        Index("ix_mail_file_message", "message_id"),
+        {"schema": "core"},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    #: The message it arrived with.
+    message_id: int = Field(
+        sa_column=Column("message_id", Integer, nullable=False)
+    )
+    #: What the file was called in the mail.
+    filename: str = Field(max_length=500)
+    #: The MIME type, as the mail claimed it.
+    content_type: Optional[str] = Field(default=None, max_length=255)
+    #: The size in bytes, of what actually arrived.
+    size: int = Field(default=0)
+    #: The bytes themselves.
+    data: bytes = Field(default=b"", sa_column=Column("data", LargeBinary))
 
     created_at: Optional[datetime] = Field(
         default=None,

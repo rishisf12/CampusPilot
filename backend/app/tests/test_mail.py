@@ -235,3 +235,149 @@ def test_read_and_star(client, monkeypatch):
     read = client["client"].post(f"/mail/messages/{message_id}/read", headers=headers)
     assert read.status_code == 200
     assert read.json()["is_read"] is True
+
+
+def test_attachment_is_stored_and_downloadable(client, monkeypatch):
+    """A posted attachment with content becomes a file the account can download."""
+    import base64
+
+    configure_mailboxes(monkeypatch)
+    content = base64.b64encode(b"notice PDF bytes").decode("ascii")
+    created = client["client"].post(
+        "/mail/ingest",
+        json={
+            "from_email": "cells@iiitdmj.ac.in",
+            "to": "ug-placement@college.ac.in",
+            "subject": "Campus drive poster",
+            "text": "Please see the poster.",
+            "message_id": "<mail-poster-1@college.ac.in>",
+            "attachments": [
+                {
+                    "filename": "poster.jpg",
+                    "content_type": "image/jpeg",
+                    "size": 16,
+                    "content": content,
+                }
+            ],
+        },
+        headers={"Authorization": "Bearer ug-secret"},
+    )
+    assert created.status_code == 201
+    message_id = created.json()["id"]
+    headers = {"Authorization": f"Bearer {client['mailug']}"}
+
+    listed = client["client"].get("/mail/messages", headers=headers).json()
+    message = next(row for row in listed["messages"] if row["id"] == message_id)
+    assert message["has_attachments"] is True
+    assert message["attachments"][0]["filename"] == "poster.jpg"
+    file_id = message["attachments"][0]["id"]
+    assert file_id is not None
+
+    got = client["client"].get(
+        f"/mail/messages/{message_id}/attachments/{file_id}", headers=headers
+    )
+    assert got.status_code == 200
+    assert got.content == b"notice PDF bytes"
+    assert "poster.jpg" in got.headers["content-disposition"]
+
+    # The Files view is the download icon's list, and the file is on it.
+    files = client["client"].get("/mail/files", headers=headers).json()
+    assert any(row["id"] == file_id for row in files)
+
+    # Another group's account cannot download it.
+    stranger = client["client"].get(
+        f"/mail/messages/{message_id}/attachments/{file_id}",
+        headers={"Authorization": f"Bearer {client['mailpg']}"},
+    )
+    assert stranger.status_code == 404
+
+
+def test_compose_files_a_sent_copy(client):
+    """Composing sends (if SMTP is there) and keeps the copy in the inbox."""
+    headers = {"Authorization": f"Bearer {client['mailug']}"}
+    sent = client["client"].post(
+        "/mail/compose",
+        json={
+            "to": "registrar@iiitdmj.ac.in",
+            "subject": "Question about the timetable",
+            "body": "Could the mid semester timetable change?",
+        },
+        headers=headers,
+    )
+    assert sent.status_code == 200
+    copy = sent.json()
+    assert copy["direction"] == "sent"
+    assert copy["subject"] == "Question about the timetable"
+
+    listed = client["client"].get("/mail/messages", headers=headers).json()
+    assert any(row["id"] == copy["id"] for row in listed["messages"])
+
+
+def test_reply_answers_the_sender(client, monkeypatch):
+    """A reply takes the original's sender as its recipient and one Re:."""
+    configure_mailboxes(monkeypatch)
+    created = client["client"].post(
+        "/mail/ingest",
+        json={
+            "from_email": "tnp@iiitdmj.ac.in",
+            "to": "ug-placement@college.ac.in",
+            "subject": "Register for the drive",
+            "text": "Registrations are open.",
+            "message_id": "<mail-reply-1@college.ac.in>",
+        },
+        headers={"Authorization": "Bearer ug-secret"},
+    )
+    original_id = created.json()["id"]
+    headers = {"Authorization": f"Bearer {client['mailug']}"}
+
+    sent = client["client"].post(
+        "/mail/compose",
+        json={"reply_of": original_id, "body": "Registering now, thank you."},
+        headers=headers,
+    )
+    assert sent.status_code == 200
+    copy = sent.json()
+    assert copy["to_email"] == "tnp@iiitdmj.ac.in"
+    assert copy["subject"] == "Re: Register for the drive"
+
+    # Replying to a message in the other group's mailbox is a 404.
+    pg_created = client["client"].post(
+        "/mail/ingest",
+        json={
+            "from_email": "pgoffice@iiitdmj.ac.in",
+            "to": "pg-academics@college.ac.in",
+            "subject": "PG notices",
+            "message_id": "<mail-reply-pg-1@college.ac.in>",
+        },
+        headers={"Authorization": "Bearer pg-secret"},
+    )
+    wrong = client["client"].post(
+        "/mail/compose",
+        json={"reply_of": pg_created.json()["id"], "body": "hello?"},
+        headers=headers,
+    )
+    assert wrong.status_code == 404
+
+
+def test_forward_quotes_the_original(client):
+    """A forward keeps Fwd: and rides the original's body under the words."""
+    headers = {"Authorization": f"Bearer {client['mailug']}"}
+    listed = client["client"].get("/mail/messages", headers=headers).json()
+    original = next(
+        row for row in listed["messages"] if row["subject"] == "Mid semester timetable"
+    )
+
+    sent = client["client"].post(
+        "/mail/compose",
+        json={
+            "to": "friend@iiitdmj.ac.in",
+            "body": "This might concern you too.",
+            "forward_of": original["id"],
+        },
+        headers=headers,
+    )
+    assert sent.status_code == 200
+    copy = sent.json()
+    assert copy["subject"] == "Fwd: Mid semester timetable"
+    assert "---------- Forwarded message ----------" in (copy["body_text"] or "")
+    assert "This might concern you too." in (copy["body_text"] or "")

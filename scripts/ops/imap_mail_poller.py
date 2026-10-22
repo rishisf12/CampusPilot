@@ -16,6 +16,7 @@ Environment variables:
     MAIL_PROCESSED_LABEL=Processed/Mail    # Gmail label to mark processed mail
     MAIL_FROM_DOMAIN=@college.ac.in        # optional sender filter
 """
+import base64
 import email
 import email.utils
 import imaplib
@@ -103,7 +104,14 @@ def extract_body(msg: email.message.Message) -> tuple[str, str]:
 
 
 def describe_attachments(msg: email.message.Message) -> list[dict]:
-    """Attachment metadata; the mail app does not carry the bytes."""
+    """
+    Attachment metadata plus the bytes, base64-encoded.
+
+    Only so much of a file rides along: a notice PDF or a poster is normal,
+    a mailbox dump is not, and a post without the bytes would describe a
+    file nobody could download.
+    """
+    limit = int(os.environ.get("MAIL_ATTACHMENT_LIMIT", 10 * 1024 * 1024))
     attachments = []
     for part in msg.walk():
         disp = str(part.get("Content-Disposition", ""))
@@ -117,7 +125,12 @@ def describe_attachments(msg: email.message.Message) -> list[dict]:
             {
                 "filename": decode_mime_header(filename),
                 "content_type": part.get_content_type(),
-                "size": len(payload) if payload else None,
+                "size": len(payload) if payload else 0,
+                **(
+                    {"content": base64.b64encode(payload).decode("ascii")}
+                    if payload and len(payload) <= limit
+                    else {}
+                ),
             }
         )
     return attachments

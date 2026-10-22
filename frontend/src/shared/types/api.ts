@@ -1065,6 +1065,8 @@ export interface AdminActivityItem {
 // a row.
 
 export interface MailAttachmentMeta {
+  /** In a message's response: the stored file, so a download can point at it. */
+  id?: number;
   filename: string;
   content_type?: string | null;
   size?: number | null;
@@ -1117,8 +1119,27 @@ export interface MailListResponse {
 }
 
 export interface MailComposeRequest {
-  to: string;
+  to?: string;
   subject?: string;
   body?: string;
   section?: string | null;
+  /** The message this one answers: the backend takes the recipient's address from it. */
+  reply_of?: number;
+  /** The message this one passes on: the subject gains Fwd:, the body quotes it. */
+  forward_of?: number;
+}
+
+/** One attachment, as the Files (Downloads) view shows it. */
+export interface MailFileInfo {
+  id: number;
+  message_id: number;
+  filename: string;
+  content_type?: string | null;
+  size: number;
+  section: string;
+  group: string;
+  from_email: string;
+  from_name?: string | null;
+  subject?: string | null;
+  received_at?: string | null;
 }

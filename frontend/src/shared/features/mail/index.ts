@@ -6,3 +6,5 @@
  * bundles.
  */
 export { default as MailInbox } from './MailInbox';
+export { default as MailCompose } from './MailCompose';
+export type { ComposeMode } from './MailCompose';

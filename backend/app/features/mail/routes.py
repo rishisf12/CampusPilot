@@ -14,7 +14,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlmodel import Session
 
 from core.database import get_session
@@ -25,6 +25,7 @@ from features.mail import service
 from features.mail.models import MailMessage
 from features.mail.schemas import (
     MailComposeRequest,
+    MailFileInfo,
     MailIngestRequest,
     MailListResponse,
     MailMessageResponse,
@@ -38,6 +39,7 @@ from features.mail.sections import (
     is_group,
     is_section,
 )
+from sqlmodel import select
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +192,7 @@ def get_mail_message(
     user: User = Depends(get_current_user),
 ):
     """One message, opened."""
-    message = service.get_message(session, message_id)
+    message = service.get_message(session, None, message_id)
     if message is None or message.group not in _readable_groups(user, session):
         raise HTTPException(status_code=404, detail="Message not found")
     return _to_response(message)
@@ -204,7 +206,7 @@ def set_mail_message_read(
     user: User = Depends(get_current_user),
 ):
     """Mark a message read or unread."""
-    message = service.get_message(session, message_id)
+    message = service.get_message(session, None, message_id)
     if message is None or message.group not in _readable_groups(user, session):
         raise HTTPException(status_code=404, detail="Message not found")
     return _to_response(service.mark_read(session, message, read))
@@ -217,7 +219,7 @@ def star_mail_message(
     user: User = Depends(get_current_user),
 ):
     """Star a message, or unstar it if it already was."""
-    message = service.get_message(session, message_id)
+    message = service.get_message(session, None, message_id)
     if message is None or message.group not in _readable_groups(user, session):
         raise HTTPException(status_code=404, detail="Message not found")
     return _to_response(service.toggle_star(session, message))
@@ -233,9 +235,27 @@ def compose_mail(
     Send a message, and keep a copy of what was sent.
 
     The copy is the point: a sent message is filed under its section like
-    any other, so the thread it belongs to is in one place.
+    any other, so the thread it belongs to is in one place. A reply or a
+    forward carries the original with it - a reply answers the sender, a
+    forward quotes it under what the user wrote.
     """
+    readable = _readable_groups(user, session)
+    group = readable[0] if readable else "ug"
+
+    original: Optional[MailMessage] = None
+    if payload.reply_of or payload.forward_of:
+        original_id = payload.reply_of or payload.forward_of
+        found = service.get_message(session, group=group, message_id=original_id)
+        if found is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The message being answered is not in this mailbox.",
+            )
+        original = found
+
     to_address = (payload.to or "").strip()
+    if not to_address and payload.reply_of is not None and original is not None:
+        to_address = original.from_email or ""
     if not to_address:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -247,9 +267,28 @@ def compose_mail(
             detail=f"'{to_address}' is not an email address.",
         )
 
-    readable = _readable_groups(user, session)
-    group = readable[0] if readable else "ug"
-    sent = _send(group, to_address, payload.subject or "", payload.body or "")
+    subject = (payload.subject or "").strip()
+    body = payload.body or ""
+    if original is not None:
+        if payload.reply_of:
+            subject = subject or _replied_subject(original.subject)
+        else:
+            subject = subject or _forwarded_subject(original.subject)
+            # The composer pre-fills the quote; only add it when the user
+            # deleted it, so a forward never carries two copies.
+            if "---------- Forwarded message ----------" not in body:
+                body = f"{body}\n\n{_quote(original)}".strip()
+        if not subject.startswith(("Re:", "Fwd:")):
+            prefix = "Re:" if payload.reply_of else "Fwd:"
+            subject = f"{prefix} {subject}".strip()
+
+    sent = _send(
+        group,
+        to_address,
+        subject,
+        body,
+        in_reply_to=original.message_id if payload.reply_of and original else None,
+    )
 
     message = service.store_message(
         session,
@@ -257,10 +296,14 @@ def compose_mail(
         from_email=(user.email or "").lower(),
         from_name=user.full_name or user.username,
         to_email=to_address.lower(),
-        subject=payload.subject or "",
-        body_text=payload.body or "",
+        subject=subject,
+        body_text=body,
         received_at=datetime.now(timezone.utc),
-        section=payload.section if is_section(payload.section) else None,
+        section=(
+            payload.section
+            if is_section(payload.section)
+            else (original.section if original else None)
+        ),
         direction="sent",
         created_by=user.id,
     )
@@ -269,7 +312,39 @@ def compose_mail(
     return _to_response(message)
 
 
-def _send(group: str, to_address: str, subject: str, body: str) -> Optional[str]:
+def _replied_subject(subject: Optional[str]) -> str:
+    """The subject a reply takes, with one, and only one, Re:."""
+    text = (subject or "").strip()
+    return text if text.lower().startswith("re:") else f"Re: {text}"
+
+
+def _forwarded_subject(subject: Optional[str]) -> str:
+    """The subject a forward takes, with one, and only one, Fwd:."""
+    text = (subject or "").strip()
+    return text if text.lower().startswith("fwd:") else f"Fwd: {text}"
+
+
+def _quote(message: MailMessage) -> str:
+    """The quoted body a forward carries under the user's words."""
+    header = [
+        "---------- Forwarded message ----------",
+        f"From: {message.from_name or message.from_email} <{message.from_email}>",
+        f"Subject: {message.subject or '(no subject)'}",
+        f"Date: {message.received_at:%d %B %Y, %H:%M}" if message.received_at else None,
+    ]
+    lines = [line for line in header if line]
+    body = message.body_text or "(no text)"
+    quoted = "\n".join(f"> {line}" for line in body.splitlines() or [""])
+    return "\n".join(lines) + "\n\n" + quoted
+
+
+def _send(
+    group: str,
+    to_address: str,
+    subject: str,
+    body: str,
+    in_reply_to: Optional[str] = None,
+) -> Optional[str]:
     """
     Hand the message to the mail server.
 
@@ -293,6 +368,11 @@ def _send(group: str, to_address: str, subject: str, body: str) -> Optional[str]
     message["From"] = sender
     message["To"] = to_address
     message["Subject"] = subject or "(no subject)"
+    if in_reply_to:
+        # A reply quotes the thread, and its headers say so: a mail client
+        # that reads this keeps the conversation in one place.
+        message["In-Reply-To"] = in_reply_to
+        message["References"] = in_reply_to
     message.set_content(body or "")
 
     try:
@@ -356,6 +436,15 @@ def ingest_mail(
             }
         )
 
+    existing = None
+    if payload.message_id:
+        existing = session.exec(
+            select(MailMessage).where(
+                MailMessage.message_id == payload.message_id,
+                MailMessage.group == group,
+            )
+        ).first()
+
     message = service.store_message(
         session,
         group=group,
@@ -371,4 +460,68 @@ def ingest_mail(
         labels=payload.labels,
         message_id=payload.message_id,
     )
+    if existing is None and payload.attachments:
+        # A new message: its attachments' bytes ride with the post, and
+        # this is where they are kept. A re-post (the poller retrying)
+        # must not duplicate the files. The files' ids go back onto the
+        # message's descriptions, so a download button knows what to ask
+        # for.
+        stored = service.store_files(session, message, payload.attachments)
+        described = list(message.attachments or [])
+        pointer = 0
+        for index, entry in enumerate(payload.attachments):
+            if not entry.get("content"):
+                continue
+            if pointer < len(stored):
+                file = stored[pointer]
+                pointer += 1
+                if index < len(described):
+                    described[index] = {**described[index], "id": file.id}
+        message.attachments = described
+        session.add(message)
+        session.commit()
+        session.refresh(message)
     return {"id": message.id, "group": message.group, "section": message.section}
+
+
+@router.get("/files", response_model=List[MailFileInfo])
+def list_files(
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """
+    Every attachment the mailbox carries, newest first.
+
+    The download icon on the inbox holds this: one list of the files the
+    group's mail has brought in, each row with its own download button.
+    """
+    readable = _readable_groups(user, session)
+    chosen = readable[0] if len(readable) == 1 else None
+    return service.list_files(session, group=chosen)
+
+
+@router.get("/messages/{message_id}/attachments/{file_id}")
+def download_attachment(
+    message_id: int,
+    file_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """One attachment's bytes, as a file the browser saves."""
+    readable = _readable_groups(user, session)
+    chosen = readable[0] if len(readable) == 1 else None
+    found = service.get_file(session, chosen, message_id, file_id)
+    if found is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="That file is not part of the mail this account reads.",
+        )
+    file, message = found
+    filename = file.filename.replace('"', "'")
+    return Response(
+        content=file.data or b"",
+        media_type=file.content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

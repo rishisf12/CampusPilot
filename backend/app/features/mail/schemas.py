@@ -11,6 +11,9 @@ class MailAttachment(BaseModel):
     filename: str
     content_type: Optional[str] = None
     size: Optional[int] = None
+    #: Set when the file's bytes are stored (see core.mail_file): the id a
+    #: download endpoint asks for. A metadata-only entry has none.
+    id: Optional[int] = None
 
 
 class MailMessageResponse(BaseModel):
@@ -38,6 +41,22 @@ class MailMessageResponse(BaseModel):
     labels: List[str] = Field(default_factory=list)
 
 
+class MailFileInfo(BaseModel):
+    """One attachment as the Files (Downloads) view shows it."""
+
+    id: int
+    message_id: int
+    filename: str
+    content_type: Optional[str] = None
+    size: int = 0
+    section: str
+    group: str
+    from_email: str
+    from_name: Optional[str] = None
+    subject: Optional[str] = None
+    received_at: Optional[datetime] = None
+
+
 class MailListResponse(BaseModel):
     """A page of messages, and the counts the navigation shows."""
 
@@ -52,12 +71,18 @@ class MailListResponse(BaseModel):
 
 
 class MailComposeRequest(BaseModel):
-    """A message to send."""
+    """A message to send, or a reply or forward of one already in the inbox."""
 
-    to: str
+    to: str = ""
     subject: str = ""
     body: str = ""
     section: Optional[str] = None
+    #: The message this one replies to: its sender becomes the recipient and
+    #: the subject gains "Re:" unless it is already there.
+    reply_of: Optional[int] = None
+    #: The message this one forwards on: the recipient stays as given and the
+    #: subject gains "Fwd:"; the original's body rides along quoted.
+    forward_of: Optional[int] = None
 
 
 class MailIngestRequest(BaseModel):

@@ -223,7 +223,12 @@ group's mailbox and posts unread messages to `/mail/ingest`; deploy it on the
 
 Mail endpoints (see `/docs` for schemas): `GET /mail/sections`,
 `GET /mail/messages`, `GET/POST /mail/messages/{id}/read|star`,
-`POST /mail/compose`, `POST /mail/ingest` (poller only, guarded by the secret).
+`GET /mail/files` and `GET /mail/messages/{id}/attachments/{file_id}`
+(the download icon's Files view, and one attachment's bytes),
+`POST /mail/compose` (also answers replies with `reply_of` and forwards with
+`forward_of`), `POST /mail/ingest` (poller only, guarded by the secret).
+An ingest post may carry attachments with base64 `content`; the bytes are
+stored and every download is scoped to the reader's group.
 
 ## Monitoring
 
