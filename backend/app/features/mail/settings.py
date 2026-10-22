@@ -13,7 +13,7 @@ Nothing here is a secret. Credentials belong to the provider configuration
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 
 DEFAULT_INSTITUTE = (
@@ -72,10 +72,41 @@ class MailSettings:
     portal_url: str = DEFAULT_PORTAL_URL
     footer_text: str = DEFAULT_FOOTER_TEXT
     unassigned_label: str = "Unassigned"
+    mail_mailboxes_json: str = "{}"
+    mail_ingest_secret: str = ""
 
     @property
     def is_dummy(self) -> bool:
         return self.provider == "dummy"
+
+    def mail_group_cfg(self, group: str) -> dict[str, Any]:
+        """The mailbox config for a group, or empty dict."""
+        import json
+
+        try:
+            data = json.loads(self.mail_mailboxes_json or "{}")
+        except json.JSONDecodeError:
+            return {}
+        return data.get(group, {})
+
+    def mail_group_enabled(self, group: str) -> bool:
+        """Whether a group has mail ingestion enabled."""
+        cfg = self.mail_group_cfg(group)
+        return bool(cfg.get("imap_host") or cfg.get("sections"))
+
+    def mail_group_secret(self, group: str) -> str:
+        """The ingest secret for a group."""
+        cfg = self.mail_group_cfg(group)
+        return str(cfg.get("ingest_secret") or self.mail_ingest_secret or "")
+
+    def mail_section_for_address(self, group: str, address: str) -> Optional[str]:
+        """The section an alias belongs to within a group, or None."""
+        cfg = self.mail_group_cfg(group)
+        sections = cfg.get("sections", {}) or {}
+        for section, addr in sections.items():
+            if addr == address:
+                return section
+        return None
 
 
 @lru_cache(maxsize=1)
@@ -97,6 +128,8 @@ def get_mail_settings() -> MailSettings:
         portal_url=_text("MAIL_PORTAL_URL", DEFAULT_PORTAL_URL),
         footer_text=os.environ.get("MAIL_FOOTER_TEXT") or DEFAULT_FOOTER_TEXT,
         unassigned_label=_text("MAIL_UNASSIGNED_LABEL", "Unassigned"),
+        mail_mailboxes_json=os.environ.get("MAIL_MAILBOXES_JSON") or "{}",
+        mail_ingest_secret=os.environ.get("MAIL_INGEST_SECRET") or "",
     )
 
 

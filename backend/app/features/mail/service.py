@@ -682,6 +682,11 @@ def store_message(
     message_id: Optional[str] = None,
     direction: str = MailDirection.INBOX.value,
     created_by: Optional[int] = None,
+    is_quarantined: bool = False,
+    auth_spf: Optional[str] = None,
+    auth_dkim: Optional[str] = None,
+    auth_dmarc: Optional[str] = None,
+    auth_summary: Optional[str] = None,
 ) -> MailMessage:
     """
     File a message.
@@ -740,6 +745,11 @@ def store_message(
         snippet=_snippet(body_text or body_html),
         received_at=received_at,
         intake_address=intake_address,
+        is_quarantined=is_quarantined,
+        auth_spf=auth_spf,
+        auth_dkim=auth_dkim,
+        auth_dmarc=auth_dmarc,
+        auth_summary=auth_summary,
         has_attachments=bool(attachments),
         attachments=list(attachments or []),
         labels=list(labels or []),
