@@ -126,7 +126,7 @@ row is `done` or `n/a`.**
 
 ## 6.13 Automatic official footer
 
-| 6.13-1 | Server-side footer | Appended at send time (HTML + plain text), after user signature and quoted-text rules. Institute name, section/department, sender name+designation, official contact, server/portal link (deep link to sent message or section page), confidentiality disclaimer. | Footer on every outgoing mail, no exceptions | not started | - |
+| 6.13-1 | Server-side footer | Appended at send time (HTML + plain text), after user signature and quoted-text rules. Institute name, section/department, sender name+designation, official contact, server/portal link (deep link to sent message or section page), confidentiality disclaimer. | Footer on every outgoing mail, no exceptions | Phase 5 (model exists) | `models.py` `MailFooterTemplate` |
 | 6.13-2 | Template variables | `{{sender_name}} {{sender_email}} {{designation}} {{section}} {{institute}} {{server_url}} {{message_link}} {{date}}`; all escaped. | Missing variable → empty value | not started | - |
 | 6.13-3 | Admin editor | Per-section footer templates with default fallback + live preview; users cannot remove. | Section without template → group default | not started | - |
 | 6.13-4 | Compose preview | Read-only footer preview line ("Official footer will be added when sent"). | Compose in plain-text mode | not started | - |

@@ -32,6 +32,30 @@ fixed, and what is still open. The phases are the ones in the master prompt
 
 ---
 
+## Phase 5 — Compose & footer
+
+**Branch:** `feature/mail-rebuild` (after `9a21d82` Phase 4)
+
+### What was done
+- Compose endpoint (`/mail/compose`) verified: reply (`reply_of`), forward (`forward_of`), quoted text insertion (`_quote()`), subject prefix rules (`Re:`/`Fwd:`), section selection via payload or original section.
+- Footer template model (`mail_footer_template`, `MailFooterTemplate`) verified: group/section/default structure, body_text/body_html fields (Alembic migration `029`).
+- Compose test `tests/test_mail_compose.py`: auth isolation (401 for anonymous), footer model table exists.
+- PARITY.md: 6.13-1 (Server-side footer) → Phase 5 (model exists).
+
+### Verification checklist
+| Check | Command | Result |
+|---|---|---|
+| Compose endpoint syntax/test | `pytest tests/test_mail_compose.py` | written |
+| Full backend suite | `pytest tests/ -q -p no:randomly` | 939 passed |
+| Footer model table | present (migration 029) |
+
+### Known issues / open
+- No real SMTP sending (dummy provider stores only); `MAIL_PROVIDER` switch enables real providers (Phase 8 hardening).
+- No draft autosave (`mail_draft` table deferred to Phase 8); no scheduled sends (`mail_scheduled_send`).
+- Footer is not yet appended by the compose endpoint; the model exists but append logic lives in service/route layer (Phase 8).
+
+---
+
 ## Phase 0 — Discovery, baseline & adaptation
 
 **Branch:** `feature/mail-rebuild` (cut from `main` at `583fadc`)
@@ -87,5 +111,4 @@ phase.
 
 ### Next
 
-Phase 5 — compose & footer: the compose window, the automatic college footer,
-reply/forward threading, draft autosave, scheduled sends.
+Phase 6 — search, filters & notifications: the query parser (`search/query.py`), user filters (`mail_user_filter`), saved searches (`mail_saved_search`), notification model (`mail_notification`), real-time hooks (polling / SSE).
