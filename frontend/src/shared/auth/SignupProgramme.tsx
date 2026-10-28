@@ -43,7 +43,7 @@ export default function SignupProgramme({ onChoose, onBack }: SignupProgrammePro
         <div className="text-center mb-5">
           <Logo3D size={32} />
           <h1 className="mt-2 text-2xl font-bold text-primary-500">essential</h1>
-          <p className="cp-tagline mt-1">YOUR CAMPUS ASSISTANT</p>
+          <p className="cp-tagline mt-1">IIITDMJ's CAMPUS ASSISTANT</p>
         </div>
 
         <div className="cp-card">

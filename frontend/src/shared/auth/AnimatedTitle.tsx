@@ -41,7 +41,7 @@ export default function AnimatedTitle({ scale = 1 }: AnimatedTitleProps) {
           </span>
         ))}
       </h1>
-      <p className="cp-tagline mt-1">YOUR CAMPUS ASSISTANT</p>
+      <p className="cp-tagline mt-1">IIITDMJ's CAMPUS ASSISTANT</p>
     </div>
   );
 }

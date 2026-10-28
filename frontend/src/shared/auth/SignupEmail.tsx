@@ -28,6 +28,8 @@ interface SignupEmailProps {
   /** Chosen in step 0; shown so the choice can still be changed. */
   programmeGroup?: ProgrammeGroup | null;
   onChangeProgramme?: () => void;
+  /** Faculty signup: the stepper drops the programme step. */
+  faculty?: boolean;
 }
 
 export default function SignupEmail({
@@ -36,6 +38,7 @@ export default function SignupEmail({
   offline,
   programmeGroup = null,
   onChangeProgramme,
+  faculty = false,
 }: SignupEmailProps) {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -106,7 +109,7 @@ export default function SignupEmail({
           <Logo3D size={24} />
           <h1 className="mt-3 text-2xl font-bold text-primary-500">essential</h1>
           <p className="text-xs tracking-widest text-primary-400 font-medium">
-            YOUR CAMPUS ASSISTANT
+            IIITDMJ's CAMPUS ASSISTANT
           </p>
         </div>
 
@@ -156,7 +159,7 @@ export default function SignupEmail({
           </div>
 
           {/* Order, so it is clear what happens next. */}
-          <SignupProgress current={stage === 'email' ? 'email' : 'code'} />
+          <SignupProgress current={stage === 'email' ? 'email' : 'code'} faculty={faculty} />
 
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
 

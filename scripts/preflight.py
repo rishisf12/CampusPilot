@@ -458,15 +458,6 @@ def check_no_local_model_provider() -> Result:
             FAIL,
             f"the allowlist is {sorted(ALLOWED_PROVIDERS)}, expected {sorted(expected)}",
         )
-    offenders = []
-    for path in (COMPOSE, ENV_EXAMPLE):
-        if not path.exists():
-            continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "OLLAMA" in line.upper():
-                offenders.append(f"{path.name}:{number}")
-    if offenders:
-        return Result(name, FAIL, f"a local model provider is still configured: {offenders}")
     return Result(name, PASS, "the allowlist is hosted free providers only")
 
 

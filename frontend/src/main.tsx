@@ -13,6 +13,11 @@ import { bootstrapTheme } from './shared/features/settings/useTheme';
 // flash on every reload.
 bootstrapTheme();
 
+// Register the PWA service worker (auto-updates on new version).
+if (import.meta.env.PROD) {
+  void import('./registerSW').then(({ registerSW }) => registerSW());
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

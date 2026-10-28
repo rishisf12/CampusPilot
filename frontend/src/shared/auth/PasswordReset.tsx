@@ -95,7 +95,7 @@ export default function PasswordReset({ onBack, onDone, offline }: PasswordReset
           <Logo3D size={24} />
           <h1 className="mt-3 text-2xl font-bold text-primary-500">essential</h1>
           <p className="text-xs tracking-widest text-primary-400 font-medium">
-            YOUR CAMPUS ASSISTANT
+            IIITDMJ's CAMPUS ASSISTANT
           </p>
         </div>
 

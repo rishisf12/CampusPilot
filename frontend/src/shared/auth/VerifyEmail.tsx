@@ -109,7 +109,7 @@ export default function VerifyEmail({ onVerified, onStartOver }: VerifyEmailProp
           <Logo3D size={24} />
           <h1 className="mt-2 text-2xl font-bold text-primary-500">Verify your email</h1>
           <p className="text-xs tracking-widest text-primary-400 font-medium">
-            YOUR CAMPUS ASSISTANT
+            IIITDMJ's CAMPUS ASSISTANT
           </p>
         </div>
 

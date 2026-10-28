@@ -1,0 +1,55 @@
+{
+  "id": "campuspilot",
+  "name": "CampusPilot",
+  "short_name": "CampusPilot",
+  "description": "Your Campus Assistant - Live Schedule, Attendance, Exam, Vacant Rooms, Feedback",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e9f1ef",
+  "theme_color": "#0f766e",
+  "scope": "/",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/logo-icon.svg",
+      "sizes": "72x72 96x96 128x128 144x144 152x152 192x192 384x384 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["education", "productivity", "student"],
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile-home.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "CampusPilot mobile home"
+    },
+    {
+      "src": "/screenshots/desktop-home.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "CampusPilot desktop home"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live Schedule",
+      "short_name": "Schedule",
+      "description": "View today live schedule",
+      "url": "/?tab=live",
+      "icons": [{ "src": "/logo-icon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Exam",
+      "short_name": "Exam",
+      "description": "View exam seating",
+      "url": "/?tab=exam",
+      "icons": [{ "src": "/logo-icon.svg", "sizes": "96x96" }]
+    }
+  ]
+}

@@ -10,8 +10,8 @@ import TechBackground from './TechBackground';
  * The landing screen: who are you signing in as?
  *
  * Student is the full app; admin is the developer sign-in for feedback
- * responses. Faculty is shown with a "Soon" badge rather than offering a form
- * that would fail.
+ * responses. Faculty gets its own signup: department instead of the student
+ * cohort fields, and a teaching-schedule workspace after sign-in.
  *
  * The cards carry a single short line each. An earlier version had a second
  * "detail" sentence on every card ("Track your classes, attendance, exam
@@ -50,7 +50,7 @@ const ROLES: Role[] = [
     id: 'faculty',
     label: 'Faculty',
     description: 'Teaching schedule.',
-    available: false,
+    available: true,
     hue: 'amber',
   },
   {
@@ -198,6 +198,7 @@ function LandingLockup({ reduced, onReveal }: LandingLockupProps) {
 
 interface StartScreenProps {
   onChooseStudent?: () => void;
+  onChooseFaculty?: () => void;
   onChooseAdmin?: () => void;
   /** Sign in with an existing account, rather than creating one. */
   onSignIn?: () => void;
@@ -205,6 +206,7 @@ interface StartScreenProps {
 
 export default function StartScreen({
   onChooseStudent,
+  onChooseFaculty,
   onChooseAdmin,
   onSignIn,
 }: StartScreenProps) {
@@ -220,6 +222,7 @@ export default function StartScreen({
 
   const pick = (id: string) => {
     if (id === 'admin') onChooseAdmin?.();
+    else if (id === 'faculty') onChooseFaculty?.();
     else onChooseStudent?.();
   };
   return (
@@ -231,7 +234,7 @@ export default function StartScreen({
 
         <div className={`cp-card space-y-5${cardVisible ? '' : ' cp-card--waiting'}`}>
           <h2 className="text-lg font-semibold text-center" style={{ color: 'var(--cp-text)' }}>
-            How are you signing in?
+            Create a new account
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

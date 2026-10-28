@@ -190,19 +190,25 @@ CampusPilot/
 | Teams | Hackathon team creation and skill matching |
 | OppFeed | Agent-run internship/job feed with admin moderation |
 | Profile | Programme, branch (incl. branch change), electives, attendance target |
-| Mail | Per-section inboxes fed from the college's mailboxes (below) |
+| Mail | ONE common inbox fed by all the college's mail ids, filed by the sender (below) |
 
 ## Mail app
 
-Every "Important" section (Academics, Placement Cell, Cultural, Technical,
-Sports, Other) has its own inbox, fed from the college's mailboxes. Mail is
-completely separate from feedback: its own table, endpoints, poller and secret.
+Every receiving mail id of a group - all six of them - feeds ONE common inbox,
+the one the "Important" navigation shows. Mail is completely separate from
+feedback: its own tables, endpoints, poller and secret.
 
 - Two programme groups: UG and PG. All six sections of a group share one IMAP
   mailbox; each section has its own receiving address inside it.
-- A message is filed under the section whose receiving address it was sent to.
-  An address not on the list falls back to keyword classification, which files
-  into `other`.
+- **The sender's email id decides the filing, not the receiving address.** The
+  admin registers clusters of sender ids per section (`core.mail_sender_rule`:
+  one full id like `tnp@college.ac.in`, or a whole domain like
+  `@partner-college.ac.in`), and an arriving message from one of them files
+  under that section wherever it was posted. The order is sender rule first,
+  then the receiving address, then keyword classification into `other`.
+- The list shows one mailbox: each row carries the badge of the section its
+  sender filed it under, the chips on top filter by section with unread
+  counts, and unmatched rows can be marked unread again.
 - Students read only their group's mailbox; admins can switch between both.
 
 Configure with a JSON setting:
@@ -227,8 +233,11 @@ Mail endpoints (see `/docs` for schemas): `GET /mail/sections`,
 (the download icon's Files view, and one attachment's bytes),
 `POST /mail/compose` (also answers replies with `reply_of` and forwards with
 `forward_of`), `POST /mail/ingest` (poller only, guarded by the secret).
-An ingest post may carry attachments with base64 `content`; the bytes are
-stored and every download is scoped to the reader's group.
+Admins manage the sender clusters at `GET/POST/DELETE /mail/sender-rules`
+(students get 403, strangers 401; a re-registration returns the same rule
+instead of a duplicate). An ingest post may carry attachments with base64
+`content`; the bytes are stored and every download is scoped to the reader's
+group.
 
 ## Monitoring
 

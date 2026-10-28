@@ -20,18 +20,26 @@ const LABELS: Record<SignupStage, string> = {
   details: 'Details',
 };
 
-export default function SignupProgress({ current }: { current: SignupStage }) {
-  const activeIndex = ORDER.indexOf(current);
+export default function SignupProgress({
+  current,
+  faculty = false,
+}: {
+  current: SignupStage;
+  /** Faculty signup skips the programme step: Email -> Code -> Details. */
+  faculty?: boolean;
+}) {
+  const steps: SignupStage[] = faculty ? ORDER.filter(stage => stage !== 'programme') : ORDER;
+  const activeIndex = steps.indexOf(current);
   return (
     <ol className="flex items-center gap-2 text-xs" aria-label="Signup progress">
-      {ORDER.map((stage, index) => (
+      {steps.map((stage, index) => (
         <Step
           key={stage}
           n={index + 1}
           label={LABELS[stage]}
           done={index < activeIndex}
           active={index === activeIndex}
-          last={index === ORDER.length - 1}
+          last={index === steps.length - 1}
         />
       ))}
     </ol>

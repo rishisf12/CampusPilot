@@ -13,7 +13,7 @@ export default function Logo({ collapsed = false }: { collapsed?: boolean }) {
             className="text-[10px] tracking-widest font-semibold"
             style={{ color: 'var(--cp-muted)' }}
           >
-            YOUR CAMPUS ASSISTANT
+            IIITDMJ's CAMPUS ASSISTANT
           </p>
         </div>
       )}

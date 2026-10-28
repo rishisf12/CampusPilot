@@ -38,11 +38,17 @@ export function Sidebar({ onClose, isOpen, onSectionChange }: SidebarProps) {
         <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} aria-hidden="true" />
       )}
       <aside
-        className={`neu-raised fixed top-0 right-0 h-full w-80 z-50 transition-transform duration-200 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full w-80 z-50 transition-transform duration-200 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
         role="dialog"
         aria-label="User menu"
         aria-modal="true"
-        style={{ borderRadius: '24px 0 0 24px' }}
+        style={{
+          borderRadius: '24px 0 0 24px',
+          /* Main background colour, flat — not the dotted wall, not the card surface. */
+          background: 'var(--cp-bg)',
+          boxShadow: 'var(--cp-neu-raised)',
+          border: '1px solid rgba(148,163,184,.25)',
+        }}
       >
         <div className="p-4" style={{ borderBottom: '1px solid rgba(163,177,198,.25)' }}>
           <div className="flex items-center gap-3">
@@ -63,7 +69,24 @@ export function Sidebar({ onClose, isOpen, onSectionChange }: SidebarProps) {
               </p>
             </div>
           </div>
-          {!isAdmin && (
+          {isAdmin ? (
+            <div className="mt-3">
+              <Badge tone="primary">Admin</Badge>
+            </div>
+          ) : user?.role === 'faculty' ? (
+            // Faculty carry a department, not a programme/semester cohort.
+            <div className="mt-4">
+              <p
+                className="text-[10px] uppercase tracking-wide mb-1"
+                style={{ color: 'var(--cp-muted)' }}
+              >
+                Department
+              </p>
+              <p className="text-sm font-semibold truncate" style={{ color: 'var(--cp-text)' }}>
+                {branch || '—'}
+              </p>
+            </div>
+          ) : (
             <div className="mt-4 grid grid-cols-3 gap-2">
               {(
                 [
@@ -84,11 +107,6 @@ export function Sidebar({ onClose, isOpen, onSectionChange }: SidebarProps) {
                   </p>
                 </div>
               ))}
-            </div>
-          )}
-          {isAdmin && (
-            <div className="mt-3">
-              <Badge tone="primary">Admin</Badge>
             </div>
           )}
         </div>

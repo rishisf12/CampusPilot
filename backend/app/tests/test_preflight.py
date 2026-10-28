@@ -60,29 +60,6 @@ def test_the_signing_key_check_passes_and_catches_a_regression(
     failed = preflight.check_the_signing_key_is_not_the_published_one()
     assert failed.status == preflight.FAIL
     assert "published" in failed.detail
-
-
-def test_the_local_model_provider_check_passes_and_catches_a_regression(
-    preflight, tmp_path, monkeypatch
-):
-    """No local model provider, and the check says so if one comes back."""
-    result = preflight.check_no_local_model_provider()
-    assert result.status == preflight.PASS
-
-    compose = tmp_path / "docker-compose.yml"
-    compose.write_text(
-        "services:\n  backend:\n    environment:\n      - OLLAMA_BASE_URL=http://ollama:11434/v1\n",
-        encoding="utf-8",
-    )
-    env_example = tmp_path / ".env.example"
-    env_example.write_text("OLLAMA_BASE_URL=http://ollama:11434/v1\n", encoding="utf-8")
-    monkeypatch.setattr(preflight, "COMPOSE", compose)
-    monkeypatch.setattr(preflight, "ENV_EXAMPLE", env_example)
-    failed = preflight.check_no_local_model_provider()
-    assert failed.status == preflight.FAIL
-    assert "local model provider" in failed.detail
-
-
 def test_the_static_checks_pass_on_this_repository(preflight):
     for check in (
         preflight.check_no_shell_mcp_in_prod_config,

@@ -46,7 +46,19 @@
      own: a second gradient under a gradient is noise, and the cards need
      a quiet ground to sit on. */
   --cp-bg: #e9f1ef;
-  --cp-surface: #fbfdfc;
+  /* The app wall (post-sign-in pages): flat mint-teal plus the blueprint dot
+     grid from the sign-in screen. A background shorthand value — dot layers
+     first, the flat colour last — so shells that paint
+     `background: var(--cp-wall)` stay opaque (cards, inputs, modals never see
+     dots through them). The sign-in screens keep their own backdrop instead:
+     --cp-bg plus the 45° corner washes in .cp-tech-bg. */
+  --cp-wall:
+    radial-gradient(circle at 1px 1px, rgba(15, 118, 110, 0.32) 1.4px, transparent 0) 0 0 / 24px
+      24px,
+    radial-gradient(circle at 1px 1px, rgba(15, 118, 110, 0.16) 1px, transparent 0) 12px 12px / 96px
+      96px,
+    #d9e8e3;
+  --cp-surface: #f0f6f4;
   /* The chrome: the bright band the header and footer wear. Saturated
      enough to be the one place the app is allowed to shout, and dark
      enough that white text sits on it comfortably. */
@@ -85,9 +97,18 @@
 
 .dark {
   --cp-bg: #141a1c;
+  /* Dark wall: same flat ground with the grid at a whisper so it reads as
+     texture, not noise, on the dark page. */
+  --cp-wall:
+    radial-gradient(circle at 1px 1px, rgba(45, 212, 191, 0.07) 1.4px, transparent 0) 0 0 / 24px
+      24px,
+    radial-gradient(circle at 1px 1px, rgba(45, 212, 191, 0.04) 1px, transparent 0) 12px 12px / 96px
+      96px,
+    #141a1c;
   --cp-surface: #1d2229;
-  /* The same band, a shade deeper so it does not glare on a dark page. */
-  --cp-chrome: linear-gradient(90deg, #0b5e56 0%, #0f766e 45%, #0d9488 100%);
+  /* Darkest chrome: sits just a hair above the page background (#141a1c) —
+     a faint teal cast instead of a lit band. */
+  --cp-chrome: linear-gradient(90deg, #0f1a18 0%, #112220 45%, #132925 100%);
   --cp-chrome-text: #ffffff;
   --cp-chrome-muted: rgba(255, 255, 255, 0.78);
   --cp-text: #e5e7eb;
@@ -124,13 +145,14 @@ body,
   margin: 0;
   padding: 0;
   min-height: 100%;
+  overflow-x: hidden;
 }
 
 body {
   background-color: var(--cp-bg);
   color: var(--cp-text);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
@@ -179,6 +201,7 @@ body {
 .cp-auth-root {
   position: relative;
   isolation: isolate;
+  /* Sign-in screens keep their own backdrop: pale wall + corner washes + grid. */
   background: var(--cp-bg);
   overflow: hidden;
 }
@@ -193,13 +216,17 @@ body {
 }
 
 /* Blueprint dots, 24px apart. Two offset layers make it read as a grid rather
-   than a single dot screen. */
+   than a single dot screen. Stacked ABOVE the corner washes (z-index) so the
+   dots stay readable over the dark gradient, and the alpha is high enough to
+   hold up on both the light page and the wash (#0f766e reads lighter than
+   #042f2e, so dots show as bright specks there too). */
 .cp-tech-grid {
   position: absolute;
   inset: -10%;
+  z-index: 1;
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(15, 118, 110, 0.11) 1px, transparent 0),
-    radial-gradient(circle at 1px 1px, rgba(15, 118, 110, 0.06) 1px, transparent 0);
+    radial-gradient(circle at 1px 1px, rgba(15, 118, 110, 0.5) 1.4px, transparent 0),
+    radial-gradient(circle at 1px 1px, rgba(15, 118, 110, 0.3) 1px, transparent 0);
   background-size:
     24px 24px,
     96px 96px;
@@ -208,30 +235,45 @@ body {
     12px 12px;
 }
 
-/* Blurred teal blobs. Only transform and opacity are animated, so they stay on
-   the compositor and cause no layout work. Durations are deliberately different
-   and mutually prime-ish so the loop never visibly repeats. */
+/* Corner wash layer for a/b above (static 45° gradients). blob-c remains a
+   blurred drifting accent. */
 .cp-blob {
   position: absolute;
   border-radius: 9999px;
   filter: blur(70px);
   will-change: transform;
 }
+/* Two 45° diagonal washes from the top corners (135deg flows top-left →
+   bottom-right, 225deg top-right → bottom-left), meeting over the header —
+   the darkest shade of the same teal ramp. Static by design: the V reads
+   best when its edges don't drift. blob-c keeps its amber drift below. */
 .cp-blob-a {
-  width: 34rem;
-  height: 34rem;
-  top: -12rem;
-  left: -8rem;
-  background: radial-gradient(circle, rgba(45, 212, 191, 0.2), transparent 68%);
-  animation: cp-drift-a 26s ease-in-out infinite;
+  inset: 0;
+  border-radius: 0;
+  filter: none;
+  animation: none;
+  will-change: auto;
+  background: linear-gradient(
+    135deg,
+    rgba(4, 47, 46, 0.97) 0%,
+    rgba(4, 47, 46, 0.72) 24%,
+    rgba(13, 148, 136, 0.35) 47%,
+    transparent 68%
+  );
 }
 .cp-blob-b {
-  width: 28rem;
-  height: 28rem;
-  bottom: -10rem;
-  right: -6rem;
-  background: radial-gradient(circle, rgba(15, 118, 110, 0.16), transparent 68%);
-  animation: cp-drift-b 32s ease-in-out infinite;
+  inset: 0;
+  border-radius: 0;
+  filter: none;
+  animation: none;
+  will-change: auto;
+  background: linear-gradient(
+    225deg,
+    rgba(4, 47, 46, 0.97) 0%,
+    rgba(4, 47, 46, 0.72) 24%,
+    rgba(13, 148, 136, 0.35) 47%,
+    transparent 68%
+  );
 }
 .cp-blob-c {
   width: 22rem;
@@ -242,24 +284,29 @@ body {
   animation: cp-drift-c 38s ease-in-out infinite;
 }
 
-@keyframes cp-drift-a {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
+/* On phones two full-screen 45° bands collapse into hard-edged diagonal slabs
+   (narrow width, tall aspect). Swap to elliptical glows anchored at each top
+   corner: same darkest teal, smooth falloff, no seam — the corner-V reading
+   survives without the slab edges. */
+@media (max-width: 767px) {
+  .cp-blob-a {
+    background: radial-gradient(
+      140% 100% at 0% 0%,
+      rgba(4, 47, 46, 0.97) 0%,
+      rgba(13, 148, 136, 0.5) 26%,
+      transparent 60%
+    );
   }
-  50% {
-    transform: translate3d(6rem, 4rem, 0) scale(1.12);
+  .cp-blob-b {
+    background: radial-gradient(
+      140% 100% at 100% 0%,
+      rgba(4, 47, 46, 0.97) 0%,
+      rgba(13, 148, 136, 0.5) 26%,
+      transparent 60%
+    );
   }
 }
-@keyframes cp-drift-b {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1.05);
-  }
-  50% {
-    transform: translate3d(-5rem, -3rem, 0) scale(0.94);
-  }
-}
+
 @keyframes cp-drift-c {
   0%,
   100% {
@@ -550,7 +597,17 @@ body {
 /* -- Card ---------------------------------------------------------------- */
 
 .cp-card {
-  background: var(--cp-surface);
+  /* Bottom-to-top teal gradient over the opaque surface: medium tint at the
+     base easing to near-white at the top. Layered ON the surface (not replacing
+     it) so the card stays opaque and the page dots never bleed through. */
+  background:
+    linear-gradient(
+      to top,
+      rgba(13, 148, 136, 0.3) 0%,
+      rgba(13, 148, 136, 0.12) 45%,
+      rgba(13, 148, 136, 0.04) 100%
+    ),
+    var(--cp-surface);
   border: 1px solid rgba(15, 118, 110, 0.14);
   border-radius: 1.25rem;
   padding: 1.75rem;
@@ -1057,16 +1114,8 @@ body {
     letter-spacing: 0.22em;
     text-indent: 0.22em;
   }
-  /* Blobs are a fixed rem size, so on a narrow viewport they would cover most
-     of the screen. Shrinking them keeps the backdrop a backdrop. */
-  .cp-blob-a {
-    width: 20rem;
-    height: 20rem;
-  }
-  .cp-blob-b {
-    width: 17rem;
-    height: 17rem;
-  }
+  /* a/b are full-bleed 45° washes (inset: 0); blob-c is still a blurred blob,
+     so it keeps its phone clamp. */
   .cp-blob-c {
     width: 13rem;
     height: 13rem;

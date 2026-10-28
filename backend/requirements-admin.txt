@@ -1,0 +1,30 @@
+# Admin backend dependencies — OppFeed agent + LLM features only
+# Install on top of backend/requirements.txt:
+#   pip install -r backend/requirements.txt
+#   pip install -r backend/requirements-admin.txt
+
+# --- OppFeed Agent dependencies -----------------------------------------------
+# APScheduler for daily agent job scheduling
+apscheduler
+# LangGraph/LangChain for agent pipeline
+langgraph
+langchain-core
+langchain-community
+# OpenAI-compatible LLM clients
+openai
+# DuckDuckGo search
+duckduckgo-search
+# BeautifulSoup for HTML parsing
+beautifulsoup4
+# lxml for fast parsing
+lxml[html_clean]
+# lxml.html.clean moved to its own distribution in lxml 5.x.
+lxml_html_clean
+# trafilatura for article extraction
+trafilatura
+# Playwright for browser-based fetching (PlaywrightFetcher)
+playwright
+# robotstxt for robots.txt parsing
+robotstxt
+# Rate limiting for LLM providers
+aiolimiter

@@ -104,7 +104,7 @@ export function AdminRoutes() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--cp-bg)' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--cp-wall)' }}>
       {/* Single static header, flush at the top, never scrolls away */}
       <header
         className="sticky top-0 z-40"
@@ -126,7 +126,7 @@ export function AdminRoutes() {
                   className="text-[10px] tracking-widest font-semibold whitespace-nowrap"
                   style={{ color: 'var(--cp-chrome-muted)' }}
                 >
-                  YOUR CAMPUS ASSISTANT
+                  IIITDMJ's CAMPUS ASSISTANT
                 </p>
               </div>
             </div>

@@ -198,6 +198,7 @@ from features.rooms import routes as rooms
 from features.exam import routes as exam
 from features.auth import routes as auth
 from features.feedback import routes as feedback
+from features.task import routes as task_routes
 from features.monitoring.api.routes import collect_router, monitoring_router
 from features.admin import routes as admin_routes
 from features.audit import routes as audit_routes
@@ -214,7 +215,6 @@ from features.force_update import routes as force_update_routes
 from features.security import routes as security_routes
 from ocr import routes as ocr_routes
 from features.settings import routes as settings_routes
-from features.oppfeed.api import router as oppfeed_router
 from features.mail.routes import router as mail_router
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
@@ -227,11 +227,14 @@ from features.profile import admin_routes as profile_admin  # noqa: E402
 
 app.include_router(profile_admin.router, prefix="/profile", tags=["Profile"])
 app.include_router(settings_routes.router, tags=["Settings"])
-app.include_router(oppfeed_router, tags=["OppFeed"])
+if settings.enable_agent:
+    from features.oppfeed.api import router as oppfeed_router
+    app.include_router(oppfeed_router, tags=["OppFeed"])
 app.include_router(mail_router, tags=["Mail"])
 app.include_router(rooms.router, prefix="/rooms", tags=["Rooms"])
 app.include_router(exam.router, prefix="/exam", tags=["Exam"])
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
+app.include_router(task_routes.router, prefix="/tasks", tags=["Task"])
 app.include_router(ocr_routes.router, prefix="/ocr", tags=["OCR Extraction"])
 app.include_router(admin_routes.router, prefix="/admin", tags=["Admin"])
 # The feature routers below already declare their own "/admin/..." prefix

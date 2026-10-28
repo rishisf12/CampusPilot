@@ -30,13 +30,20 @@ export interface SignupRequest {
   first_name: string;
   last_name: string;
   gender: string;
-  programme: string;
-  semester: number;
-  branch: string;
+  /** "student" (default) or "faculty". Faculty accounts skip the cohort fields. */
+  role?: 'student' | 'faculty';
+  programme?: string;
+  semester?: number;
+  /** The student's branch. Faculty accounts carry no branch. */
+  branch?: string;
+  /** Faculty only: the exact name notation shown in the timetable, e.g. ARR. */
+  timetable_notation?: string;
+  /** Faculty only: Professor, Associate Professor or Assistant Professor. */
+  designation?: string;
   /** The year the student joined, e.g. 2024 - the batch they belong to. */
   batch_year?: number;
   username: string;
-  roll_number: string;
+  roll_number?: string;
   whatsapp: string;
   email: string;
   password: string;
@@ -446,6 +453,35 @@ export interface FeedbackReply {
   message: string;
   created_at: string;
   is_admin: boolean;
+}
+
+/** Task types — mirror the /tasks endpoints (24-hour tracker). */
+export type TaskStatus = 'active' | 'expired' | 'completed';
+
+export interface TaskItem {
+  id: number;
+  title: string;
+  remind_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  expires_at?: string | null;
+  status: TaskStatus;
+}
+
+export interface TaskListResponse {
+  tasks: TaskItem[];
+  /** Server clock at read time; the client uses it to correct its own. */
+  server_now: string;
+}
+
+export interface TaskCreatePayload {
+  title: string;
+  remind_at?: string | null;
+}
+
+export interface TaskEditPayload {
+  title?: string;
+  remind_at?: string | null;
 }
 
 /** Teams types — mirror TeamOut / TeamDetailOut / MatchOut in the backend. */

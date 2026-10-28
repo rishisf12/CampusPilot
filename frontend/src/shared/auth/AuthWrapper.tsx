@@ -89,6 +89,9 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
   // and, once signed in, the whole app. Held in state, not storage: a reload
   // re-asks rather than trusting a value the page no longer holds.
   const [signupGroup, setSignupGroup] = useState<ProgrammeGroup | null>(null);
+  // "student" or "faculty". Faculty skip the programme step and get a
+  // department field instead of the cohort fields in the details form.
+  const [signupRole, setSignupRole] = useState<'student' | 'faculty'>('student');
   // Set after a password sign-in on an account with no passkey, to offer one.
   const [offerPasskey, setOfferPasskey] = useState(false);
 
@@ -239,7 +242,16 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
     if (screen === 'start') {
       return (
         <StartScreen
-          onChooseStudent={() => setScreen('signup-programme')}
+          onChooseStudent={() => {
+            setSignupRole('student');
+            setScreen('signup-programme');
+          }}
+          onChooseFaculty={() => {
+            // Faculty skip the programme step: their form asks for a
+            // department, not a cohort.
+            setSignupRole('faculty');
+            setScreen('signup-email');
+          }}
           onChooseAdmin={() => setScreen('admin-login')}
           onSignIn={() => setScreen('login')}
         />
@@ -274,6 +286,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
           offline={offline}
           programmeGroup={signupGroup}
           onChangeProgramme={signupGroup ? () => setScreen('signup-programme') : undefined}
+          faculty={signupRole === 'faculty'}
           onBack={() => setScreen('login')}
           onVerified={email => {
             // Proof of the address, so the details step below can create the
@@ -290,6 +303,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
       return (
         <SignupForm
           verifiedEmail={verifiedEmail}
+          signupRole={signupRole}
           // The details step always follows a programme choice; 'UG' is only a
           // defensive fallback for a reload that somehow lands here directly.
           programmeGroup={signupGroup || 'UG'}
@@ -299,6 +313,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
             setEmailJustVerified();
             setVerifiedEmail('');
             setSignupGroup(null);
+            setSignupRole('student');
             setScreen('login');
           }}
           onStartOver={() => {
@@ -306,6 +321,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
             // Back to the very beginning: a new email may belong to someone in
             // a different programme, so the group is re-asked too.
             setSignupGroup(null);
+            setSignupRole('student');
             setScreen('signup-programme');
           }}
         />

@@ -64,6 +64,13 @@ export const PROGRAMME_BRANCHES: Record<Programme, readonly BranchOption[]> = {
 
 export const GENDERS = ['Male', 'Female', 'Other'] as const;
 
+/** Faculty designations, as used on the rolls. Signup asks faculty to pick one. */
+export const FACULTY_DESIGNATIONS = [
+  'Professor',
+  'Associate Professor',
+  'Assistant Professor',
+] as const;
+
 /**
  * How long the "Resend Code" button stays disabled after a signup or a resend.
  *

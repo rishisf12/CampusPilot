@@ -5,6 +5,7 @@ export default function Modal({
   onClose,
   children,
   sheet = false,
+  wide = false,
 }: {
   title: string;
   onClose: () => void;
@@ -14,6 +15,8 @@ export default function Modal({
    * existing centered usages (passkeys, attendance) are untouched.
    */
   sheet?: boolean;
+  /** Wide dialog (max-w-4xl) for side-by-side content like the uploads row. */
+  wide?: boolean;
 }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -30,7 +33,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`neu-raised w-full p-6 ${sheet ? 'max-w-lg rounded-b-none animate-slide-down sm:rounded-[1rem]' : 'max-w-lg'}`}
+        className={`neu-raised w-full p-6 ${sheet ? 'max-w-lg rounded-b-none animate-slide-down sm:rounded-[1rem]' : wide ? 'max-w-4xl' : 'max-w-lg'}`}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">

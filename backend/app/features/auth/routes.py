@@ -14,7 +14,7 @@ import random
 
 from core.database import get_session
 from models import User, UserProfile
-from core.config import get_settings, PROGRAMME_SEMESTERS
+from core.config import get_settings, PROGRAMME_SEMESTERS, FACULTY_DESIGNATIONS
 from core.deps import get_current_user
 from features.auth import passkeys as passkey_service, password_reset as password_reset_service, signup as signup_verification_service
 from features.monitoring import collector as monitoring_collector
@@ -33,25 +33,45 @@ class SignupRequest(BaseModel):
     first_name: str
     last_name: str
     gender: str
+    #: Faculty only: where they sit on the rolls (Professor, Associate
+    #: Professor or Assistant Professor). Students have none.
+    designation: Optional[str] = None
+    #: "student" (the default) or "faculty". Admin is never creatable here -
+    #: that grant stays with scripts/admin/make_admin.py.
+    role: str = "student"
     #: One of the known programmes. The frontend asks for the programme group
     #: first and narrows this list, but the server stays the arbiter: a stale
     #: or hand-crafted payload must not store a programme nobody can use.
-    programme: str
-    semester: int
-    branch: str
+    #: Faculty accounts carry only a department, so this is optional for them.
+    programme: Optional[str] = None
+    #: Students only. Faculty have no semester.
+    semester: Optional[int] = None
+    #: The student's branch. Faculty accounts carry no branch/department.
+    branch: Optional[str] = None
+    #: Faculty only: the exact name notation shown in the timetable, e.g. ARR.
+    timetable_notation: Optional[str] = None
     #: The year the student joined, e.g. 2024 - the batch they belong to.
     #: The roll number carries it ("24BCS125" -> 2024), but the roll is a
     #: label and the batch year is the fact, so it is asked for and stored.
     batch_year: Optional[int] = None
     username: str
-    roll_number: str
+    roll_number: Optional[str] = None
     whatsapp: Optional[str] = None
     email: EmailStr
     password: str
 
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v not in ("student", "faculty"):
+            raise ValueError("Role must be student or faculty")
+        return v
+
     @field_validator("programme")
     @classmethod
-    def validate_programme(cls, v: str) -> str:
+    def validate_programme(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
         allowed = list(PROGRAMME_SEMESTERS)
         if v not in allowed:
             raise ValueError(f"Programme must be one of: {', '.join(allowed)}")
@@ -71,10 +91,55 @@ class SignupRequest(BaseModel):
         return v
 
     @model_validator(mode="after")
+    def validate_fields_fit_role(self):
+        if self.role == "student":
+            # A student profile is meaningless without its cohort fields.
+            missing = [
+                name
+                for name in ("programme", "semester", "branch", "roll_number")
+                if getattr(self, name) in (None, "")
+            ]
+            if missing:
+                raise ValueError(
+                    f"Student signup requires: {', '.join(missing)}"
+                )
+        else:
+            # A faculty account carries no academic cohort fields.
+            sent = [
+                name
+                for name, value in (
+                    ("programme", self.programme),
+                    ("semester", self.semester),
+                    ("roll_number", self.roll_number),
+                    ("batch_year", self.batch_year),
+                )
+                if value not in (None, "")
+            ]
+            if sent:
+                raise ValueError(
+                    "Faculty signup must not include: " + ", ".join(sent)
+                )
+            # The notation the timetable shows this member under, e.g. ARR.
+            if not self.timetable_notation:
+                raise ValueError("Timetable notation is required for faculty signup")
+            self.timetable_notation = self.timetable_notation.strip().upper()
+            # The designation must be one the rolls actually use.
+            if not self.designation:
+                raise ValueError("Designation is required for faculty signup")
+            self.designation = self.designation.strip()
+            if self.designation not in FACULTY_DESIGNATIONS:
+                raise ValueError(
+                    "Designation must be one of: " + ", ".join(FACULTY_DESIGNATIONS)
+                )
+        return self
+
+    @model_validator(mode="after")
     def validate_semester_fits_programme(self):
+        if self.semester is None:
+            return self
         # Each programme has its own length (BTech 8, MTech 4, PhD 2...), so a
         # semester outside that range means the pair is wrong, not just odd.
-        max_semesters = PROGRAMME_SEMESTERS.get(self.programme)
+        max_semesters = PROGRAMME_SEMESTERS.get(self.programme or "")
         if max_semesters and not (1 <= self.semester <= max_semesters):
             raise ValueError(
                 f"Semester must be between 1 and {max_semesters} for {self.programme}"
@@ -387,12 +452,14 @@ async def signup(data: SignupRequest, session: Session = Depends(get_session), r
         password_hash=password_hash,
         full_name=f"{data.first_name} {data.last_name}",
         username=data.username,
-        roll_number=data.roll_number.upper(),
+        # A faculty member has no roll number; the column stays empty.
+        roll_number=data.roll_number.upper() if data.roll_number else None,
         # Already proven by /signup/verify - see the gate at the top of this route.
         is_email_verified=True,
-        # Students can only ever create student accounts; admin is granted by
-        # tools/make_admin.py, never by signup.
-        role="student",
+        # "student" or "faculty" - the request validator refuses anything else.
+        # Admin is still never creatable here; that grant stays with
+        # scripts/admin/make_admin.py.
+        role=data.role,
         created_at=now,
         updated_at=now,
     )
@@ -400,16 +467,20 @@ async def signup(data: SignupRequest, session: Session = Depends(get_session), r
     session.commit()
     session.refresh(user)
 
-    # Create profile
+    # Create profile. Faculty accounts skip the cohort fields: no programme, no
+    # semester (the column keeps its default), no batch year. They carry the
+    # notation their name shows under in the timetable, e.g. "ARR".
     profile = UserProfile(
         user_id=user.id,
         first_name=data.first_name,
         last_name=data.last_name,
         gender=data.gender,
+        designation=(data.designation or "").strip() or None,
         phone=data.whatsapp,
         programme=data.programme,
-        semester=data.semester,
+        semester=data.semester if data.semester is not None else 1,
         branch=data.branch,
+        timetable_notation=(data.timetable_notation or "").strip() or None,
         batch_year=data.batch_year,
         elective_codes=[],
     )

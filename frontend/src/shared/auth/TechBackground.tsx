@@ -1,19 +1,9 @@
 /**
- * The blueprint backdrop every auth page sits on.
+ * Fixed backdrop behind the sign-in screens: the blueprint dot grid plus the
+ * two 45° corner washes (see .cp-tech-* and .cp-blob-* in index.css).
  *
- * Three layers, cheapest first, all decorative:
- *
- *   1. a faint dot grid, so the page reads as graph paper rather than blank
- *   2. slowly drifting blurred teal blobs, which give the flat area some depth
- *   3. nothing else - no content here, ever
- *
- * Fixed and aria-hidden so it never intercepts clicks or reaches a screen
- * reader. The drift is CSS-only (`cp-drift-*` in index.css) so it stays on the
- * compositor and costs nothing per frame.
- *
- * The OS asking for reduced motion disables the drift and the shimmer. That is
- * handled by the global reduced-motion rule rather than here, so there is one
- * place that decides.
+ * Fixed, not absolute, so the washes sit behind the scrolling content instead
+ * of sliding with it; z-index -1 keeps it under the auth cards.
  */
 export default function TechBackground() {
   return (

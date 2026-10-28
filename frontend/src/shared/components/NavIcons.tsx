@@ -2,6 +2,7 @@
   Activity,
   AlertCircle,
   CalendarDays,
+  ListTodo,
   MessageSquare,
   Settings as SettingsIcon,
   UserCog,
@@ -17,6 +18,9 @@ export const SECTION_ICONS = {
   ),
   feedback: ({ className = 'w-5 h-5' }: { className?: string }) => (
     <MessageSquare className={className} strokeWidth={2} aria-hidden />
+  ),
+  task: ({ className = 'w-5 h-5' }: { className?: string }) => (
+    <ListTodo className={className} strokeWidth={2} aria-hidden />
   ),
   profile: ({ className = 'w-5 h-5' }: { className?: string }) => (
     <UserCog className={className} strokeWidth={2} aria-hidden />
@@ -37,6 +41,7 @@ export const SECTION_LABELS: Record<string, string> = {
   'my-team': 'Collaborations',
   important: 'Important',
   feedback: 'Feedback',
+  task: 'Task',
   profile: 'Profile',
   settings: 'Settings',
 };

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Trash2, Users } from 'lucide-react';
 import { Badge, Button, Card, Modal, Tabs } from '@/components/ui';
 import { scheduleApi, timetableApi } from '@/api';
-import { DAYS, GROUP_CLASSROOM_TABS, programmeGroupOf } from '@shared/constants';
+import { DAYS } from '@shared/constants';
 import {
   formatTime as formatClock,
   istNow,
@@ -25,6 +25,7 @@ import type { ScheduleClass, TimetableSlot } from '@shared/types/api';
 const SUB_TABS = [
   { id: 'schedule', label: 'Schedule' },
   { id: 'timetable', label: 'Timetable' },
+  { id: 'upload', label: 'Upload' },
 ] as const;
 
 const formatTime = formatClock;
@@ -63,8 +64,6 @@ import { useSettings } from '@shared/features/settings/SettingsProvider';
 
 interface LiveScheduleProps {
   onError?: (message: string) => void;
-  /** Jump to a classroom-level tab (used by the home quick actions). */
-  onJumpTab?: (id: string) => void;
 }
 
 interface ScheduleNow {
@@ -77,15 +76,14 @@ interface ProfileCourseLike extends TimetableSlot {
   is_opted_in: boolean;
 }
 
-export default function LiveSchedule({ onError, onJumpTab }: LiveScheduleProps) {
+export default function LiveSchedule({ onError }: LiveScheduleProps) {
   const [subTab, setSubTab] = useState('schedule');
   const [schedule, setSchedule] = useState<ScheduleNow | null>(null);
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const profileVersion = useProfileVersion();
-  const { semester, optedInCodes, programme } = useProfile();
-  const group = programmeGroupOf(programme);
+  const { semester, optedInCodes } = useProfile();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -216,19 +214,19 @@ export default function LiveSchedule({ onError, onJumpTab }: LiveScheduleProps) 
           courseLabel={courseLabel}
           hasTimetable={slots.length > 0}
           myClasses={myClasses}
-          onJumpTab={onJumpTab}
-          showAttendanceAction={GROUP_CLASSROOM_TABS[group].includes('attendance')}
-          showVacantAction={GROUP_CLASSROOM_TABS[group].includes('vacant')}
         />
       )}
 
       {subTab === 'timetable' && (
         <TimetableView
           slots={myClasses}
-          onChanged={load}
           totalSlots={slots.length}
           hiddenElectives={hiddenElectives}
         />
+      )}
+
+      {subTab === 'upload' && (
+        <UploadView slots={myClasses} onChanged={load} totalSlots={slots.length} />
       )}
     </div>
   );
@@ -247,9 +245,6 @@ interface ScheduleViewProps {
   courseLabel: (item: CourseLike) => string;
   hasTimetable: boolean;
   myClasses: ProfileCourseLike[];
-  onJumpTab?: (id: string) => void;
-  showAttendanceAction: boolean;
-  showVacantAction: boolean;
 }
 
 function ScheduleView({
@@ -261,9 +256,6 @@ function ScheduleView({
   courseLabel,
   hasTimetable,
   myClasses,
-  onJumpTab,
-  showAttendanceAction,
-  showVacantAction,
 }: ScheduleViewProps) {
   const today = todayWeekday();
 
@@ -309,9 +301,6 @@ function ScheduleView({
         nextClasses={nextList}
         todayRemaining={todayRemaining}
         courseLabel={courseLabel}
-        onJumpTab={onJumpTab ?? (() => {})}
-        showAttendanceAction={showAttendanceAction}
-        showVacantAction={showVacantAction}
       />
 
       {sameTimeSlot.length > 0 && (
@@ -349,32 +338,17 @@ function ScheduleView({
 /* Timetable upload                                                     */
 /* ------------------------------------------------------------------ */
 
-interface TimetableViewProps {
+interface UploadViewProps {
   slots: ProfileCourseLike[];
   onChanged?: () => void;
   totalSlots?: number;
-  hiddenElectives?: string[];
 }
 
-function TimetableView({ slots, onChanged, totalSlots, hiddenElectives = [] }: TimetableViewProps) {
+/** Upload tab: upload the master timetable and manage what is loaded. */
+function UploadView({ slots, onChanged, totalSlots }: UploadViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  // Which weekdays this timetable actually has, so the filter offers only those.
-  const availableDays = useMemo(() => {
-    const present = new Set((slots || []).map(slot => slot.day));
-    return DAYS.filter(name => present.has(name));
-  }, [slots]);
-
-  // Live day selection: defaults to today (IST), weekends -> "all",
-  // updates automatically when the day rolls over.
-  const { day, onSelect } = useLiveDay(availableDays as string[]);
-
-  const visibleSlots = useMemo(
-    () => (day === 'all' ? slots : (slots || []).filter(slot => slot.day === day)),
-    [slots, day]
-  );
 
   // Stable identities, so UploadPreview does not re-fetch on every render.
   const fetchTimetableUpload = useCallback(() => timetableApi.latestUpload(), []);
@@ -459,7 +433,35 @@ function TimetableView({ slots, onChanged, totalSlots, hiddenElectives = [] }: T
           </Button>
         </Card>
       </div>
+    </div>
+  );
+}
 
+interface TimetableViewProps {
+  slots: ProfileCourseLike[];
+  onChanged?: () => void;
+  totalSlots?: number;
+  hiddenElectives?: string[];
+}
+
+function TimetableView({ slots, totalSlots, hiddenElectives = [] }: TimetableViewProps) {
+  // Which weekdays this timetable actually has, so the filter offers only those.
+  const availableDays = useMemo(() => {
+    const present = new Set((slots || []).map(slot => slot.day));
+    return DAYS.filter(name => present.has(name));
+  }, [slots]);
+
+  // Live day selection: defaults to today (IST), weekends -> "all",
+  // updates automatically when the day rolls over.
+  const { day, onSelect } = useLiveDay(availableDays as string[]);
+
+  const visibleSlots = useMemo(
+    () => (day === 'all' ? slots : (slots || []).filter(slot => slot.day === day)),
+    [slots, day]
+  );
+
+  return (
+    <div className="space-y-4">
       {hiddenElectives.length > 0 && (
         <div
           className="p-3 rounded-lg border text-xs"

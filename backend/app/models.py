@@ -26,6 +26,7 @@ class AttendanceStatus(str, Enum):
 
 class UserRole(str, Enum):
     STUDENT = "student"
+    FACULTY = "faculty"
     ADMIN = "admin"
 
 
@@ -385,6 +386,12 @@ class UserProfile(SQLModel, table=True):
     #: faculty": the role column alone cannot, because an account only ever
     #: carries "admin" or "student".
     is_faculty: bool = False
+    #: Faculty only: where they sit on the rolls - Professor, Associate
+    #: Professor or Assistant Professor. Students have none.
+    designation: Optional[str] = None
+    #: Faculty only: the exact name notation this member appears under in the
+    #: published timetable, e.g. "ARR". Students have none.
+    timetable_notation: Optional[str] = None
     #: A class representative: a student who represents their class. The
     #: class is the batch, the branch and the semester, so those are what the
     #: admin filters on to find the CRs of a class.
@@ -982,3 +989,38 @@ class SecurityFeed(SQLModel, table=True):
     description: Optional[str] = Field(default=None, sa_column=Column(postgresql.TEXT))
     created_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
     updated_at: datetime = Field(default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()))
+
+
+class Task(SQLModel, table=True):
+    """A student's short-lived task.
+
+    A task is alive for one day: for the first 24 hours it can be edited and
+    marked complete, after that it only shows as expired, and 48 hours after
+    creation the row is purged (the list read sweeps it away). The optional
+    alarm - remind_at - may only point into the upcoming 24 hours, because a
+    tracker this short-lived has no use for a next-week reminder.
+    """
+
+    __tablename__ = "task"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="core.user.id", index=True)
+    title: str = Field(max_length=200)
+    #: The alarm instant, if the student set one. Always inside 24h ahead.
+    remind_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=True)
+    )
+    #: Set the moment the student ticks it done; a completed task is final.
+    completed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=True)
+    )
+    #: Creation instant. 24h later the task expires, 48h later it is deleted.
+    created_at: datetime = Field(
+        default=None,
+        sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
+    #: created_at + 24h, frozen at insert so expiry never drifts.
+    expires_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(postgresql.TIMESTAMP(timezone=True), nullable=True)
+    )

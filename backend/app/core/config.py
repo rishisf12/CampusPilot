@@ -144,6 +144,12 @@ class Settings(BaseSettings):
     #: (`mcp.api.panels._llm_configured`) instead of reading this flag.
     scan_llm_enabled: bool = Field(default=False, alias="SCAN_LLM_ENABLED")
 
+    #: Enable the OppFeed agent pipeline (discovery/verification). Admin-only
+    #: surface: students never touch this. Requires LLM provider keys
+    #: (OPENROUTER_API_KEY / NVIDIA_NIM_API_KEY / GROQ_API_KEY) when true.
+    #: Off by default so a fresh student backend never pulls LLM deps.
+    enable_agent: bool = Field(default=False, alias="ENABLE_AGENT")
+
     #: Verify Play Store receipts. Off by default: it needs the Google Play
     #: Developer API credentials, and until then every purchase is honestly
     #: labelled unverified rather than quietly assumed good.
@@ -421,6 +427,9 @@ DAYS_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 DAY_TO_INT = {d: i for i, d in enumerate(DAYS_ORDER)}
 
 BRANCH_OPTIONS = [b.strip() for b in settings.branch_options.split(",") if b.strip()]
+
+#: Faculty designations, as used on the rolls. Signup asks faculty to pick one.
+FACULTY_DESIGNATIONS = ["Professor", "Associate Professor", "Assistant Professor"]
 
 PROGRAMME_SEMESTERS = {
     programme.strip(): int(count)

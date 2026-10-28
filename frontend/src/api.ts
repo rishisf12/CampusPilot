@@ -54,6 +54,10 @@ import type {
   FeedbackSubmit,
   FeedbackResponse,
   FeedbackReply,
+  TaskItem,
+  TaskListResponse,
+  TaskCreatePayload,
+  TaskEditPayload,
   MonitoringSubsection,
   ValidationErrorDetail,
   HealthResponse,
@@ -519,6 +523,22 @@ export const feedbackApi = {
 
   /** Check if mail ingestion is configured. */
   ingestStatus: () => request<{ configured: boolean }>('/feedback/ingest/status'),
+};
+
+// ------------------------------------------------------------- task
+export const taskApi = {
+  /** The signed-in student's tasks, newest first. Rows past 48h are purged server-side. */
+  list: () => request<TaskListResponse>('/tasks/'),
+
+  /** Create a task; the optional alarm must point into the upcoming 24 hours. */
+  create: (data: TaskCreatePayload) => request<TaskItem>('/tasks/', { method: 'POST', body: data }),
+
+  /** Edit title and/or alarm. Only allowed while the task is still active. */
+  edit: (id: number, data: TaskEditPayload) =>
+    request<TaskItem>(`/tasks/${id}`, { method: 'PATCH', body: data }),
+
+  /** Mark done. Only allowed while the task is still active. */
+  complete: (id: number) => request<TaskItem>(`/tasks/${id}/complete`, { method: 'POST' }),
 };
 
 // ------------------------------------------------------------- health

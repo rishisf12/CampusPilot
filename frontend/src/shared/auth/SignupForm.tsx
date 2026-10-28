@@ -4,6 +4,7 @@ import { Button, Card, Input, Select, ProgressBar } from '@/components/ui';
 import { authApi } from '../../api';
 import {
   BRANCH_OPTIONS,
+  FACULTY_DESIGNATIONS,
   GENDERS,
   GROUP_DETAILS,
   GROUP_PROGRAMMES,
@@ -44,6 +45,9 @@ const STRENGTH_LABELS = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
 
 interface SignupFormProps {
   verifiedEmail: string;
+  /** "student" (default) or "faculty". Faculty get a department field instead
+   *  of the student cohort fields (programme, semester, roll, batch year). */
+  signupRole?: 'student' | 'faculty';
   /** Chosen in step 0: narrows the programme and branch lists to one group. */
   programmeGroup: ProgrammeGroup;
   onSwitchToLogin: () => void;
@@ -65,11 +69,13 @@ interface SignupFormProps {
  */
 export default function SignupForm({
   verifiedEmail,
+  signupRole = 'student',
   programmeGroup,
   onSwitchToLogin,
   onRegistered,
   onStartOver,
 }: SignupFormProps) {
+  const isFaculty = signupRole === 'faculty';
   // Start on the first programme of the chosen group, not always BTech.
   const groupProgrammes = GROUP_PROGRAMMES[programmeGroup];
   const firstProgramme = groupProgrammes[0];
@@ -77,12 +83,14 @@ export default function SignupForm({
     first_name: '',
     last_name: '',
     gender: 'Male' as const,
+    designation: '',
     programme: firstProgramme as Programme,
     semester: 1,
     branch: PROGRAMME_BRANCHES[firstProgramme][0] as BranchOption,
     batch_year: '',
     username: '',
     roll_number: '',
+    timetableNotation: '',
     whatsapp: '',
     password: '',
     confirm_password: '',
@@ -116,16 +124,26 @@ export default function SignupForm({
     if (!form.last_name.trim()) found.last_name = 'Last name is required';
     if (!/^[A-Za-z0-9_.-]{3,30}$/.test(form.username.trim()))
       found.username = '3-30 characters: letters, numbers, dot, dash or underscore';
-    const roll = form.roll_number.trim().toUpperCase();
-    if (!ROLL_PATTERN.test(roll)) found.roll_number = 'Use YYBBBNNN, e.g. 23BCS125';
-    // The batch year is the year they joined. It is a plain year, and the
-    // range the server accepts is the same one.
-    const batchYear = form.batch_year.trim();
-    if (batchYear) {
-      const year = Number(batchYear);
-      if (!/^\d{4}$/.test(batchYear) || year < 2000 || year > LATEST_BATCH_YEAR) {
-        found.batch_year = `Enter a year between 2000 and ${LATEST_BATCH_YEAR}`;
+    if (!isFaculty) {
+      const roll = form.roll_number.trim().toUpperCase();
+      if (!ROLL_PATTERN.test(roll)) found.roll_number = 'Use YYBBBNNN, e.g. 23BCS125';
+      // The batch year is the year they joined. It is a plain year, and the
+      // range the server accepts is the same one.
+      const batchYear = form.batch_year.trim();
+      if (batchYear) {
+        const year = Number(batchYear);
+        if (!/^\d{4}$/.test(batchYear) || year < 2000 || year > LATEST_BATCH_YEAR) {
+          found.batch_year = `Enter a year between 2000 and ${LATEST_BATCH_YEAR}`;
+        }
       }
+    } else {
+      // Faculty: designation on the rolls, plus the timetable notation their
+      // name shows under in the published timetable, e.g. ARR.
+      if (!form.designation) found.designation = 'Designation is required';
+      const notation = form.timetableNotation.trim();
+      if (!notation) found.timetableNotation = 'Timetable notation is required';
+      else if (!/^[A-Z]{1,10}$/.test(notation))
+        found.timetableNotation = 'Use capital letters only, e.g. ARR';
     }
     const digits = form.whatsapp.replace(/\D/g, '');
     if (!digits) found.whatsapp = 'WhatsApp number is required';
@@ -136,7 +154,7 @@ export default function SignupForm({
     if (canChangeBranch && showBranchChange && branchTo && branchTo === branchFrom)
       found.branchTo = 'Choose a different branch';
     return found;
-  }, [form, canChangeBranch, showBranchChange, branchFrom, branchTo]);
+  }, [form, canChangeBranch, showBranchChange, branchFrom, branchTo, isFaculty]);
 
   const invalid = (key: string) => (touched[key] && errors[key] ? errors[key] : null);
   const strength = scorePassword(form.password);
@@ -147,8 +165,10 @@ export default function SignupForm({
       first_name: true,
       last_name: true,
       username: true,
-      roll_number: true,
-      batch_year: true,
+      roll_number: !isFaculty,
+      batch_year: !isFaculty,
+      timetableNotation: isFaculty,
+      designation: isFaculty,
       whatsapp: true,
       email: true,
       password: true,
@@ -163,24 +183,42 @@ export default function SignupForm({
     setLoading(true);
     setError(null);
     try {
-      await authApi.signup({
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        gender: form.gender,
-        programme: form.programme,
-        semester: Number(form.semester),
-        // A revealed branch change moves the student to the target branch.
-        branch: canChangeBranch && showBranchChange && branchTo ? branchTo : form.branch,
-        // The batch they joined. The roll's prefix carries it too, but the
-        // roll is a label and this is the fact.
-        batch_year: form.batch_year.trim() ? Number(form.batch_year.trim()) : undefined,
-        username: form.username.trim(),
-        roll_number: form.roll_number.trim().toUpperCase(),
-        whatsapp: form.whatsapp.trim(),
-        // The proven address, not anything typed here.
-        email: verifiedEmail,
-        password: form.password,
-      });
+      if (isFaculty) {
+        // Faculty: no cohort fields - the notation their timetable shows.
+        await authApi.signup({
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+          gender: form.gender,
+          role: 'faculty',
+          designation: form.designation,
+          timetable_notation: form.timetableNotation.trim(),
+          username: form.username.trim(),
+          whatsapp: form.whatsapp.trim(),
+          // The proven address, not anything typed here.
+          email: verifiedEmail,
+          password: form.password,
+        });
+      } else {
+        await authApi.signup({
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+          gender: form.gender,
+          role: 'student',
+          programme: form.programme,
+          semester: Number(form.semester),
+          // A revealed branch change moves the student to the target branch.
+          branch: canChangeBranch && showBranchChange && branchTo ? branchTo : form.branch,
+          // The batch they joined. The roll's prefix carries it too, but the
+          // roll is a label and this is the fact.
+          batch_year: form.batch_year.trim() ? Number(form.batch_year.trim()) : undefined,
+          username: form.username.trim(),
+          roll_number: form.roll_number.trim().toUpperCase(),
+          whatsapp: form.whatsapp.trim(),
+          // The proven address, not anything typed here.
+          email: verifiedEmail,
+          password: form.password,
+        });
+      }
       onRegistered();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -199,12 +237,12 @@ export default function SignupForm({
           <Logo3D size={24} />
           <h1 className="mt-2 text-2xl font-bold text-primary-500">Create your account</h1>
           <p className="text-xs tracking-widest text-primary-400 font-medium">
-            YOUR CAMPUS ASSISTANT
+            IIITDMJ's CAMPUS ASSISTANT
           </p>
         </div>
 
         <Card className="space-y-4">
-          <SignupProgress current="details" />
+          <SignupProgress current="details" faculty={isFaculty} />
 
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
@@ -235,223 +273,302 @@ export default function SignupForm({
               </Field>
             </div>
 
-            {/* Gender + programme */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Gender">
-                <Select
-                  id="su-gender"
-                  value={form.gender}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => update('gender', e.target.value)}
-                  required
-                >
-                  {GENDERS.map(gender => (
-                    <option key={gender} value={gender}>
-                      {gender}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field
-                label="Programme"
-                hint={
-                  groupProgrammes.length > 1
-                    ? `${GROUP_DETAILS[programmeGroup].title} programmes only.`
-                    : undefined
-                }
-              >
-                <Select
-                  id="su-programme"
-                  value={form.programme}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                    const programme = e.target.value as Programme;
-                    const options =
-                      PROGRAMME_SEMESTERS[programme as keyof typeof PROGRAMME_SEMESTERS] || [];
-                    update('programme', programme);
-                    const nextSemester = (options as readonly number[]).includes(
-                      Number(form.semester)
-                    )
-                      ? form.semester
-                      : options[0];
-                    update('semester', nextSemester as string | number);
-                    // The branch list belongs to the programme, so a programme
-                    // change re-picks the first valid branch rather than
-                    // silently keeping one from another programme.
-                    const branches = PROGRAMME_BRANCHES[programme] || BRANCH_OPTIONS;
-                    const nextBranch = branches.includes(form.branch as BranchOption)
-                      ? form.branch
-                      : branches[0];
-                    update('branch', nextBranch);
-                    setBranchFrom(nextBranch);
-                    setBranchTo('');
-                    setShowBranchChange(false);
-                  }}
-                  required
-                >
-                  {groupProgrammes.map(programme => (
-                    <option key={programme} value={programme}>
-                      {programme}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-
-            {/* Semester + branch */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Semester">
-                <Select
-                  id="su-semester"
-                  value={form.semester}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                    update('semester', e.target.value)
-                  }
-                  required
-                >
-                  {semesters.map(value => (
-                    <option key={value} value={value}>
-                      {semesterLabel(value)}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field
-                label="Branch"
-                hint={branchOptions.length === 1 ? 'Fixed for this programme.' : undefined}
-              >
-                <Select
-                  id="su-branch"
-                  value={form.branch}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                    update('branch', e.target.value);
-                    setBranchFrom(e.target.value);
-                  }}
-                  required
-                >
-                  {branchOptions.map(branch => (
-                    <option key={branch} value={branch}>
-                      {branch}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-
-            {/* Batch year - the year the student joined, e.g. 2024. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field
-                label="Batch year"
-                hint="The year you joined, e.g. 2024. Your roll number starts with it."
-                error={invalid('batch_year')}
-              >
-                <Input
-                  id="su-batch-year"
-                  type="number"
-                  inputMode="numeric"
-                  min={2000}
-                  max={LATEST_BATCH_YEAR}
-                  step={1}
-                  value={form.batch_year}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    update('batch_year', e.target.value)
-                  }
-                  onBlur={() => setTouched(t => ({ ...t, batch_year: true }))}
-                  placeholder="2024"
-                />
-              </Field>
-            </div>
-
-            {/* Branch change reveal - a BTech transfer only, so hidden elsewhere. */}
-            {canChangeBranch && (
-              <div className="neu-inset p-3 rounded-xl">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowBranchChange(value => !value)}
+            {isFaculty ? (
+              <>
+                {/* Gender: faculty rolls carry only the binary options, so
+                    "Other" is offered to students only. */}
+                <Field label="Gender">
+                  <Select
+                    id="su-gender"
+                    value={form.gender}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                      update('gender', e.target.value)
+                    }
+                    required
                   >
-                    {showBranchChange ? 'Hide branch change' : 'Branch changed'}
-                  </Button>
-                  <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
-                    Already applied for a branch transfer? Add it now.
-                  </span>
+                    {GENDERS.filter(gender => gender !== 'Other').map(gender => (
+                      <option key={gender} value={gender}>
+                        {gender}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                {/* Designation: where this member sits on the faculty rolls. */}
+                <Field label="Designation" error={invalid('designation')}>
+                  <Select
+                    id="su-designation"
+                    value={form.designation}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                      update('designation', e.target.value)
+                    }
+                    onBlur={() => setTouched(t => ({ ...t, designation: true }))}
+                    required
+                  >
+                    <option value="">Select designation</option>
+                    {FACULTY_DESIGNATIONS.map(designation => (
+                      <option key={designation} value={designation}>
+                        {designation}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                {/* Timetable name notation shown for this faculty member (e.g. ARR). */}
+                <Field
+                  label="Timetable notation"
+                  error={invalid('timetableNotation')}
+                  hint="Exact name notation as it appears in the timetable, e.g. ARR"
+                >
+                  <Input
+                    id="su-timetable-notation"
+                    value={form.timetableNotation}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      update('timetableNotation', e.target.value.toUpperCase().replace(/\s/g, ''))
+                    }
+                    onBlur={() => setTouched(t => ({ ...t, timetableNotation: true }))}
+                    required
+                    placeholder="ARR"
+                  />
+                </Field>
+
+                {/* Username only - a faculty member has no roll number. */}
+                <Field label="Username" error={invalid('username')}>
+                  <Input
+                    id="su-username"
+                    value={form.username}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      update('username', e.target.value.replace(/\s/g, ''))
+                    }
+                    onBlur={() => setTouched(t => ({ ...t, username: true }))}
+                    autoComplete="username"
+                    required
+                  />
+                </Field>
+              </>
+            ) : (
+              <>
+                {/* Gender + programme */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Gender">
+                    <Select
+                      id="su-gender"
+                      value={form.gender}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                        update('gender', e.target.value)
+                      }
+                      required
+                    >
+                      {GENDERS.map(gender => (
+                        <option key={gender} value={gender}>
+                          {gender}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field
+                    label="Programme"
+                    hint={
+                      groupProgrammes.length > 1
+                        ? `${GROUP_DETAILS[programmeGroup].title} programmes only.`
+                        : undefined
+                    }
+                  >
+                    <Select
+                      id="su-programme"
+                      value={form.programme}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                        const programme = e.target.value as Programme;
+                        const options =
+                          PROGRAMME_SEMESTERS[programme as keyof typeof PROGRAMME_SEMESTERS] || [];
+                        update('programme', programme);
+                        const nextSemester = (options as readonly number[]).includes(
+                          Number(form.semester)
+                        )
+                          ? form.semester
+                          : options[0];
+                        update('semester', nextSemester as string | number);
+                        // The branch list belongs to the programme, so a programme
+                        // change re-picks the first valid branch rather than
+                        // silently keeping one from another programme.
+                        const branches = PROGRAMME_BRANCHES[programme] || BRANCH_OPTIONS;
+                        const nextBranch = branches.includes(form.branch as BranchOption)
+                          ? form.branch
+                          : branches[0];
+                        update('branch', nextBranch);
+                        setBranchFrom(nextBranch);
+                        setBranchTo('');
+                        setShowBranchChange(false);
+                      }}
+                      required
+                    >
+                      {groupProgrammes.map(programme => (
+                        <option key={programme} value={programme}>
+                          {programme}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
                 </div>
 
-                {showBranchChange && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                    <Field label="From branch">
-                      <Select
-                        id="su-branch-from"
-                        value={branchFrom}
-                        onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                          setBranchFrom(e.target.value)
-                        }
+                {/* Semester + branch */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Semester">
+                    <Select
+                      id="su-semester"
+                      value={form.semester}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                        update('semester', e.target.value)
+                      }
+                      required
+                    >
+                      {semesters.map(value => (
+                        <option key={value} value={value}>
+                          {semesterLabel(value)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field
+                    label="Branch"
+                    hint={branchOptions.length === 1 ? 'Fixed for this programme.' : undefined}
+                  >
+                    <Select
+                      id="su-branch"
+                      value={form.branch}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                        update('branch', e.target.value);
+                        setBranchFrom(e.target.value);
+                      }}
+                      required
+                    >
+                      {branchOptions.map(branch => (
+                        <option key={branch} value={branch}>
+                          {branch}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+
+                {/* Batch year - the year the student joined, e.g. 2024. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field
+                    label="Batch year"
+                    hint="The year you joined, e.g. 2024. Your roll number starts with it."
+                    error={invalid('batch_year')}
+                  >
+                    <Input
+                      id="su-batch-year"
+                      type="number"
+                      inputMode="numeric"
+                      min={2000}
+                      max={LATEST_BATCH_YEAR}
+                      step={1}
+                      value={form.batch_year}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        update('batch_year', e.target.value)
+                      }
+                      onBlur={() => setTouched(t => ({ ...t, batch_year: true }))}
+                      placeholder="2024"
+                    />
+                  </Field>
+                </div>
+
+                {/* Branch change reveal - a BTech transfer only, so hidden elsewhere. */}
+                {canChangeBranch && (
+                  <div className="neu-inset p-3 rounded-xl">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setShowBranchChange(value => !value)}
                       >
-                        <option value="">Select branch</option>
-                        {BRANCH_OPTIONS.map(branch => (
-                          <option key={branch} value={branch}>
-                            {branch}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <Field label="To branch" error={invalid('branchTo')}>
-                      <Select
-                        id="su-branch-to"
-                        value={branchTo}
-                        onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                          setBranchTo(e.target.value);
-                          setTouched(t => ({ ...t, branchTo: true }));
-                        }}
-                      >
-                        <option value="">Select branch</option>
-                        {BRANCH_OPTIONS.map(branch => (
-                          <option key={branch} value={branch}>
-                            {branch}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
+                        {showBranchChange ? 'Hide branch change' : 'Branch changed'}
+                      </Button>
+                      <span className="text-xs" style={{ color: 'var(--cp-muted)' }}>
+                        Already applied for a branch transfer? Add it now.
+                      </span>
+                    </div>
+
+                    {showBranchChange && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                        <Field label="From branch">
+                          <Select
+                            id="su-branch-from"
+                            value={branchFrom}
+                            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                              setBranchFrom(e.target.value)
+                            }
+                          >
+                            <option value="">Select branch</option>
+                            {BRANCH_OPTIONS.map(branch => (
+                              <option key={branch} value={branch}>
+                                {branch}
+                              </option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <Field label="To branch" error={invalid('branchTo')}>
+                          <Select
+                            id="su-branch-to"
+                            value={branchTo}
+                            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                              setBranchTo(e.target.value);
+                              setTouched(t => ({ ...t, branchTo: true }));
+                            }}
+                          >
+                            <option value="">Select branch</option>
+                            {BRANCH_OPTIONS.map(branch => (
+                              <option key={branch} value={branch}>
+                                {branch}
+                              </option>
+                            ))}
+                          </Select>
+                        </Field>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* Username + roll */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Username" error={invalid('username')}>
-                <Input
-                  id="su-username"
-                  value={form.username}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    update('username', e.target.value.replace(/\s/g, ''))
-                  }
-                  onBlur={() => setTouched(t => ({ ...t, username: true }))}
-                  autoComplete="username"
-                  required
-                />
-              </Field>
-              <Field label="Roll number" error={invalid('roll_number')}>
-                <Input
-                  id="su-roll"
-                  className="font-mono uppercase"
-                  value={form.roll_number}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    update(
-                      'roll_number',
-                      e.target.value
-                        .toUpperCase()
-                        .replace(/[^A-Z0-9]/g, '')
-                        .slice(0, 8)
-                    )
-                  }
-                  onBlur={() => setTouched(t => ({ ...t, roll_number: true }))}
-                  placeholder="23BCS125"
-                  maxLength={8}
-                  required
-                />
-              </Field>
-            </div>
+                {/* Username + roll */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Username" error={invalid('username')}>
+                    <Input
+                      id="su-username"
+                      value={form.username}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        update('username', e.target.value.replace(/\s/g, ''))
+                      }
+                      onBlur={() => setTouched(t => ({ ...t, username: true }))}
+                      autoComplete="username"
+                      required
+                    />
+                  </Field>
+                  <Field label="Roll number" error={invalid('roll_number')}>
+                    <Input
+                      id="su-roll"
+                      className="font-mono uppercase"
+                      value={form.roll_number}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        update(
+                          'roll_number',
+                          e.target.value
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]/g, '')
+                            .slice(0, 8)
+                        )
+                      }
+                      onBlur={() => setTouched(t => ({ ...t, roll_number: true }))}
+                      placeholder="23BCS125"
+                      maxLength={8}
+                      required
+                    />
+                  </Field>
+                </div>
+              </>
+            )}
 
             {/* Already verified in step 1, so shown but not editable. */}
             <Field label="College email" hint="Verified in the previous step.">

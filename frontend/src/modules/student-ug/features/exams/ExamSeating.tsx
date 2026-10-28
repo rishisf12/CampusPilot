@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
-import { CalendarDays, CheckCircle2, RefreshCw, Search, Trash2 } from 'lucide-react';
-import { Badge, Button, Card, Input, Select, Table, Tabs } from '@/components/ui';
+import { CalendarDays, CheckCircle2, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
+import { Badge, Button, Card, Input, Modal, Select, Table, Tabs } from '@/components/ui';
 import { authApi, examApi } from '@/api';
 import { BRANCH_OPTIONS } from '@shared/constants';
 import { formatDate, formatTime, todayIso } from '@shared/lib/time';
@@ -86,6 +86,7 @@ interface ExamSeatingProps {
 
 export default function ExamSeating({ onError }: ExamSeatingProps) {
   const [subTab, setSubTab] = useState('timetable');
+  const [uploadsOpen, setUploadsOpen] = useState(false);
   const [status, setStatus] = useState({ timetable_rows: 0, seating_rows: 0 });
   const [timetable, setTimetable] = useState<ExamTimetable | null>(null);
   const [seating, setSeating] = useState<ExamSeating | null>(null);
@@ -297,99 +298,112 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
 
   return (
     <div className="space-y-5">
-      {/* Quick Roll Lookup - small and centred */}
-      <Card className="max-w-xl mx-auto">
-        <h3 className="text-sm font-semibold text-center" style={{ color: 'var(--cp-text)' }}>
-          Quick Roll Lookup
-        </h3>
-        <form onSubmit={runLookup} className="mt-3 flex gap-2">
-          <Input
-            id="exam-roll"
-            className="font-mono flex-1"
-            value={roll}
-            onChange={event => {
-              setRoll(event.target.value.toUpperCase());
-              setLookupError(null);
-            }}
-            placeholder="e.g. 23BCS125"
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            icon={<Search size={16} strokeWidth={2} />}
-            loading={looking}
-            disabled={looking || !roll.trim()}
-            className="shrink-0"
-          >
-            Find Room
-          </Button>
-        </form>
+      {/* Quick Roll Lookup - small and centred; Uploads toggle sits beside it */}
+      <div className="max-w-xl mx-auto flex items-start gap-2">
+        <Card className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-center" style={{ color: 'var(--cp-text)' }}>
+            Quick Roll Lookup
+          </h3>
+          <form onSubmit={runLookup} className="mt-3 flex gap-2">
+            <Input
+              id="exam-roll"
+              className="font-mono flex-1"
+              value={roll}
+              onChange={event => {
+                setRoll(event.target.value.toUpperCase());
+                setLookupError(null);
+              }}
+              placeholder="e.g. 23BCS125"
+            />
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              icon={<Search size={16} strokeWidth={2} />}
+              loading={looking}
+              disabled={looking || !roll.trim()}
+              className="shrink-0"
+            >
+              Find Room
+            </Button>
+          </form>
 
-        {lookupError && (
-          <div className="mt-3">
-            <ErrorBanner message={lookupError} onDismiss={() => setLookupError(null)} />
-          </div>
-        )}
-
-        {lookup && lookup.exams.length === 0 && (
-          <p className="mt-3 text-sm text-center" style={{ color: 'var(--cp-muted)' }}>
-            No exam found for <span className="font-mono">{lookup.roll}</span>.
-          </p>
-        )}
-
-        {lookup && lookup.exams.length > 0 && (
-          <>
-            {lookup.profileFiltered && (
-              <p className="mt-3 text-xs text-center" style={{ color: 'var(--cp-muted)' }}>
-                Filtered to your profile
-                {lookup.profile
-                  ? ` (${lookup.profile.branch} · Sem ${lookup.profile.semester})`
-                  : ''}
-                .
-              </p>
-            )}
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {lookup.exams.map((exam, index) => {
-                const isToday = exam.date === today;
-                return (
-                  <div
-                    key={`${exam.course_code}-${exam.date}-${exam.room}-${index}`}
-                    className="neu-raised-sm p-3"
-                    style={isToday ? { borderColor: 'var(--cp-primary)' } : undefined}
-                  >
-                    {isToday && (
-                      <Badge tone="primary" className="mb-1 text-[10px] font-bold">
-                        <CalendarDays size={10} strokeWidth={2} aria-hidden />
-                        TODAY
-                      </Badge>
-                    )}
-                    <p
-                      className="text-sm font-mono font-semibold"
-                      style={{ color: 'var(--cp-text)' }}
-                    >
-                      {exam.course_code}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--cp-text)' }}>
-                      Room{' '}
-                      <span className="font-mono" style={{ color: 'var(--cp-primary)' }}>
-                        {exam.room || '—'}
-                      </span>
-                    </p>
-                    <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
-                      {formatDate(exam.date)}
-                      {exam.day ? ` (${exam.day})` : ''}
-                      {exam.start_time
-                        ? ` · ${formatTime(exam.start_time)}-${formatTime(exam.end_time)}`
-                        : ''}
-                    </p>
-                  </div>
-                );
-              })}
+          {lookupError && (
+            <div className="mt-3">
+              <ErrorBanner message={lookupError} onDismiss={() => setLookupError(null)} />
             </div>
-          </>
-        )}
-      </Card>
+          )}
+
+          {lookup && lookup.exams.length === 0 && (
+            <p className="mt-3 text-sm text-center" style={{ color: 'var(--cp-muted)' }}>
+              No exam found for <span className="font-mono">{lookup.roll}</span>.
+            </p>
+          )}
+
+          {lookup && lookup.exams.length > 0 && (
+            <>
+              {lookup.profileFiltered && (
+                <p className="mt-3 text-xs text-center" style={{ color: 'var(--cp-muted)' }}>
+                  Filtered to your profile
+                  {lookup.profile
+                    ? ` (${lookup.profile.branch} · Sem ${lookup.profile.semester})`
+                    : ''}
+                  .
+                </p>
+              )}
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {lookup.exams.map((exam, index) => {
+                  const isToday = exam.date === today;
+                  return (
+                    <div
+                      key={`${exam.course_code}-${exam.date}-${exam.room}-${index}`}
+                      className="neu-raised-sm p-3"
+                      style={isToday ? { borderColor: 'var(--cp-primary)' } : undefined}
+                    >
+                      {isToday && (
+                        <Badge tone="primary" className="mb-1 text-[10px] font-bold">
+                          <CalendarDays size={10} strokeWidth={2} aria-hidden />
+                          TODAY
+                        </Badge>
+                      )}
+                      <p
+                        className="text-sm font-mono font-semibold"
+                        style={{ color: 'var(--cp-text)' }}
+                      >
+                        {exam.course_code}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--cp-text)' }}>
+                        Room{' '}
+                        <span className="font-mono" style={{ color: 'var(--cp-primary)' }}>
+                          {exam.room || '—'}
+                        </span>
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--cp-muted)' }}>
+                        {formatDate(exam.date)}
+                        {exam.day ? ` (${exam.day})` : ''}
+                        {exam.start_time
+                          ? ` · ${formatTime(exam.start_time)}-${formatTime(exam.end_time)}`
+                          : ''}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </Card>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          icon={<Upload size={16} strokeWidth={2} />}
+          onClick={() => setUploadsOpen(value => !value)}
+          aria-expanded={uploadsOpen}
+          className="shrink-0"
+        >
+          Uploads
+        </Button>
+      </div>
 
       {message && (
         <div className="p-3 rounded-lg border border-success-200 bg-success-50 text-success-700 text-sm">
@@ -398,36 +412,46 @@ export default function ExamSeating({ onError }: ExamSeatingProps) {
       )}
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      {/* Upload cards, always on a single horizontal row */}
-      <div className="flex flex-nowrap gap-4 overflow-x-auto">
-        <ExamUploadCard
-          title="Exam Timetable"
-          kind="timetable"
-          count={status.timetable_rows}
-          busyLabel="Parsing exam timetable"
-          onUpload={async file => {
-            const result = await examApi.uploadTimetable(file);
-            await load();
-            bumpProfileVersion();
-            return result;
-          }}
-          onRemove={() => removeData('timetable')}
-        />
-        <ExamUploadCard
-          title="Exam Seating Index"
-          kind="seating"
-          count={status.seating_rows}
-          busyLabel="Parsing seating index"
-          onUpload={async file => {
-            const result = await examApi.uploadSeating(file);
-            await load();
-            bumpProfileVersion();
-            if (subTab === 'seating') setSeating(null);
-            return result;
-          }}
-          onRemove={() => removeData('seating')}
-        />
-      </div>
+      {/* Uploads modal: the two upload cards live behind the Uploads toggle
+          beside Quick Roll Lookup; Done closes and returns. */}
+      {uploadsOpen && (
+        <Modal title="Uploads" onClose={() => setUploadsOpen(false)} wide>
+          <div className="flex flex-nowrap gap-4 overflow-x-auto">
+            <ExamUploadCard
+              title="Exam Timetable"
+              kind="timetable"
+              count={status.timetable_rows}
+              busyLabel="Parsing exam timetable"
+              onUpload={async file => {
+                const result = await examApi.uploadTimetable(file);
+                await load();
+                bumpProfileVersion();
+                return result;
+              }}
+              onRemove={() => removeData('timetable')}
+            />
+            <ExamUploadCard
+              title="Exam Seating Index"
+              kind="seating"
+              count={status.seating_rows}
+              busyLabel="Parsing seating index"
+              onUpload={async file => {
+                const result = await examApi.uploadSeating(file);
+                await load();
+                bumpProfileVersion();
+                if (subTab === 'seating') setSeating(null);
+                return result;
+              }}
+              onRemove={() => removeData('seating')}
+            />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button type="button" variant="primary" onClick={() => setUploadsOpen(false)}>
+              Done
+            </Button>
+          </div>
+        </Modal>
+      )}
 
       {/* Views */}
       <Tabs

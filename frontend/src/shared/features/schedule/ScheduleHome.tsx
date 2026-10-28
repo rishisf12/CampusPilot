@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AlarmClock,
-  BellRing,
-  CalendarDays,
-  CheckCircle2,
-  Clock,
-  DoorOpen,
-  FileText,
-  X,
-} from 'lucide-react';
-import { Badge, Button, Card } from '@/components/ui';
+import { AlarmClock, BellRing, CalendarDays, Clock, X } from 'lucide-react';
+import { Badge, Card } from '@/components/ui';
 import { formatTime as formatClock, daysUntilWeekday, istNow, todayIso } from '@shared/lib/time';
 import { toMinutes } from '@shared/lib/normalise';
 import { readJson, writeJson, STORAGE_KEY } from '@shared/lib/storage';
@@ -40,12 +31,6 @@ interface ScheduleHomeProps {
   /** Today's classes that have not ended yet, sorted. */
   todayRemaining: HomeClass[];
   courseLabel: (item: { course_name?: string; course_code?: string }) => string;
-  /** Jump to a classroom tab (attendance / vacant / exam). */
-  onJumpTab: (id: string) => void;
-  /** True when the classroom bundle has no attendance tab (PG/PhD). */
-  showAttendanceAction: boolean;
-  /** True when the classroom bundle has no vacant-rooms tab (PG/PhD). */
-  showVacantAction: boolean;
 }
 
 /** Ticks so countdowns and progress bars stay live without a refetch. */
@@ -258,9 +243,6 @@ export default function ScheduleHome({
   nextClasses,
   todayRemaining,
   courseLabel,
-  onJumpTab,
-  showAttendanceAction,
-  showVacantAction,
 }: ScheduleHomeProps) {
   // Ticks every second so countdowns stay live and alarms fire on time.
   const now: number = useNow(1000);
@@ -473,7 +455,7 @@ export default function ScheduleHome({
           <p className="text-sm mt-1" style={{ color: 'var(--cp-muted)' }}>
             {hasTimetable
               ? (nextHint ?? 'Nothing else scheduled today. Enjoy the break.')
-              : 'No class timetable uploaded yet. Open the Timetable tab to add it.'}
+              : 'No class timetable uploaded yet. Open the Upload tab to add it.'}
           </p>
         </Card>
       )}
@@ -576,46 +558,6 @@ export default function ScheduleHome({
           </ol>
         </Card>
       )}
-
-      {/* 4 — Quick actions. Only tabs in this student's bundle appear. */}
-      <div
-        className={`grid gap-2 ${showAttendanceAction && showVacantAction ? 'grid-cols-3' : showAttendanceAction || showVacantAction ? 'grid-cols-2' : 'grid-cols-1'}`}
-      >
-        {showAttendanceAction && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon={<CheckCircle2 size={16} strokeWidth={2} aria-hidden />}
-            onClick={() => onJumpTab('attendance')}
-            aria-label="Go to Attendance"
-          >
-            Attendance
-          </Button>
-        )}
-        {showVacantAction && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon={<DoorOpen size={16} strokeWidth={2} aria-hidden />}
-            onClick={() => onJumpTab('vacant')}
-            aria-label="Find free rooms"
-          >
-            Free Rooms
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          icon={<FileText size={16} strokeWidth={2} aria-hidden />}
-          onClick={() => onJumpTab('exam')}
-          aria-label="Go to Exams"
-        >
-          Exams
-        </Button>
-      </div>
     </div>
   );
 }

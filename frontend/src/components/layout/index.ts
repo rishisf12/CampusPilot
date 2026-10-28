@@ -3,3 +3,8 @@ export { default as ThemeToggle } from './ThemeToggle';
 export { default as Sidebar } from './Sidebar';
 export { default as Navbar } from './Navbar';
 export { default as LayoutShell } from './LayoutShell';
+export { HeaderTopRow } from './HeaderTopRow';
+export { ClassroomSubNav } from './ClassroomSubNav';
+export { default as FooterNavBar } from './FooterNavBar';
+export { default as LayoutShellMobile } from './LayoutShell.mobile';
+export { default as LayoutShellDesktop } from './LayoutShell.desktop';

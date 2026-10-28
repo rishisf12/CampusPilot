@@ -1,38 +1,126 @@
 ﻿/**
- * Faculty Routes — includes OppFeed opportunity feed.
+ * Faculty Routes — student-mirrored layout: header top row, centred main nav
+ * with classroom / important / feedback, and an empty content area per
+ * section. OppFeed removed entirely; nothing else remains.
  */
-import { Suspense, lazy } from 'react';
-import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
+import { useState } from 'react';
+import { Sidebar } from '@/shared/components/Sidebar';
+import { HeaderTopRow } from '@/components/layout/HeaderTopRow';
+import { CalendarDays, AlertCircle, MessageSquare } from 'lucide-react';
 
-function ModuleLoading() {
-  return (
-    <div className="flex justify-center py-12">
-      <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+const FACULTY_SECTIONS = [
+  { id: 'classroom', label: 'Classroom', Icon: CalendarDays },
+  { id: 'important', label: 'Important', Icon: AlertCircle },
+  { id: 'feedback', label: 'Feedback', Icon: MessageSquare },
+] as const;
+
+interface FacultyRoutesProps {
+  online?: boolean;
 }
 
-const OppFeedList = lazy(() => import('./features/oppfeed/OppFeedList'));
+export function FacultyRoutes({ online = true }: FacultyRoutesProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [section, setSection] = useState('classroom');
 
-export function FacultyRoutes() {
   return (
-    <ModuleErrorBoundary moduleName="faculty">
-      <Suspense fallback={<ModuleLoading />}>
-        <div
-          className="min-h-screen flex items-center justify-center neu-raised m-4"
-          style={{ background: 'var(--cp-bg)' }}
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--cp-wall)' }}>
+      {/* Header flush to top and side edges, same as student. */}
+      <HeaderTopRow
+        online={online}
+        sidebarOpen={sidebarOpen}
+        onMenu={() => setSidebarOpen(!sidebarOpen)}
+      />
+
+      {/* Main navigation bar — centred, compact width, same card-style links as student. */}
+      <div className="flex justify-center">
+        <nav
+          className="flex gap-2 overflow-x-auto w-full max-w-2xl pt-1.5 pb-1.5 px-2"
+          aria-label="Main sections"
         >
-          <div className="text-center">
-            <h1 className="text-2xl font-semibold" style={{ color: 'var(--cp-text)' }}>
-              Faculty Module
-            </h1>
-            <p className="mt-2" style={{ color: 'var(--cp-muted)' }}>
-              OppFeed Opportunities
-            </p>
-            <OppFeedList />
-          </div>
-        </div>
-      </Suspense>
-    </ModuleErrorBoundary>
+          {FACULTY_SECTIONS.map(item => {
+            const isActive = section === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSection(item.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium whitespace-nowrap flex-1 min-w-max rounded-lg transition-all duration-200"
+                style={
+                  isActive
+                    ? {
+                        borderRadius: '0.5rem',
+                        background: 'var(--cp-surface)',
+                        color: 'var(--cp-primary)',
+                        boxShadow: 'var(--cp-clay)',
+                        border: '1px solid rgba(255,255,255,.22)',
+                      }
+                    : {
+                        borderRadius: '0.5rem',
+                        background: 'rgba(255,255,255,.06)',
+                        color: 'var(--cp-text)',
+                        border: '1px solid rgba(163,177,198,.3)',
+                      }
+                }
+              >
+                <item.Icon className="w-4 h-4" strokeWidth={2} aria-hidden />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Empty content area per section — same padding as student main content. */}
+      <main className="flex-1 min-w-0 px-3 pt-2 pb-20">
+        <section
+          className="neu-raised p-6"
+          style={{ display: section === 'classroom' ? 'block' : 'none', color: 'var(--cp-text)' }}
+        >
+          <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--cp-primary)' }}>
+            Classroom
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
+            No classes right now.
+          </p>
+        </section>
+        <section
+          className="neu-raised p-6"
+          style={{ display: section === 'important' ? 'block' : 'none', color: 'var(--cp-text)' }}
+        >
+          <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--cp-primary)' }}>
+            Important
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
+            No announcements right now.
+          </p>
+        </section>
+        <section
+          className="neu-raised p-6"
+          style={{ display: section === 'feedback' ? 'block' : 'none', color: 'var(--cp-text)' }}
+        >
+          <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--cp-primary)' }}>
+            Feedback
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--cp-muted)' }}>
+            No feedback items right now.
+          </p>
+        </section>
+      </main>
+
+      {/* Footer: simple text only, same as student desktop. */}
+      <footer className="py-4 px-3 text-center text-xs" style={{ color: 'var(--cp-muted)' }}>
+        essential &mdash; your campus assistant
+      </footer>
+
+      {/* Right-side toggle drawer: user profile, settings, logout. */}
+      {sidebarOpen && (
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          onSectionChange={setSection}
+        />
+      )}
+    </div>
   );
 }
