@@ -22,8 +22,12 @@ def log_security_event(
 ) -> object:
     """Log a security event and update aggregated feed."""
     import hashlib
-    ip_hash = hashlib.sha256(f"{settings.telemetry_pepper}{ip}".encode()).hexdigest()[:64] if ip else None
-    ua_hash = hashlib.sha256(f"{settings.telemetry_pepper}{user_agent}".encode()).hexdigest()[:64] if user_agent else None
+
+    # Salt for the IP/user-agent hashes. Derived from SECRET_KEY so the
+    # tokens in the database cannot be reversed by guessing sequential ids.
+    salt = settings.SECRET_KEY
+    ip_hash = hashlib.sha256(f"{salt}{ip}".encode()).hexdigest()[:64] if ip else None
+    ua_hash = hashlib.sha256(f"{salt}{user_agent}".encode()).hexdigest()[:64] if user_agent else None
 
     event = SecurityEvent(
         event_type=event_type,

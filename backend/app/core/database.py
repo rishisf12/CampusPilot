@@ -54,7 +54,7 @@ def engine_kwargs() -> dict:
                 # in the pool (a session-scoped SET survives pooling; an
                 # unqualified INSERT that only works because of it does not
                 # survive a disposed pool).
-                "options": "-csearch_path=core,academic,social,telemetry,public",
+                "options": "-csearch_path=core,academic,social,public",
                 **({"sslmode": settings.db_sslmode} if settings.db_sslmode != "disable" else {}),
             },
         }

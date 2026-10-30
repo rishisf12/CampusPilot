@@ -17,8 +17,8 @@ from models import User, UserProfile
 from core.config import get_settings, PROGRAMME_SEMESTERS, FACULTY_DESIGNATIONS
 from core.deps import get_current_user
 from features.auth import passkeys as passkey_service, password_reset as password_reset_service, signup as signup_verification_service
-from features.monitoring import collector as monitoring_collector
-from features.monitoring.infrastructure.ratelimit import AUTH_LIMIT, BRUTE_FORCE_LIMIT, OTP_RESEND_LIMIT
+from core.ratelimit import AUTH_LIMIT, OTP_RESEND_LIMIT
+from features.security.service import log_security_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])
@@ -407,14 +407,16 @@ async def signup(data: SignupRequest, session: Session = Depends(get_session), r
 
     # Validate email domain
     if not data.email.lower().endswith(ALLOWED_EMAIL_DOMAIN):
-        monitoring_collector.record_security_event(
-            session,
-            "waf_blocked",
-            platform="web",
-            pepper=settings.telemetry_pepper,
-            ip=client_ip,
-            detail={"reason": "invalid_email_domain", "email": data.email},
-        )
+        try:
+            log_security_event(
+                session,
+                "waf_blocked",
+                "warning",
+                details=f"invalid_email_domain: {data.email}",
+                ip=client_ip,
+            )
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Email must be from {ALLOWED_EMAIL_DOMAIN} domain",
@@ -511,28 +513,6 @@ async def verify_email(data: VerifyEmailRequest, session: Session = Depends(get_
         raise HTTPException(status_code=400, detail="Verification code expired. Request a new one.")
 
     if record["code"] != data.code:
-        # Record OTP abuse attempt (telemetry temporarily disabled due to enum type issue)
-        # monitoring_collector.record_security_event(
-        #     session,
-        #     "failed_login",
-        #     platform="web",
-        #     user_id=record.get("user_id"),
-        #     pepper=settings.telemetry_pepper,
-        #     ip=client_ip,
-        #     detail={"reason": "invalid_otp", "email": email},
-        # )
-        # Track brute force (telemetry temporarily disabled)
-        # client_ip = request.client.host if request and request.client else "unknown"
-        # if not BRUTE_FORCE_LIMIT.allow(client_ip):
-        #     monitoring_collector.record_security_event(
-        #         session,
-        #         "brute_force",
-        #         platform="web",
-        #         user_id=record.get("user_id"),
-        #         pepper=settings.telemetry_pepper,
-        #         ip=client_ip,
-        #         detail={"reason": "otp_brute_force", "email": email},
-        #     )
         raise HTTPException(status_code=400, detail="Invalid verification code")
 
     # Mark user as verified
@@ -567,15 +547,17 @@ async def resend_code(data: ResendCodeRequest, session: Session = Depends(get_se
 
     # Check OTP resend limit
     if not OTP_RESEND_LIMIT.allow(client_ip):
-        monitoring_collector.record_security_event(
-            session,
-            "rate_limited",
-            platform="web",
-            user_id=user.id,
-            pepper=settings.telemetry_pepper,
-            ip=client_ip,
-            detail={"reason": "otp_resend_limit_exceeded", "email": email},
-        )
+        try:
+            log_security_event(
+                session,
+                "rate_limited",
+                "warning",
+                actor_id=user.id,
+                details=f"otp_resend_limit_exceeded: {email}",
+                ip=client_ip,
+            )
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many resend attempts. Please wait before trying again.",
@@ -583,15 +565,17 @@ async def resend_code(data: ResendCodeRequest, session: Session = Depends(get_se
         )
 
     # Record resend attempt
-    monitoring_collector.record_security_event(
-        session,
-        "rate_limited",
-        platform="web",
-        user_id=user.id,
-        pepper=settings.telemetry_pepper,
-        ip=client_ip,
-        detail={"reason": "otp_resend", "email": email},
-    )
+    try:
+        log_security_event(
+            session,
+            "otp_resend",
+            "info",
+            actor_id=user.id,
+            details=f"rate_event_num: {email}",
+            ip=client_ip,
+        )
+    except Exception:
+        pass
 
     # Generate new code
     code = generate_code()
@@ -619,30 +603,17 @@ async def login(
     settings = get_settings()
 
     if not user or not verify_password(form.password, user.password_hash):
-        # Record the attempt before raising. Credential stuffing is only visible
-        # in the C-W Security panel if a failed login is written down here, and
-        # the panel reads `telemetry.security_event`.
-        #
-        # This was commented out as "telemetry temporarily disabled due to enum
-        # type issue". The real cause was in
-        # `monitoring/domain/models.py`: a bare `from sqlalchemy import Enum`
-        # shadowed `enum.Enum`, so `SecurityEventKind` was not a real enum and
-        # SQLAlchemy persisted `FAILED_LOGIN` into a Postgres enum holding
-        # `failed_login`. Every insert raised and was swallowed. Fixed there.
+        # Record the attempt before raising. Credential stuffing is only
+        # visible in the admin Security screen if a failed login is written
+        # down here.
         try:
-            from features.monitoring.infrastructure import collector as monitoring_collector
-
-            monitoring_collector.record_security_event(
+            log_security_event(
                 session,
                 "failed_login",
-                platform="web",
-                user_id=user.id if user else None,
-                pepper=settings.telemetry_pepper,
+                "warning",
+                actor_id=user.id if user else None,
+                details=f"username: {form.username}",
                 ip=client_ip,
-                # The attempted username is kept: distinguishing "one account
-                # being ground down" from "many accounts being sprayed" is the
-                # entire point of the metric. It is not a credential.
-                detail={"username": form.username},
             )
         except Exception:
             # Recording a security event must never turn a 401 into a 500, and

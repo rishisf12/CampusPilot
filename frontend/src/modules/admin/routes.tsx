@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Activity, Menu, Users, X, TrendingUp } from 'lucide-react';
+import { Menu, Users, X, TrendingUp } from 'lucide-react';
 import { useAuth } from '@shared/auth/AuthWrapper';
 import { healthApi } from '@/api';
 import { Tabs } from '@/components/ui';
@@ -9,7 +9,6 @@ import { Sidebar } from '@shared/components/Sidebar';
 
 /** Lazy-loaded features */
 const AdminPanel = lazy(() => import('./features/admin/AdminPanel'));
-const Monitoring = lazy(() => import('./features/monitoring/Monitoring'));
 // The administrator's own profile - an operator's, not the student one. The
 // shared Profile screen is the *student's* profile (roll number, branch,
 // electives), which describes none of this.
@@ -63,8 +62,7 @@ interface AdminTab {
 /**
  * Admin Routes - defines all routes for admin users.
  *
- * Sections: Feedback Responses, Web Monitoring, Android Monitoring
- * Profile is accessed via sidebar
+ * Sections: Users, OppFeed. Profile is accessed via sidebar
  */
 export function AdminRoutes() {
   const { offline } = useAuth();
@@ -88,12 +86,6 @@ export function AdminRoutes() {
       label: 'Users',
       icon: <Users size={16} strokeWidth={2} aria-hidden />,
       hue: 'coral',
-    },
-    {
-      id: 'web-monitoring',
-      label: 'Web App Monitoring',
-      icon: <Activity size={16} strokeWidth={2} aria-hidden />,
-      hue: 'sky',
     },
     {
       id: 'oppfeed',
@@ -228,7 +220,6 @@ export function AdminRoutes() {
             {adminTab === 'responses' && (
               <AdminPanel onError={setConnectionError} initialTab="users" />
             )}
-            {adminTab === 'web-monitoring' && <Monitoring platformGroup="Web App Monitoring" />}
             {adminTab === 'oppfeed' && <OppFeed onError={setConnectionError} />}
             {adminTab === 'profile' && <AdminProfile onError={setConnectionError} />}
             {adminTab === 'settings' && <Settings onOpenProfile={() => setAdminTab('profile')} />}

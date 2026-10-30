@@ -1,5 +1,4 @@
 ﻿import {
-  Activity,
   CalendarDays,
   CheckCircle2,
   DoorOpen,
@@ -54,12 +53,6 @@ export const CATEGORY_NAV: NavItem[] = [
     label: 'Feedback',
     icon: <MessageSquare size={18} strokeWidth={2} aria-hidden />,
     hue: 'coral',
-  },
-  {
-    id: 'monitoring',
-    label: 'Monitoring',
-    icon: <Activity size={18} strokeWidth={2} aria-hidden />,
-    hue: 'sky',
   },
   {
     id: 'admin',

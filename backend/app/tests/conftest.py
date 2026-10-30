@@ -87,7 +87,7 @@ _RATE_LIMITER_NAMES = (
 
 
 def _reset_rate_limiters() -> None:
-    from features.monitoring.infrastructure.ratelimit import (
+    from core.ratelimit import (
         AUTH_LIMIT,
         BRUTE_FORCE_LIMIT,
         COLLECT_BATCH_LIMIT,
@@ -177,7 +177,6 @@ def _schema():
     # suite runs against the same shape prod serves. Long-term fix is a
     # squashed baseline migration; until then this keeps the two in sync.
     import models  # noqa: F401
-    import features.monitoring.domain.models  # noqa: F401
     from sqlmodel import SQLModel
     from core.database import engine as _engine
     SQLModel.metadata.create_all(_engine, checkfirst=True)

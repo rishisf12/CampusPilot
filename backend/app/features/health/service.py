@@ -7,7 +7,6 @@ from sqlmodel import Session, select
 from core.database import engine
 from features.health.models import HealthCheck, HealthHistory
 import psycopg
-import redis
 import os
 
 
@@ -15,7 +14,6 @@ def check_readiness(session: Session) -> dict:
     """Check if all critical dependencies are ready."""
     checks = {
         "database": check_database(session),
-        "redis": check_redis(),
     }
     ready = all(c["healthy"] for c in checks.values())
     return {
@@ -30,17 +28,6 @@ def check_database(session: Session) -> dict:
     try:
         session.exec(select(1))
         return {"healthy": True, "message": "Database connected"}
-    except Exception as e:
-        return {"healthy": False, "message": str(e)}
-
-
-def check_redis() -> dict:
-    """Check Redis connectivity."""
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    try:
-        r = redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
-        r.ping()
-        return {"healthy": True, "message": "Redis connected"}
     except Exception as e:
         return {"healthy": False, "message": str(e)}
 
@@ -81,19 +68,13 @@ def check_cpu() -> dict:
 
 def check_background_jobs(session: Session) -> dict:
     """Check if background jobs are running."""
-    try:
-        from features.monitoring.infrastructure import rollup as rollup_mod
-        # Check if rollup ran recently
-        return {"healthy": True, "message": "Background jobs running"}
-    except Exception as e:
-        return {"healthy": False, "message": str(e)}
+    return {"healthy": True, "message": "No background jobs to check"}
 
 
 def get_component_health(session: Session, component: Optional[str] = None) -> dict:
     """Get health status of all components."""
     checks = {
         "database": check_database(session),
-        "redis": check_redis(),
         "disk": check_disk_space(),
         "memory": check_memory(),
         "cpu": check_cpu(),

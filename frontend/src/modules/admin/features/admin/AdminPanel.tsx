@@ -5,7 +5,6 @@ import {
   Send,
   Settings,
   Shield,
-  BarChart3,
   FileText,
   Wrench,
   Users,
@@ -22,7 +21,7 @@ import DataManager from './DataManager';
 
 // Lazy-load new admin tabs
 const Control = lazy(() => import('./Control').then(m => ({ default: m.default })));
-const MonitoringLive = lazy(() => import('./MonitoringLive').then(m => ({ default: m.default })));
+
 const Errors = lazy(() => import('./Errors').then(m => ({ default: m.default })));
 const Analytics = lazy(() => import('./Analytics').then(m => ({ default: m.default })));
 const User360 = lazy(() => import('./User360').then(m => ({ default: m.default })));
@@ -68,7 +67,6 @@ const SUB_TABS = [
   { id: 'users', label: 'Users', icon: <Users size={16} strokeWidth={2} /> },
   { id: 'data', label: 'Data', icon: <FileText size={16} strokeWidth={2} /> },
   { id: 'control', label: 'Control', icon: <Settings size={16} strokeWidth={2} /> },
-  { id: 'monitoring', label: 'Monitoring Live', icon: <BarChart3 size={16} strokeWidth={2} /> },
   { id: 'errors', label: 'Errors', icon: <AlertTriangle size={16} strokeWidth={2} /> },
   { id: 'analytics', label: 'Analytics', icon: <TrendingUp size={16} strokeWidth={2} /> },
   { id: 'user360', label: 'User 360', icon: <Users size={16} strokeWidth={2} /> },
@@ -258,7 +256,7 @@ export default function AdminPanel({ onError, initialTab = 'feedback' }: AdminPa
       {tab === 'users' && <UsersModule onError={(msg: string) => setError(msg)} />}
       {tab === 'data' && <DataManager onError={(msg: string) => setError(msg)} />}
       {tab === 'control' && <Control onError={(msg: string) => setError(msg)} />}
-      {tab === 'monitoring' && <MonitoringLive onError={(msg: string) => setError(msg)} />}
+
       {tab === 'errors' && <Errors onError={(msg: string) => setError(msg)} />}
       {tab === 'analytics' && <Analytics onError={(msg: string) => setError(msg)} />}
       {tab === 'user360' && <User360 onError={(msg: string) => setError(msg)} />}

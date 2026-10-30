@@ -1,5 +1,4 @@
 ﻿import {
-  Activity,
   CalendarDays,
   ListTodo,
   MessageSquare,
@@ -24,9 +23,6 @@ export const SECTION_ICONS: Record<string, (props: { className?: string }) => Re
   ),
   profile: ({ className = 'w-5 h-5' }: { className?: string }) => (
     <UserCog className={className} strokeWidth={2} aria-hidden />
-  ),
-  monitoring: ({ className = 'w-5 h-5' }: { className?: string }) => (
-    <Activity className={className} strokeWidth={2} aria-hidden />
   ),
   important: ({ className = 'w-5 h-5' }: { className?: string }) => (
     <Sparkles className={className} strokeWidth={2} aria-hidden />

@@ -27,9 +27,12 @@ depends_on: Union[str, Sequence[str], None] = None
 # table names exist in more than one schema (e.g. core.security_event vs
 # telemetry.security_event).
 TABLES: list[tuple[str, str]] = [
-    ("features.alerts.models", "core.alert_channel"),
-    ("features.alerts.models", "core.alert_rule"),
-    ("features.alerts.models", "core.alert_incident"),
+    # ("features.alerts.models", "core.alert_channel"),
+    # ("features.alerts.models", "core.alert_rule"),
+    # ("features.alerts.models", "core.alert_incident"),
+    #   Removed with the telemetry system. Installations that already ran
+    #   this migration keep the three core.alert_* tables; they are inert
+    #   and can be dropped in a later cleanup.
     ("features.analytics.models", "core.analytics_event"),
     ("features.analytics.models", "core.analytics_segment"),
     ("features.analytics.models", "core.analytics_funnel"),

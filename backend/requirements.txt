@@ -26,7 +26,6 @@ psutil
 
 # --- Observability: scan queue ----------------------------------------------
 rq
-redis
 
 # --- Feedback NLP (all local, no model downloads at runtime) ----------------
 vaderSentiment

@@ -609,14 +609,6 @@ export interface HackathonFeed {
   hackathons: Hackathon[];
 }
 
-/** Monitoring types (admin only) */
-export interface MonitoringSubsection {
-  id: string;
-  group: string;
-  title: string;
-  platform: string;
-}
-
 /** API error types */
 export interface ApiError {
   detail: string;

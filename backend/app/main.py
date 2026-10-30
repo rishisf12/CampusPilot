@@ -1,60 +1,16 @@
 """FastAPI application entry point."""
 import logging
-import threading
-import time
+
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
 
 from core.database import create_db_and_tables
 from core.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def _start_rollup_loop(interval_s: int = 3600) -> threading.Thread:
-    """Recompute the hourly rollup on a timer, in this process.
-
-    Only started when ROLLUP_INLINE is on, and the docstring on that setting
-    explains why: with more than one replica, two timers rebuild the same
-    buckets concurrently. They would each delete-then-insert, so the result
-    converges anyway, but the intermediate window where the rollup is empty is
-    visible to a dashboard and is exactly the kind of flapping that trains an
-    admin to ignore the alerts.
-    """
-    from core.database import session_scope
-    from features.monitoring.infrastructure import rollup as rollup_mod
-
-    def loop() -> None:
-        while True:
-            time.sleep(interval_s)
-            try:
-                with session_scope() as db:
-                    summary = rollup_mod.rollup(db)
-                logger.info("rollup: %s", summary)
-            except Exception:
-                logger.exception("rollup failed; will retry next interval")
-
-    thread = threading.Thread(target=loop, name="hourly-rollup", daemon=True)
-    thread.start()
-    logger.info("inline rollup loop started (interval %ds)", interval_s)
-    return thread
-
-
-def _start_health_loop(interval_s: int | None = None) -> threading.Thread:
-    """Sample the Prometheus instruments into `health_metric` on a timer.
-
-    Gated by HEALTH_SAMPLE_INLINE for the same multi-replica reason as the
-    rollup loop: each replica computes its deltas from its own in-process
-    counters, so a dashboard pointed at a different replica than the one
-    sampling would compare two unrelated processes.
-    """
-    from features.monitoring.infrastructure import health as health_mod
-
-    return health_mod.start_loop(interval_s)
 
 
 @asynccontextmanager
@@ -71,29 +27,6 @@ async def lifespan(app: FastAPI):
     with Session(_engine) as session:
         flag_engine.load(session)
         maintenance_mode.load(session)
-
-        # The default alert rules, so alerting works on a fresh install
-        # instead of waiting for somebody to create them. Idempotent: a rule
-        # that already exists is left alone.
-        try:
-            from features.alerts.seed import seed_default_rules
-
-            created = seed_default_rules(session)
-            if created:
-                logger.info("seeded %d default alert rule(s)", created)
-        except Exception as e:  # noqa: BLE001 - a missing rule must not stop the boot
-            logger.warning("Failed to seed the default alert rules: %s", e)
-
-    # Instruments DB_QUERY_DURATION / DB_QUERIES, which are otherwise declared
-    # and never incremented, and which the health sampler reads.
-    from features.monitoring.infrastructure import db_instrumentation
-
-    db_instrumentation.attach()
-
-    if settings.rollup_inline:
-        _start_rollup_loop()
-    if settings.health_sample_inline:
-        _start_health_loop()
 
     # Schedule OppFeed daily agent job if enabled
     try:
@@ -120,73 +53,10 @@ app.add_middleware(
 from core.maintenance import MaintenanceMiddleware
 app.add_middleware(MaintenanceMiddleware)
 
-# Request monitoring middleware
-from core.monitoring import RequestMonitoringMiddleware
-app.add_middleware(RequestMonitoringMiddleware)
-
 
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
-
-def _metrics_middleware():
-    """Instrument every request, and serve `/metrics`.
-
-    Installed as middleware rather than by wrapping the app so that it also
-    captures requests that 404 or raise. A latency figure that silently omits
-    the slowest requests - which are precisely the ones that error - is worse
-    than no figure, because it looks like good news.
-
-    Path collapsing happens before the label is set. Without it,
-    `/feedback/12345` and `/feedback/67890` are different time series, a busy
-    endpoint quietly multiplies the size of the metrics store, and a client that
-    polls a distinct URL per request can exhaust it.
-    """
-    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-
-    from features.monitoring.infrastructure.metrics import (
-        REGISTRY, REQUESTS, REQUEST_DURATION, REQUEST_IN_FLIGHT,
-        route_template, status_class,
-    )
-
-    @app.middleware("http")
-    async def instrument(request: Request, call_next):
-        # The scrape endpoint is excluded from its own instrumentation. Counting
-        # it would mean every scrape adds a sample to the histogram it is about
-        # to read, and the metrics endpoint would report latency numbers that
-        # include its own serialization cost.
-        if request.url.path == "/metrics":
-            return await call_next(request)
-
-        route = route_template(request.url.path)
-        # Label-less gauge, so it is inc()/dec() directly. An in-flight count
-        # labelled by route would be useless for its actual job, which is
-        # "is the whole server backed up" - a sum across routes.
-        REQUEST_IN_FLIGHT.inc()
-        started = time.perf_counter()
-        try:
-            response = await call_next(request)
-        except Exception:
-            REQUESTS.labels(route, request.method, "5xx").inc()
-            REQUEST_DURATION.labels(route, request.method).observe(
-                time.perf_counter() - started
-            )
-            REQUEST_IN_FLIGHT.dec()
-            raise
-        REQUEST_DURATION.labels(route, request.method).observe(time.perf_counter() - started)
-        REQUESTS.labels(route, request.method, status_class(response.status_code)).inc()
-        REQUEST_IN_FLIGHT.dec()
-        return response
-
-    @app.get("/metrics", include_in_schema=False)
-    def metrics():
-        if not settings.metrics_enabled:
-            return PlainTextResponse("metrics disabled\n", status_code=404)
-        return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
-
-
-_metrics_middleware()
 
 
 from features.attendance import routes as attendance
@@ -199,14 +69,12 @@ from features.exam import routes as exam
 from features.auth import routes as auth
 from features.feedback import routes as feedback
 from features.task import routes as task_routes
-from features.monitoring.api.routes import collect_router, monitoring_router
 from features.admin import routes as admin_routes
 from features.audit import routes as audit_routes
 from features.flags import routes as flags_routes
 from features.maintenance import routes as maintenance_routes
 from features.remote_config import routes as remote_config_routes
 from features.errors import routes as errors_routes
-from features.alerts import routes as alerts_routes
 from features.health import routes as health_routes
 from features.analytics import routes as analytics_routes
 from features.user_control import routes as user_control_routes
@@ -247,33 +115,12 @@ app.include_router(flags_routes.router, tags=["Admin - Feature Flags"])
 app.include_router(maintenance_routes.router, tags=["Admin - Maintenance"])
 app.include_router(remote_config_routes.router, tags=["Admin - Remote Config"])
 app.include_router(errors_routes.router, tags=["Admin - Errors"])
-app.include_router(alerts_routes.router, tags=["Admin - Alerts"])
 app.include_router(health_routes.router)
 app.include_router(analytics_routes.router, tags=["Admin - Analytics"])
 app.include_router(user_control_routes.router, tags=["Admin - User Control"])
 app.include_router(broadcasts_routes.router, tags=["Admin - Broadcasts"])
 app.include_router(force_update_routes.router, tags=["Admin - Force Update"])
 app.include_router(security_routes.router, tags=["Admin - Security"])
-app.include_router(collect_router)
-app.include_router(monitoring_router)
-
-# The admin monitoring panels are served by the MCP layer and are always
-# mounted: the admin console reads them, and a dashboard is the product, not
-# an opt-in tool. They are admin-only, and every figure they show comes
-# through the MCP tool registry - redacted, subsection-scoped and audited.
-from mcp.api.panels import router as mcp_panel_router
-
-app.include_router(mcp_panel_router, prefix="/api/mcp", tags=["Admin - MCP Panels"])
-
-# The HTTP MCP *console* is optional and off by default: with the flag false
-# the paths do not exist at all, rather than existing and refusing. It is the
-# operator's toolbox - list the tools, call one - and not something an
-# installation should expose without asking for it.
-if settings.enable_admin_mcp:
-    from mcp.api.routes import router as mcp_router
-
-    app.include_router(mcp_router, prefix="/api/mcp", tags=["Admin - MCP"])
-    logger.info("admin MCP endpoint mounted at /api/mcp (ENABLE_ADMIN_MCP=true)")
 
 
 if __name__ == "__main__":

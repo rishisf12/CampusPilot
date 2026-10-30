@@ -42,7 +42,6 @@ def _model_tables():
     from sqlmodel import SQLModel
 
     import models  # noqa: F401  - populates the metadata
-    import features.monitoring.domain.models  # noqa: F401
     import features.oppfeed.models  # noqa: F401
 
     return [t for t in SQLModel.metadata.sorted_tables if t.schema]

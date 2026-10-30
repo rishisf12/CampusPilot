@@ -17,18 +17,6 @@ import type { AdminProfileResponse } from '@/shared/types/api';
  * screen (User 360) on purpose.
  */
 
-const SUBSECTIONS = [
-  { value: '', label: 'No default (remember my last)' },
-  { value: 'A_W_HEALTH', label: 'A/W Health & Performance' },
-  { value: 'B_W_ACTIVITY', label: 'B/W User Activity' },
-  { value: 'C_W_SECURITY', label: 'C/W Security' },
-  { value: 'D_W_FEEDBACK', label: 'D/W Feedback' },
-  { value: 'A_A_HEALTH', label: 'A/A Health & Performance' },
-  { value: 'B_A_ACTIVITY', label: 'B/A User Activity' },
-  { value: 'C_A_SECURITY', label: 'C/A Security' },
-  { value: 'D_A_FEEDBACK', label: 'D/A Feedback' },
-];
-
 const CHANNELS = [
   { value: 'email', label: 'Email' },
   { value: 'telegram', label: 'Telegram' },
@@ -234,51 +222,6 @@ export default function AdminProfile({ onError }: { onError?: (m: string) => voi
                 </select>
               </Field>
             </div>
-            <Field
-              label="Default monitoring subsection"
-              hint="Where the console lands when you open it."
-            >
-              <select
-                className={input}
-                value={profile.default_subsection ?? ''}
-                onChange={e => set('default_subsection', e.target.value || null)}
-              >
-                {SUBSECTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Default window (days)">
-              <input
-                type="number"
-                min={1}
-                max={90}
-                className={input}
-                value={profile.default_window_days}
-                onChange={e => set('default_window_days', Number(e.target.value))}
-              />
-            </Field>
-            <Field
-              label="Pinned panels"
-              hint="Comma separated. These stay at the top of your console."
-            >
-              <input
-                className={input}
-                value={profile.pinned_panels.join(', ')}
-                onChange={e =>
-                  set(
-                    'pinned_panels',
-                    e.target.value
-                      .split(',')
-                      .map(item => item.trim())
-                      .filter(Boolean)
-                  )
-                }
-                placeholder="health, security"
-              />
-            </Field>
           </div>
         </Card>
 
