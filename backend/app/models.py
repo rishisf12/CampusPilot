@@ -828,6 +828,25 @@ class FlagTarget(SQLModel, table=True):
     __tablename__ = "flag_target"
     __table_args__ = {"schema": "core", "extend_existing": True}
 
+
+class ExtraEvent(SQLModel, table=True):
+    """Faculty-added extra class or quiz, linked to a course."""
+    __tablename__ = "extra_event"
+    __table_args__ = {"schema": "core", "extend_existing": True}
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    course_code: str = Field(index=True, max_length=32)
+    label: str = Field(max_length=128)
+    event_date: date = Field(default=None)
+    time_slot: Optional[str] = Field(default=None, max_length=64)
+    instructor_id: Optional[int] = Field(default=None, index=True)
+    created_at: datetime = Field(
+        default=None,
+        sa_column=Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()),
+    )
+    expires_at: Optional[datetime] = Field(default=None)
+    cancelled: bool = Field(default=False)
+
     id: Optional[int] = Field(default=None, sa_column=Column(Integer, Identity(), primary_key=True))
     flag_id: int = Field(sa_column=Column(Integer, ForeignKey("core.feature_flag.id", ondelete="CASCADE"), nullable=False, index=True))
     attribute: str = Field(max_length=50)

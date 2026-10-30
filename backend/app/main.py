@@ -121,6 +121,8 @@ app.include_router(user_control_routes.router, tags=["Admin - User Control"])
 app.include_router(broadcasts_routes.router, tags=["Admin - Broadcasts"])
 app.include_router(force_update_routes.router, tags=["Admin - Force Update"])
 app.include_router(security_routes.router, tags=["Admin - Security"])
+from features.extra_events import router as extra_events_router
+app.include_router(extra_events_router, tags=["Extra Events"])
 
 
 if __name__ == "__main__":

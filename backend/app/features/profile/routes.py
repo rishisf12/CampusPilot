@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from core.database import get_session
 from models import User, UserProfile, normalize_tags
@@ -83,6 +83,7 @@ class ProfileResponse(BaseModel):
     #: Faculty-only fields set at signup; students get None.
     designation: Optional[str] = None
     timetable_notation: Optional[str] = None
+    courses: List[Dict[str, Any]] = []
 
     class Config:
         from_attributes = True
@@ -161,7 +162,22 @@ def get_profile(
 ):
     """Return the authenticated user's profile."""
     profile = get_profile_for_user(session, user)
-    return _to_response(profile)
+    resp = _to_response(profile)
+    # Faculty-only: list their assigned courses by notation or email
+    if profile.designation or profile.timetable_notation:
+        from models import Course
+        notation = profile.timetable_notation or ""
+        user_email = user.email if user else ""
+        courses = session.exec(
+            select(Course).where(
+                (Course.instructor == notation) | (Course.instructor == user_email)
+            )
+        ).all()
+        resp.courses = [
+            {"code": c.code, "name": c.name, "is_extra": c.is_extra}
+            for c in courses
+        ]
+    return resp
 
 
 @router.put("/", response_model=ProfileResponse)

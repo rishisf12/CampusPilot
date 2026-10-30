@@ -39,6 +39,8 @@ export default function FacultyProfile() {
     { Icon: UserRound, term: 'Bio', value: profile?.bio },
   ].filter(row => row.value);
 
+  const courses = (profile?.courses || []) as Array<{code:string,name:string,is_extra?:boolean}>;
+
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
       <Card className="text-center space-y-2">
@@ -85,6 +87,20 @@ export default function FacultyProfile() {
               </div>
             ))}
           </dl>
+        </Card>
+      )}
+
+      {courses.length > 0 && (
+        <Card>
+          <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--cp-text)' }}>Courses</h3>
+          <ul className="space-y-1 text-sm">
+            {courses.map((c: any) => (
+              <li key={c.code} className="flex items-center justify-between" style={{ color: 'var(--cp-text)' }}>
+                <span className="font-mono">{c.code}</span>
+                <span>{c.name} {c.is_extra ? '(Extra)' : ''}</span>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
     </div>

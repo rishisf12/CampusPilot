@@ -15,6 +15,7 @@ import LayoutShellMobile from '@/components/layout/LayoutShell.mobile';
 import LayoutShellDesktop from '@/components/layout/LayoutShell.desktop';
 
 /** Lazy-loaded features */
+const FacultyManage = lazy(() => import('./features/schedule/FacultyManage'));
 const FacultyLiveSchedule = lazy(() => import('./features/schedule/FacultyLiveSchedule'));
 const VacantRoomLookup = lazy(() => import('@shared/features/rooms/VacantRoomLookup'));
 const Feedback = lazy(() => import('@shared/features/feedback/Feedback'));
@@ -76,6 +77,7 @@ const FACULTY_NAV = [
 const FACULTY_SUB_TABS = [
   { id: 'live', label: 'Live Schedule' },
   { id: 'vacant', label: 'Vacant Rooms' },
+  { id: 'manage', label: 'Manage' },
 ] as const;
 
 const FACULTY_LABELS: Record<string, string> = {
@@ -85,6 +87,7 @@ const FACULTY_LABELS: Record<string, string> = {
   profile: 'Profile',
   live: 'Live Schedule',
   vacant: 'Vacant Rooms',
+  manage: 'Manage',
 };
 
 export function FacultyRoutes() {
@@ -138,6 +141,10 @@ export function FacultyRoutes() {
         setSection('classroom');
         setClassroomExpanded(true);
         selectTab('live');
+      } else if (id === 'manage') {
+        setSection('classroom');
+        setClassroomExpanded(true);
+        selectTab('manage');
       } else if (id === 'important') {
         if (section === 'important') {
           setEventsExpanded(prev => !prev);
@@ -227,6 +234,7 @@ export function FacultyRoutes() {
           <>
             {activeTab === 'live' && <FacultyLiveSchedule onError={setConnectionError} />}
             {activeTab === 'vacant' && <VacantRoomLookup onError={setConnectionError} />}
+            {activeTab === 'manage' && <FacultyManage />}
           </>
         )}
 
