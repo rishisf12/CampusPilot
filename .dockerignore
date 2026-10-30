@@ -21,7 +21,10 @@ dist/
 build/
 
 # Node.js
-node_modules/
+# `**/` matters: without it the pattern only matches a root-level folder,
+# and frontend/node_modules rode along in every build context (~100 MB).
+**/node_modules/
+**/__pycache__/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -79,6 +82,18 @@ backend/backend/uploads
 
 # CI/CD
 .github/workflows/*.yml.bak
+
+# Session / verification artifacts left in the repo root. The build context
+# is the repository root, so without these every image build zips and ships
+# screenshots, a stray zip and a nested scratch folder to the daemon —
+# hundreds of MB per build.
+/*.png
+/*.zip
+/*.ipynb
+/*.log
+/gen-d2v14.py
+/CampusPilot/
+/frontend/dev-dist/
 
 # Misc
 *.bak

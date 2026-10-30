@@ -80,6 +80,9 @@ class ProfileResponse(BaseModel):
     requested_branch: Optional[str] = None
     branch_change_reason: Optional[str] = None
     branch_change_requested_at: Optional[datetime] = None
+    #: Faculty-only fields set at signup; students get None.
+    designation: Optional[str] = None
+    timetable_notation: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -131,6 +134,8 @@ def _to_response(profile: UserProfile) -> ProfileResponse:
         requested_branch=profile.requested_branch,
         branch_change_reason=profile.branch_change_reason,
         branch_change_requested_at=profile.branch_change_requested_at,
+        designation=profile.designation,
+        timetable_notation=profile.timetable_notation,
     )
 
 

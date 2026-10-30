@@ -19,6 +19,19 @@ interface FooterNavBarProps {
   selectTab: (id: string) => void;
   /** When true, sub navbar renders above the main navigation bar (mobile only). */
   subNavFirst?: boolean;
+  /** Main nav pill order; defaults to the student list. */
+  navIds?: readonly string[];
+  /** Classroom sub-tab order; defaults to the student list. */
+  subTabIds?: readonly string[];
+  /** Events sub-tab order; shows the row only when Events is expanded. */
+  eventsTabIds?: readonly string[];
+  /** Whether the Events sub-row is expanded, mirroring classroomExpanded. */
+  eventsExpanded?: boolean;
+  /** The event stream the row should mark active. */
+  activeEventTab?: string;
+  selectEventTab?: (id: string) => void;
+  /** Label overrides; anything not listed falls back to SECTION_LABELS. */
+  labels?: Record<string, string>;
 }
 
 export default function FooterNavBar({
@@ -28,7 +41,15 @@ export default function FooterNavBar({
   activeTab,
   selectTab,
   subNavFirst = false,
+  navIds = ['classroom', 'my-team', 'important', 'feedback', 'task'],
+  subTabIds = ['live', 'attendance', 'vacant', 'exam'],
+  eventsTabIds,
+  eventsExpanded = false,
+  activeEventTab,
+  selectEventTab,
+  labels,
 }: FooterNavBarProps) {
+  const labelOf = (id: string) => labels?.[id] ?? SECTION_LABELS[id] ?? id;
   const handleSectionClick = (id: string) => {
     setSection(id);
   };
@@ -43,9 +64,9 @@ export default function FooterNavBar({
       }}
     >
       <nav className="flex gap-2 overflow-x-auto" aria-label="Main sections">
-        {(['classroom', 'my-team', 'important', 'feedback', 'task'] as const).map(id => {
+        {navIds.map(id => {
           const isActive = section === id;
-          const label = SECTION_LABELS[id];
+          const label = labelOf(id);
           const Icon = SECTION_ICONS[id];
           return (
             <button
@@ -80,20 +101,25 @@ export default function FooterNavBar({
     </div>
   );
 
-  const renderSubNav = () => (
+  /** One pill row of sub-tabs, styled identically for Classroom and Events. */
+  const renderSubRow = (
+    ids: readonly string[],
+    active: string,
+    onSelect?: (id: string) => void
+  ) => (
     <div
       className="py-2"
       style={{ borderTop: '1px solid rgba(163,177,198,.3)', marginTop: '2px', paddingTop: '2px' }}
     >
-      <nav className="flex gap-2 overflow-x-auto" aria-label="Classroom sub-tabs">
-        {(['live', 'attendance', 'vacant', 'exam'] as const).map(id => {
-          const isActive = id === activeTab;
+      <nav className="flex gap-2 overflow-x-auto" aria-label="Sub navigation">
+        {ids.map(id => {
+          const isActive = id === active;
           const SubIcon = SUB_TAB_ICONS[id];
           return (
             <button
               key={id}
               type="button"
-              onClick={() => selectTab(id)}
+              onClick={() => onSelect?.(id)}
               aria-current={isActive ? 'page' : undefined}
               className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[10px] sm:text-sm font-medium whitespace-nowrap flex-1 min-w-0 md:min-w-max rounded-lg transition-all duration-200"
               style={
@@ -114,13 +140,17 @@ export default function FooterNavBar({
               }
             >
               {SubIcon && <SubIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-              {SECTION_LABELS[id] ?? id}
+              {labelOf(id)}
             </button>
           );
         })}
       </nav>
     </div>
   );
+
+  const showClassroomRow = section === 'classroom' && classroomExpanded;
+  const showEventsRow =
+    section === 'important' && eventsExpanded && !!eventsTabIds?.length && selectEventTab;
 
   return (
     <footer
@@ -136,7 +166,8 @@ export default function FooterNavBar({
         {subNavFirst ? (
           <>
             {/* Sub navbar on top (mobile) */}
-            {section === 'classroom' && classroomExpanded && renderSubNav()}
+            {showClassroomRow && renderSubRow(subTabIds, activeTab, selectTab)}
+            {showEventsRow && renderSubRow(eventsTabIds!, activeEventTab || '', selectEventTab)}
             {/* Main navigation bar below */}
             {renderMainNav()}
           </>
@@ -145,7 +176,8 @@ export default function FooterNavBar({
             {/* Main navigation bar on top */}
             {renderMainNav()}
             {/* Sub navbar below */}
-            {section === 'classroom' && classroomExpanded && renderSubNav()}
+            {showClassroomRow && renderSubRow(subTabIds, activeTab, selectTab)}
+            {showEventsRow && renderSubRow(eventsTabIds!, activeEventTab || '', selectEventTab)}
           </>
         )}
       </div>

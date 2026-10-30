@@ -14,6 +14,18 @@ interface LayoutShellProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   children: React.ReactNode;
+  /** Main nav pill order; defaults to the student list. */
+  navIds?: readonly string[];
+  /** Classroom sub-tab order; defaults to the student list. */
+  subTabIds?: readonly string[];
+  /** Events sub-tab order; row shows only when expanded (Desktop+mobile). */
+  eventsTabIds?: readonly string[];
+  /** Whether the Events sub-row is expanded. */
+  eventsExpanded?: boolean;
+  activeEventTab?: string;
+  selectEventTab?: (id: string) => void;
+  /** Label overrides; anything not listed falls back to SECTION_LABELS. */
+  labels?: Record<string, string>;
 }
 
 /** Mobile layout: header top row only; footer has sub navbar ABOVE main nav bar;
@@ -29,6 +41,13 @@ export default function LayoutShellMobile({
   sidebarOpen,
   setSidebarOpen,
   children,
+  navIds,
+  subTabIds,
+  eventsTabIds,
+  eventsExpanded,
+  activeEventTab,
+  selectEventTab,
+  labels,
 }: LayoutShellProps) {
   return (
     <div
@@ -60,6 +79,13 @@ export default function LayoutShellMobile({
           activeTab={activeTab}
           selectTab={selectTab}
           subNavFirst
+          navIds={navIds}
+          subTabIds={subTabIds}
+          eventsTabIds={eventsTabIds}
+          eventsExpanded={eventsExpanded}
+          activeEventTab={activeEventTab}
+          selectEventTab={selectEventTab}
+          labels={labels}
         />
       </div>
 

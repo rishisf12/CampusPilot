@@ -91,6 +91,9 @@ export interface ProfileResponse {
   requested_branch?: string;
   branch_change_reason?: string;
   branch_change_requested_at?: string;
+  /** Faculty-only fields set at signup; students leave them undefined. */
+  designation?: string;
+  timetable_notation?: string;
 }
 
 export interface ProfileUpdate {

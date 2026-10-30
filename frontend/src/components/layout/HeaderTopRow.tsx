@@ -24,7 +24,7 @@ export function HeaderTopRow({ online, sidebarOpen, onMenu }: HeaderTopRowProps)
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-40"
+      className="fixed top-0 left-0 right-0 z-40 md:static"
       style={{
         background: 'var(--cp-chrome)',
         borderBottom: '1px solid rgba(255,255,255,.12)',

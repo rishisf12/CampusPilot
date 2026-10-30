@@ -8,7 +8,7 @@ import ErrorBanner from '@shared/components/ErrorBanner';
 import { ModuleErrorBoundary } from '@shared/components/ModuleErrorBoundary';
 import LayoutShellMobile from '@/components/layout/LayoutShell.mobile';
 import LayoutShellDesktop from '@/components/layout/LayoutShell.desktop';
-import { MailPlaceholder } from '@shared/features/mail';
+const Events = lazy(() => import('@shared/features/events/Events'));
 
 /** Lazy-loaded features */
 const LiveSchedule = lazy(() => import('./features/schedule/LiveSchedule'));
@@ -93,6 +93,10 @@ export function StudentUGRoutes() {
   const [section, setSection] = useState<SectionId>('classroom');
   // Tracks whether the Classroom sub-nav is expanded. Only relevant when section === 'classroom'.
   const [classroomExpanded, setClassroomExpanded] = useState(true);
+  // Events sub-row mirrors the Classroom mechanism: expands with the section and
+  // toggles when the Events pill is clicked again.
+  const [eventsExpanded, setEventsExpanded] = useState(false);
+  const [eventTab, setEventTab] = useState('jagrati');
   // Sidebar open state (mobile drawer / desktop collapsed)
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -145,7 +149,12 @@ export function StudentUGRoutes() {
         setClassroomExpanded(true);
         selectTab('exam');
       } else if (id === 'important') {
-        setSection('important');
+        if (section === 'important') {
+          setEventsExpanded(prev => !prev);
+        } else {
+          setSection('important');
+          setEventsExpanded(true);
+        }
         setClassroomExpanded(false);
       } else if (id === 'my-team') {
         setSection('my-team');
@@ -190,6 +199,10 @@ export function StudentUGRoutes() {
     selectTab,
     sidebarOpen,
     setSidebarOpen: handleToggleSidebar,
+    eventsTabIds: ['jagrati', 'cultural', 'technical', 'sports'],
+    eventsExpanded,
+    activeEventTab: eventTab,
+    selectEventTab: setEventTab,
     collapsed,
     setCollapsed: handleToggleCollapse,
   };
@@ -242,7 +255,7 @@ export function StudentUGRoutes() {
           </div>
         )}
 
-        {section === 'important' && <MailPlaceholder />}
+        {section === 'important' && <Events tab={eventTab} />}
 
         {section === 'feedback' && <Feedback />}
 

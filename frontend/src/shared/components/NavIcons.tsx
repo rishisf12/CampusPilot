@@ -1,15 +1,15 @@
 ﻿import {
   Activity,
-  AlertCircle,
   CalendarDays,
   ListTodo,
   MessageSquare,
   Settings as SettingsIcon,
+  Sparkles,
   UserCog,
   Users,
 } from 'lucide-react';
 
-export const SECTION_ICONS = {
+export const SECTION_ICONS: Record<string, (props: { className?: string }) => React.ReactNode> = {
   classroom: ({ className = 'w-5 h-5' }: { className?: string }) => (
     <CalendarDays className={className} strokeWidth={2} aria-hidden />
   ),
@@ -29,7 +29,7 @@ export const SECTION_ICONS = {
     <Activity className={className} strokeWidth={2} aria-hidden />
   ),
   important: ({ className = 'w-5 h-5' }: { className?: string }) => (
-    <AlertCircle className={className} strokeWidth={2} aria-hidden />
+    <Sparkles className={className} strokeWidth={2} aria-hidden />
   ),
   settings: ({ className = 'w-5 h-5' }: { className?: string }) => (
     <SettingsIcon className={className} strokeWidth={2} aria-hidden />
@@ -39,7 +39,11 @@ export const SECTION_ICONS = {
 export const SECTION_LABELS: Record<string, string> = {
   classroom: 'Classroom',
   'my-team': 'Collaborations',
-  important: 'Important',
+  important: 'Events',
+  jagrati: 'Jagrati',
+  cultural: 'Cultural',
+  technical: 'Technical',
+  sports: 'Sports',
   feedback: 'Feedback',
   task: 'Task',
   profile: 'Profile',

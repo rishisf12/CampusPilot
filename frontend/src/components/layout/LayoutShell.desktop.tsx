@@ -23,6 +23,19 @@ interface LayoutShellProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   children: React.ReactNode;
+  /** Main nav pill order; defaults to the student list. */
+  navIds?: readonly string[];
+  /** Classroom sub-tab order; defaults to the student list. */
+  subTabIds?: readonly string[];
+  /** Events sub-tab order (Jagrati/Cultural/Technical/Sports); omits the row. */
+  eventsTabIds?: readonly string[];
+  /** Whether the Events sub-row is expanded, mirroring classroomExpanded. */
+  eventsExpanded?: boolean;
+  /** The event stream the shell should mark active. */
+  activeEventTab?: string;
+  selectEventTab?: (id: string) => void;
+  /** Label overrides; anything not listed falls back to SECTION_LABELS. */
+  labels?: Record<string, string>;
 }
 
 /** Desktop layout: header top row + main nav + classroom sub-tabs in header,
@@ -38,7 +51,61 @@ export default function LayoutShellDesktop({
   sidebarOpen,
   setSidebarOpen,
   children,
+  navIds = ['classroom', 'my-team', 'important', 'feedback', 'task'],
+  subTabIds = ['live', 'attendance', 'vacant', 'exam'],
+  eventsTabIds,
+  eventsExpanded = false,
+  activeEventTab,
+  selectEventTab,
+  labels,
 }: LayoutShellProps) {
+  /** One pill row of sub-tabs, styled identically for Classroom and Events. */
+  const renderSubRow = (
+    ids: readonly string[],
+    active: string | undefined,
+    onSelect?: (id: string) => void
+  ) => (
+    <div className="flex justify-center">
+      <nav
+        className="flex gap-2 overflow-x-auto w-full max-w-xl px-2 pb-1.5"
+        aria-label="Sub navigation"
+      >
+        {ids.map(id => {
+          const isActive = id === active;
+          const SubIcon = SUB_TAB_ICONS[id];
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onSelect?.(id)}
+              aria-current={isActive ? 'page' : undefined}
+              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium whitespace-nowrap flex-1 min-w-max rounded-lg transition-all duration-200"
+              style={
+                isActive
+                  ? {
+                      borderRadius: '0.5rem',
+                      background: 'var(--cp-surface)',
+                      color: 'var(--cp-primary)',
+                      boxShadow: 'var(--cp-clay)',
+                      border: '1px solid rgba(255,255,255,.22)',
+                    }
+                  : {
+                      borderRadius: '0.5rem',
+                      background: 'rgba(255,255,255,.06)',
+                      color: 'var(--cp-text)',
+                      border: '1px solid rgba(163,177,198,.3)',
+                    }
+              }
+            >
+              {SubIcon && <SubIcon className="w-4 h-4" />}
+              {labels?.[id] ?? SECTION_LABELS[id] ?? id}
+            </button>
+          );
+        })}
+      </nav>
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--cp-wall)' }}>
       {/* Header flush to the top and side edges; navs attach below it. Desktop
@@ -55,9 +122,9 @@ export default function LayoutShellDesktop({
           className="flex gap-2 overflow-x-auto w-full max-w-2xl pt-1.5 pb-1.5 px-2"
           aria-label="Main sections"
         >
-          {(['classroom', 'my-team', 'important', 'feedback', 'task'] as const).map(id => {
+          {navIds.map(id => {
             const isActive = section === id;
-            const label = SECTION_LABELS[id];
+            const label = labels?.[id] ?? SECTION_LABELS[id];
             const Icon = SECTION_ICONS[id];
             return (
               <button
@@ -91,48 +158,17 @@ export default function LayoutShellDesktop({
         </nav>
       </div>
 
-      {/* Classroom sub-tabs — attached to the main nav, centred, narrower */}
-      {section === 'classroom' && classroomExpanded && (
-        <div className="flex justify-center">
-          <nav
-            className="flex gap-2 overflow-x-auto w-full max-w-xl px-2 pb-1.5"
-            aria-label="Classroom sub-tabs"
-          >
-            {(['live', 'attendance', 'vacant', 'exam'] as const).map(id => {
-              const isActive = id === activeTab;
-              const SubIcon = SUB_TAB_ICONS[id];
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => selectTab(id)}
-                  aria-current={isActive ? 'page' : undefined}
-                  className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium whitespace-nowrap flex-1 min-w-max rounded-lg transition-all duration-200"
-                  style={
-                    isActive
-                      ? {
-                          borderRadius: '0.5rem',
-                          background: 'var(--cp-surface)',
-                          color: 'var(--cp-primary)',
-                          boxShadow: 'var(--cp-clay)',
-                          border: '1px solid rgba(255,255,255,.22)',
-                        }
-                      : {
-                          borderRadius: '0.5rem',
-                          background: 'rgba(255,255,255,.06)',
-                          color: 'var(--cp-text)',
-                          border: '1px solid rgba(163,177,198,.3)',
-                        }
-                  }
-                >
-                  <SubIcon className="w-4 h-4" />
-                  {SECTION_LABELS[id] ?? id}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      )}
+      {/* Sub-tabs — attached to the main nav, centred, narrower. Classroom has
+          its own row; Events shows its streams the same way, toggled by the
+          Events pill itself. */}
+      {section === 'classroom' &&
+        classroomExpanded &&
+        renderSubRow(subTabIds, activeTab, selectTab)}
+      {section === 'important' &&
+        eventsExpanded &&
+        eventsTabIds &&
+        eventsTabIds.length > 0 &&
+        renderSubRow(eventsTabIds, activeEventTab, selectEventTab)}
 
       {/* Main content: keeps side padding even though the header is full-bleed */}
       <main className="flex-1 min-w-0 px-3 pt-2 pb-20">{children}</main>
