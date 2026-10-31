@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui';
 import { Plus, Clock } from 'lucide-react';
-import useProfile from '@shared/hooks/useProfile';
 
 type ManageSubTab = 'extra' | 'quiz';
 
@@ -10,21 +9,18 @@ const SUB_TAB_LABELS: Record<ManageSubTab, string> = {
   quiz: 'Quiz',
 };
 
-/** College hours 09:00-17:00. */
+const pad = (n: number) => n.toString().padStart(2, '0');
+
 const HOURS = Array.from({ length: 9 }, (_, i) => i + 9); // 9..17
 const MINUTES = Array.from({ length: 60 }, (_, i) => i); // 0..59
-
-const pad = (n: number) => n.toString().padStart(2, '0');
 
 /** Custom dropdown time picker: hours column + minutes column, opens on click. */
 function TimePicker({
   value,
   onChange,
-  onVacantCheck,
 }: {
   value: string; // "HH:mm"
   onChange: (v: string) => void;
-  onVacantCheck: (date: string, time: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [hour, setHour] = useState<number | null>(value ? Number(value.split(':')[0]) : null);
@@ -100,7 +96,7 @@ function TimePicker({
           type="button"
           className="rounded px-3 py-2 text-xs font-medium bg-[var(--cp-surface)] border border-[var(--cp-border)] hover:brightness-110 transition"
           style={{ color: 'var(--cp-text)' }}
-          onClick={() => onVacantCheck('', formatted)}
+          onClick={() => {}}
         >
           <Clock size={14} /> Check vacant
         </button>
@@ -113,20 +109,70 @@ function TimePicker({
 function ExtraEventForm({
   subTab,
   courses,
-  onVacantCheck,
+  options,
 }: {
   subTab: ManageSubTab;
-  courses: Array<{ code: string; name: string; is_extra?: boolean }>;
-  onVacantCheck: (date: string, time: string) => void;
+  courses: Array<{
+    code: string;
+    name: string;
+    semester?: number;
+    branch?: string;
+    instructor?: string;
+  }>;
+  options: {
+    semesters: number[];
+    branches: string[];
+    instructors: string[];
+    profile: {
+      first_name?: string | null;
+      last_name?: string | null;
+      branch?: string | null;
+      semester?: number | null;
+      designation?: string | null;
+      timetable_notation?: string | null;
+      full_name?: string | null;
+    } | null;
+  };
 }) {
   const [selectedCode, setSelectedCode] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedInstructor, setSelectedInstructor] = useState('');
   const [label, setLabel] = useState(subTab === 'quiz' ? 'Quiz-1' : 'Extraclass');
   const [dateStr, setDateStr] = useState('');
   const [timeSlot, setTimeSlot] = useState('');
   const [status, setStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [statusMsg, setStatusMsg] = useState('');
 
-  const selectedCourse = courses.find(c => c.code === selectedCode);
+  // Default instructor from profile (full name or timetable notation)
+  useEffect(() => {
+    if (!selectedInstructor && options.profile) {
+      const name = options.profile.full_name || options.profile.timetable_notation || '';
+      if (name && options.instructors.includes(name)) {
+        setSelectedInstructor(name);
+      } else if (options.instructors.length > 0) {
+        setSelectedInstructor(options.instructors[0]);
+      }
+    }
+  }, [options.profile, options.instructors, selectedInstructor]);
+
+  // Default semester and branch from profile
+  useEffect(() => {
+    if (selectedSemester === null && options.profile?.semester != null) {
+      setSelectedSemester(options.profile.semester);
+    }
+    if (!selectedBranch && options.profile?.branch) {
+      setSelectedBranch(options.profile.branch);
+    }
+  }, [options.profile, selectedSemester, selectedBranch]);
+
+  // Filter courses by selected semester + branch + instructor
+  const filteredCourses = courses.filter(
+    c =>
+      (selectedSemester == null || c.semester === selectedSemester) &&
+      (!selectedBranch || c.branch === selectedBranch) &&
+      (!selectedInstructor || c.instructor === selectedInstructor)
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,6 +191,9 @@ function ExtraEventForm({
           label,
           event_date: dateStr,
           time_slot: timeSlot,
+          semester: selectedSemester,
+          branch: selectedBranch || undefined,
+          instructor_name: selectedInstructor || undefined,
         }),
       });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
@@ -156,6 +205,9 @@ function ExtraEventForm({
       setLabel(subTab === 'quiz' ? 'Quiz-1' : 'Extraclass');
       setDateStr('');
       setTimeSlot('');
+      setSelectedSemester(null);
+      setSelectedBranch('');
+      setSelectedInstructor('');
     } catch {
       setStatus('error');
       setStatusMsg('Failed to add extra event. Try again.');
@@ -173,10 +225,68 @@ function ExtraEventForm({
         {subTab === 'quiz' ? 'Add Quiz' : 'Add Extra Class'}
       </h2>
       <form onSubmit={handleSubmit} className="space-y-3">
-        {/* Course dropdown */}
+        {/* Semester */}
         <div>
           <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
-            Course
+            Semester
+          </label>
+          <select
+            value={selectedSemester ?? ''}
+            onChange={e => setSelectedSemester(e.target.value ? Number(e.target.value) : null)}
+            className={input.className}
+          >
+            <option value="">Select semester</option>
+            {options.semesters.map(s => (
+              <option key={s} value={s}>
+                {s}
+                {' Sem'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Branch */}
+        <div>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Branch
+          </label>
+          <select
+            value={selectedBranch}
+            onChange={e => setSelectedBranch(e.target.value)}
+            className={input.className}
+          >
+            <option value="">Select branch</option>
+            {options.branches.map(b => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Instructor */}
+        <div>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Instructor
+          </label>
+          <select
+            value={selectedInstructor}
+            onChange={e => setSelectedInstructor(e.target.value)}
+            className={input.className}
+          >
+            <option value="">Select instructor</option>
+            {options.instructors.map(i => (
+              <option key={i} value={i}>
+                {i}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Course Code - auto-filtered by semester/branch/instructor */}
+        <div>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Course Code
           </label>
           <select
             value={selectedCode}
@@ -184,12 +294,20 @@ function ExtraEventForm({
             className={input.className}
           >
             <option value="">Select course</option>
-            {courses.map(c => (
-              <option key={c.code} value={c.code}>
-                {c.code} — {c.name} {c.is_extra ? ' (Extra)' : ''}
+            {filteredCourses.map(c => (
+              <option key={`${c.code}|${c.semester}|${c.branch}|${c.instructor}`} value={c.code}>
+                {c.code} — {c.name}
               </option>
             ))}
           </select>
+          {selectedSemester != null &&
+            selectedBranch &&
+            selectedInstructor &&
+            filteredCourses.length === 0 && (
+              <p className="text-xs text-[var(--cp-muted)] mt-1">
+                No courses match this semester/branch/instructor in the latest timetable.
+              </p>
+            )}
         </div>
 
         {/* Label input */}
@@ -225,7 +343,7 @@ function ExtraEventForm({
             Time slot (vacant room lookup applies)
           </label>
           <div className="flex gap-2">
-            <TimePicker value={timeSlot} onChange={setTimeSlot} onVacantCheck={onVacantCheck} />
+            <TimePicker value={timeSlot} onChange={setTimeSlot} />
           </div>
         </div>
 
@@ -241,13 +359,12 @@ function ExtraEventForm({
       </form>
 
       {/* Selected course info */}
-      {selectedCourse && (
+      {selectedCode && (
         <div
           className="mt-3 p-3 rounded text-xs bg-[var(--cp-surface)] border border-[var(--cp-border)]"
           style={{ color: 'var(--cp-text)' }}
         >
-          Selected: <b>{selectedCourse.code}</b> — {selectedCourse.name}
-          {selectedCourse.is_extra ? ' (Extra course)' : ''}
+          Selected: <b>{selectedCode}</b>
         </div>
       )}
     </Card>
@@ -256,21 +373,60 @@ function ExtraEventForm({
 
 /** Faculty section manager: sub-tabs for Extra Class and Quiz. */
 export default function FacultyManage() {
-  const { profile } = useProfile();
-  const courses = (profile?.courses || []) as Array<{
-    code: string;
-    name: string;
-    is_extra?: boolean;
-  }>;
-
+  const [options, setOptions] = useState<{
+    semesters: number[];
+    branches: string[];
+    instructors: string[];
+    courses: Array<{
+      code: string;
+      name: string;
+      semester?: number;
+      branch?: string;
+      instructor?: string;
+    }>;
+    profile: {
+      first_name?: string | null;
+      last_name?: string | null;
+      branch?: string | null;
+      semester?: number | null;
+      designation?: string | null;
+      timetable_notation?: string | null;
+      full_name?: string | null;
+    } | null;
+  } | null>(null);
+  const [optionsLoading, setOptionsLoading] = useState(false);
   const [subTab, setSubTab] = useState<ManageSubTab>('extra');
 
-  const onVacantCheck = (date: string, time: string) => {
-    // Vacant room lookup is delegated to the shared VacantRoomLookup screen;
-    // the time picker just captures the selected time here.
+  // Fetch options (semesters, branches, instructors, courses) from the latest timetable
+  useEffect(() => {
+    setOptionsLoading(true);
+    fetch('/extra-events/options')
+      .then(r => r.json())
+      .then(data => {
+        setOptions({
+          semesters: data.semesters || [],
+          branches: data.branches || [],
+          instructors: data.instructors || [],
+          courses: data.courses || [],
+          profile: data.profile || null,
+        });
+      })
+      .catch(() =>
+        setOptions({ semesters: [], branches: [], instructors: [], courses: [], profile: null })
+      )
+      .finally(() => setOptionsLoading(false));
+  }, []);
 
-    console.log('Vacant check requested for', date, time);
-  };
+  if (optionsLoading || !options) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div
+          className="animate-spin rounded-full border-2 border-current border-t-transparent"
+          style={{ color: 'var(--cp-primary)', width: 26, height: 26 }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 max-w-xl mx-auto">
@@ -311,9 +467,9 @@ export default function FacultyManage() {
       </div>
 
       {subTab === 'extra' ? (
-        <ExtraEventForm subTab="extra" courses={courses} onVacantCheck={onVacantCheck} />
+        <ExtraEventForm subTab="extra" courses={options.courses} options={options} />
       ) : (
-        <ExtraEventForm subTab="quiz" courses={courses} onVacantCheck={onVacantCheck} />
+        <ExtraEventForm subTab="quiz" courses={options.courses} options={options} />
       )}
     </div>
   );

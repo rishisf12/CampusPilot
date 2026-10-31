@@ -842,6 +842,11 @@ class ExtraEvent(SQLModel, table=True):
     event_date: date = Field(default=None)
     time_slot: Optional[str] = Field(default=None, max_length=64)
     instructor_id: Optional[int] = Field(default=None, index=True)
+    #: Timetable context at time of creation - semester, branch and instructor
+    #: are captured so the row can be reconciled when the timetable changes.
+    semester: Optional[int] = Field(default=None, index=True)
+    branch: Optional[str] = Field(default=None, max_length=64)
+    instructor_name: Optional[str] = Field(default=None, max_length=128)
     created_at: datetime = Field(
         default=None,
         sa_column=Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()),
