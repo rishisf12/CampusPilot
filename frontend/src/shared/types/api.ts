@@ -94,6 +94,8 @@ export interface ProfileResponse {
   /** Faculty-only fields set at signup; students leave them undefined. */
   designation?: string;
   timetable_notation?: string;
+  /** Faculty-only: courses assigned to this instructor (code/name/is_extra). */
+  courses?: Array<{ code: string; name: string; is_extra?: boolean }>;
 }
 
 export interface ProfileUpdate {
