@@ -57,7 +57,8 @@ export function SlotRow<T extends TimetableSlot>({
       </Badge>
 
       <span className="text-xs truncate" style={{ color: 'var(--cp-muted)' }}>
-        {slot.branch_or_program}
+        {slot.semester ? `Sem ${slot.semester}` : ''}{' '}
+        {slot.branch_or_program ? `· ${slot.branch_or_program}` : ''}
       </span>
     </button>
   );
