@@ -225,6 +225,7 @@ function ExtraEventForm({
   const [timeSlot, setTimeSlot] = useState('');
   const [status, setStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [statusMsg, setStatusMsg] = useState('');
+  const [notification, setNotification] = useState<string>('');
 
   // Default instructor from profile (full name or timetable notation)
   useEffect(() => {
@@ -303,6 +304,9 @@ function ExtraEventForm({
         }),
       });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
+      setNotification(
+        `${label} (${subTab === 'quiz' ? 'Quiz' : 'Extra Class'}) added at ${dateStr} ${timeSlot}. It will appear in Live Schedule and is visible to students.`
+      );
       setStatus('ok');
       setStatusMsg(
         `${subTab === 'quiz' ? 'Quiz' : 'Extra class'} added — it now appears in Live Schedule.`
@@ -490,6 +494,22 @@ function ExtraEventForm({
             <TimePicker value={timeSlot} onChange={setTimeSlot} />
           </div>
         </div>
+
+        {notification && (
+          <div
+            className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm font-medium"
+            style={{ color: '#10b981' }}
+          >
+            ✓ {notification}
+            <button
+              type="button"
+              onClick={() => setNotification('')}
+              className="ml-2 text-xs underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         <button
           type="submit"
