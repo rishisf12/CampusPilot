@@ -1,7 +1,7 @@
 """Profile API routes: profile CRUD, branch options, and branch-change tracking."""
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field

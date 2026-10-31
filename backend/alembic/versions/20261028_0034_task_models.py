@@ -19,23 +19,20 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "task",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=True),
-        sa.Column("title", sa.String(length=200), nullable=False),
-        sa.Column("remind_at", postgresql.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("completed_at", postgresql.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column(
-            "created_at",
-            postgresql.TIMESTAMP(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
-        sa.Column("expires_at", postgresql.TIMESTAMP(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["user_id"], ["core.user.id"]),
-        sa.PrimaryKeyConstraint("id"),
-        schema="core",
+    op.execute(
+        sa.text(
+            "CREATE TABLE IF NOT EXISTS core.task ("
+            "id SERIAL NOT NULL, "
+            "user_id INTEGER, "
+            "title VARCHAR(200) NOT NULL, "
+            "remind_at TIMESTAMP WITH TIME ZONE, "
+            "completed_at TIMESTAMP WITH TIME ZONE, "
+            "created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, "
+            "expires_at TIMESTAMP WITH TIME ZONE, "
+            "PRIMARY KEY (id), "
+            "FOREIGN KEY(user_id) REFERENCES core.\"user\" (id)"
+            ")"
+        )
     )
     op.create_index(
         "ix_core_task_user_id",

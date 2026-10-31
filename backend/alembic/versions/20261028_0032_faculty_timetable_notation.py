@@ -17,10 +17,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "user_profile",
-        sa.Column("timetable_notation", sa.String(), nullable=True),
-        schema="core",
+    op.execute(
+        sa.text("ALTER TABLE core.user_profile ADD COLUMN IF NOT EXISTS timetable_notation VARCHAR")
     )
 
 

@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    import os; os.system(taskkill
+                        ^
+SyntaxError: '(' was never closed

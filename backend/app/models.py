@@ -828,6 +828,8 @@ class FlagTarget(SQLModel, table=True):
     __tablename__ = "flag_target"
     __table_args__ = {"schema": "core", "extend_existing": True}
 
+    id: Optional[int] = Field(default=None, primary_key=True)
+
 
 class ExtraEvent(SQLModel, table=True):
     """Faculty-added extra class or quiz, linked to a course."""
