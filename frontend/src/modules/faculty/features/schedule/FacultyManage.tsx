@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card } from '@/components/ui';
+import { Card, Input } from '@/components/ui';
 import { Plus, Clock } from 'lucide-react';
 import useProfile from '@shared/hooks/useProfile';
 
@@ -9,20 +9,6 @@ const SUB_TAB_LABELS: Record<ManageSubTab, string> = {
   extra: 'Extra Class',
   quiz: 'Quiz',
 };
-
-/** Common college time slots (09:00–17:00, 55-min periods with 5-min gaps). */
-const TIME_SLOTS: Array<string> = (() => {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  const slots: Array<string> = [];
-  for (const day of days) {
-    for (let h = 9; h < 17; h++) {
-      const start = `${h.toString().padStart(2, '0')}:00`;
-      const end = `${h.toString().padStart(2, '0')}:55`;
-      slots.push(`${day} ${start} — ${end}`);
-    }
-  }
-  return slots;
-})();
 
 /** Shared form for adding an extra class or quiz. */
 function ExtraEventForm({
@@ -138,18 +124,13 @@ function ExtraEventForm({
             Time slot (vacant room lookup applies)
           </label>
           <div className="flex gap-2">
-            <select
+            <Input
+              id="vr-hour"
+              type="time"
               value={timeSlot}
               onChange={e => setTimeSlot(e.target.value)}
               className="flex-1 rounded px-3 py-2 text-sm bg-[var(--cp-bg)] border border-[var(--cp-border)] text-[var(--cp-text)]"
-            >
-              <option value="">Select time slot</option>
-              {TIME_SLOTS.map(s => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+            />
             <button
               type="button"
               onClick={() => {
