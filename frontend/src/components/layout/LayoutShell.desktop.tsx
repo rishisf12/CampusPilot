@@ -1,7 +1,7 @@
 import { Dispatch, SetStateAction } from 'react';
 import { Sidebar } from '@shared/components/Sidebar';
 import { SECTION_ICONS, SECTION_LABELS } from '@shared/components/NavIcons';
-import { CheckCircle2, DoorOpen, FileText, CalendarDays } from 'lucide-react';
+import { CheckCircle2, DoorOpen, FileText, CalendarDays, Plus } from 'lucide-react';
 
 /** Sub-tab icons (live / attendance / vacant / exam), matching the quick-action cards. */
 const SUB_TAB_ICONS: Record<string, (props: { className?: string }) => React.ReactNode> = {
@@ -9,6 +9,7 @@ const SUB_TAB_ICONS: Record<string, (props: { className?: string }) => React.Rea
   attendance: ({ className }) => <CheckCircle2 className={className} strokeWidth={2} aria-hidden />,
   vacant: ({ className }) => <DoorOpen className={className} strokeWidth={2} aria-hidden />,
   exam: ({ className }) => <FileText className={className} strokeWidth={2} aria-hidden />,
+  manage: ({ className }) => <Plus className={className} strokeWidth={2} aria-hidden />,
 };
 import { HeaderTopRow } from './HeaderTopRow';
 

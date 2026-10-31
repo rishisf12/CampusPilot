@@ -2,6 +2,7 @@
   CalendarDays,
   ListTodo,
   MessageSquare,
+  Plus,
   Settings as SettingsIcon,
   Sparkles,
   UserCog,
@@ -30,6 +31,9 @@ export const SECTION_ICONS: Record<string, (props: { className?: string }) => Re
   settings: ({ className = 'w-5 h-5' }: { className?: string }) => (
     <SettingsIcon className={className} strokeWidth={2} aria-hidden />
   ),
+  manage: ({ className = 'w-5 h-5' }: { className?: string }) => (
+    <Plus className={className} strokeWidth={2} aria-hidden />
+  ),
 };
 
 export const SECTION_LABELS: Record<string, string> = {
@@ -44,4 +48,5 @@ export const SECTION_LABELS: Record<string, string> = {
   task: 'Task',
   profile: 'Profile',
   settings: 'Settings',
+  manage: 'Manage',
 };
