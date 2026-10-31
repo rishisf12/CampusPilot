@@ -847,6 +847,7 @@ class ExtraEvent(SQLModel, table=True):
     semester: Optional[int] = Field(default=None, index=True)
     branch: Optional[str] = Field(default=None, max_length=64)
     instructor_name: Optional[str] = Field(default=None, max_length=128)
+    room: Optional[str] = Field(default=None, max_length=64)
     created_at: datetime = Field(
         default=None,
         sa_column=Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=func.now()),

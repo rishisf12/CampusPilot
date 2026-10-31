@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui';
-import { Plus, Clock } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 type ManageSubTab = 'extra' | 'quiz';
 
@@ -92,16 +92,86 @@ function TimePicker({
             </div>
           )}
         </div>
-        <button
-          type="button"
-          className="rounded px-3 py-2 text-xs font-medium bg-[var(--cp-surface)] border border-[var(--cp-border)] hover:brightness-110 transition"
-          style={{ color: 'var(--cp-text)' }}
-          onClick={() => {}}
-        >
-          <Clock size={14} /> Check vacant
-        </button>
       </div>
     </div>
+  );
+}
+
+/** Timetable entry card - click to select for creating an extra class/quiz. */
+function TimetableEntryCard({
+  entry,
+  selected,
+  onSelect,
+}: {
+  entry: {
+    code: string;
+    name: string;
+    instructor: string | null;
+    semester: number | null;
+    branch: string | null;
+    room: string | null;
+    day: string | null;
+    start_time: string | null;
+    end_time: string | null;
+  };
+  selected: boolean;
+  onSelect: (e: {
+    code: string;
+    name: string;
+    instructor: string | null;
+    semester: number | null;
+    branch: string | null;
+    room: string | null;
+    day: string | null;
+    start_time: string | null;
+    end_time: string | null;
+  }) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(entry)}
+      className={`flex items-center justify-between gap-3 p-3 rounded-lg border transition-all duration-200 ${
+        selected
+          ? 'bg-[var(--cp-surface)] border-[var(--cp-primary)] shadow-sm'
+          : 'bg-[var(--cp-bg)] border-[var(--cp-border)] hover:bg-[var(--cp-surface)]'
+      }`}
+    >
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-mono font-semibold text-sm" style={{ color: 'var(--cp-text)' }}>
+            {entry.code}
+          </span>
+          {entry.instructor && (
+            <span className="text-xs font-medium" style={{ color: 'var(--cp-primary)' }}>
+              {entry.instructor}
+            </span>
+          )}
+        </div>
+        <span className="text-sm" style={{ color: 'var(--cp-text)' }}>
+          {entry.name}
+        </span>
+        <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: 'var(--cp-muted)' }}>
+          <span>
+            {entry.semester}
+            {' Sem'}
+          </span>
+          <span>•</span>
+          <span>{entry.branch}</span>
+          <span>•</span>
+          <span>{entry.room}</span>
+          <span>•</span>
+          <span>{entry.day}</span>
+          <span>•</span>
+          <span>
+            {entry.start_time} – {entry.end_time}
+          </span>
+        </div>
+      </div>
+      <span className="text-xs font-medium" style={{ color: 'var(--cp-muted)' }}>
+        Select
+      </span>
+    </button>
   );
 }
 
@@ -123,6 +193,17 @@ function ExtraEventForm({
     semesters: number[];
     branches: string[];
     instructors: string[];
+    timetable_entries: Array<{
+      code: string;
+      name: string;
+      instructor: string | null;
+      semester: number | null;
+      branch: string | null;
+      room: string | null;
+      day: string | null;
+      start_time: string | null;
+      end_time: string | null;
+    }>;
     profile: {
       first_name?: string | null;
       last_name?: string | null;
@@ -138,6 +219,7 @@ function ExtraEventForm({
   const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [selectedInstructor, setSelectedInstructor] = useState('');
+  const [selectedRoom, setSelectedRoom] = useState<string>('');
   const [label, setLabel] = useState(subTab === 'quiz' ? 'Quiz-1' : 'Extraclass');
   const [dateStr, setDateStr] = useState('');
   const [timeSlot, setTimeSlot] = useState('');
@@ -174,6 +256,29 @@ function ExtraEventForm({
       (!selectedInstructor || c.instructor === selectedInstructor)
   );
 
+  // When a timetable entry is selected, auto-fill all fields
+  const selectTimetableEntry = (entry: {
+    code: string;
+    name: string;
+    instructor: string | null;
+    semester: number | null;
+    branch: string | null;
+    room: string | null;
+    day: string | null;
+    start_time: string | null;
+    end_time: string | null;
+  }) => {
+    setSelectedCode(entry.code);
+    setSelectedSemester(entry.semester ?? null);
+    setSelectedBranch(entry.branch ?? '');
+    setSelectedInstructor(entry.instructor ?? '');
+    setSelectedRoom(entry.room ?? '');
+    // Use the start time from the timetable slot
+    if (entry.start_time) {
+      setTimeSlot(entry.start_time);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCode || !label || !dateStr || !timeSlot) {
@@ -194,6 +299,7 @@ function ExtraEventForm({
           semester: selectedSemester,
           branch: selectedBranch || undefined,
           instructor_name: selectedInstructor || undefined,
+          room: selectedRoom || undefined,
         }),
       });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
@@ -208,6 +314,7 @@ function ExtraEventForm({
       setSelectedSemester(null);
       setSelectedBranch('');
       setSelectedInstructor('');
+      setSelectedRoom('');
     } catch {
       setStatus('error');
       setStatusMsg('Failed to add extra event. Try again.');
@@ -310,6 +417,43 @@ function ExtraEventForm({
             )}
         </div>
 
+        {/* Timetable entries - selectable cards */}
+        <div>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Timetable Entries (select one to auto-fill)
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+            {options.timetable_entries
+              .filter(
+                e =>
+                  (selectedSemester == null || e.semester === selectedSemester) &&
+                  (!selectedBranch || e.branch === selectedBranch) &&
+                  (!selectedInstructor || e.instructor === selectedInstructor)
+              )
+              .map(entry => (
+                <TimetableEntryCard
+                  key={`${entry.code}|${entry.day}|${entry.start_time}`}
+                  entry={entry}
+                  selected={selectedCode === entry.code && selectedSemester === entry.semester}
+                  onSelect={selectTimetableEntry}
+                />
+              ))}
+          </div>
+          {selectedSemester != null &&
+            selectedBranch &&
+            selectedInstructor &&
+            options.timetable_entries.filter(
+              e =>
+                (selectedSemester == null || e.semester === selectedSemester) &&
+                (!selectedBranch || e.branch === selectedBranch) &&
+                (!selectedInstructor || e.instructor === selectedInstructor)
+            ).length === 0 && (
+              <p className="text-xs text-[var(--cp-muted)] mt-1">
+                No timetable entries match this semester/branch/instructor.
+              </p>
+            )}
+        </div>
+
         {/* Label input */}
         <div>
           <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
@@ -384,6 +528,17 @@ export default function FacultyManage() {
       branch?: string;
       instructor?: string;
     }>;
+    timetable_entries: Array<{
+      code: string;
+      name: string;
+      instructor: string | null;
+      semester: number | null;
+      branch: string | null;
+      room: string | null;
+      day: string | null;
+      start_time: string | null;
+      end_time: string | null;
+    }>;
     profile: {
       first_name?: string | null;
       last_name?: string | null;
@@ -395,9 +550,8 @@ export default function FacultyManage() {
     } | null;
   } | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(false);
-  const [subTab, setSubTab] = useState<ManageSubTab>('extra');
 
-  // Fetch options (semesters, branches, instructors, courses) from the latest timetable
+  // Fetch options (semesters, branches, instructors, timetable entries) from the latest timetable
   useEffect(() => {
     setOptionsLoading(true);
     fetch('/extra-events/options')
@@ -408,14 +562,24 @@ export default function FacultyManage() {
           branches: data.branches || [],
           instructors: data.instructors || [],
           courses: data.courses || [],
+          timetable_entries: data.timetable_entries || [],
           profile: data.profile || null,
         });
       })
       .catch(() =>
-        setOptions({ semesters: [], branches: [], instructors: [], courses: [], profile: null })
+        setOptions({
+          semesters: [],
+          branches: [],
+          instructors: [],
+          courses: [],
+          timetable_entries: [],
+          profile: null,
+        })
       )
       .finally(() => setOptionsLoading(false));
   }, []);
+
+  const [subTab, setSubTab] = useState<ManageSubTab>('extra');
 
   if (optionsLoading || !options) {
     return (

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
-from datetime import date, timedelta
+from datetime import date
 from core.database import get_session
 from core.deps import get_current_user
 from models import User, ExtraEvent, TimetableSlot, Course, UserProfile
@@ -16,14 +16,13 @@ async def extra_event_options(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    """Return filter options (semesters, branches, instructors) and matching
-    courses from the latest timetable upload. Used by the faculty Manage
-    screen to auto-select the course code when semester+branch+instructor
-    are chosen.
+    """Return timetable slot data (course code, branch, semester, instructor,
+    room, day, time) from the latest timetable upload, plus filter options.
 
-    All figures come from ``timetable_slot`` - the table the timetable upload
-    writes to - so they always reflect the most recent timetable, whatever
-    semester/branch/instructor combination is currently published.
+    Everything comes from ``timetable_slot`` - the table the timetable upload
+    writes to - so it always reflects the most recent timetable. Faculty can
+    select a timetable entry to auto-fill course code, branch, semester,
+    instructor and classroom when adding an extra class or quiz.
     """
     # Current user's profile (for default values)
     profile = session.exec(
@@ -59,26 +58,19 @@ async def extra_event_options(
         if i
     ]
 
-    # Matching courses for the selected semester/branch/instructor.
-    course_query = select(
-        TimetableSlot.course_code,
-        TimetableSlot.instructor,
-        TimetableSlot.semester,
-        TimetableSlot.branch_or_program,
-    ).distinct()
+    # Full timetable slot entries matching the filters.
+    query = select(TimetableSlot).distinct(TimetableSlot.course_code, TimetableSlot.day, TimetableSlot.start_time)
     if semester is not None:
-        course_query = course_query.where(TimetableSlot.semester == semester)
+        query = query.where(TimetableSlot.semester == semester)
     if branch:
-        course_query = course_query.where(
-            TimetableSlot.branch_or_program == branch
-        )
+        query = query.where(TimetableSlot.branch_or_program == branch)
     if instructor:
-        course_query = course_query.where(TimetableSlot.instructor == instructor)
+        query = query.where(TimetableSlot.instructor == instructor)
 
-    course_rows = session.exec(course_query).all()
+    slots = session.exec(query).all()
 
     # Resolve course names from the Course table.
-    course_codes = [r[0] for r in course_rows]
+    course_codes = [s.course_code for s in slots]
     course_map: dict[str, str] = {}
     if course_codes:
         course_objs = session.exec(
@@ -86,22 +78,36 @@ async def extra_event_options(
         ).all()
         course_map = {c.code: c.name for c in course_objs}
 
-    courses = [
+    timetable_entries = [
         {
-            "code": code,
-            "name": course_map.get(code, code),
-            "instructor": instr,
-            "semester": sem,
-            "branch": br,
+            "code": s.course_code,
+            "name": course_map.get(s.course_code, s.course_code),
+            "instructor": s.instructor,
+            "semester": s.semester,
+            "branch": s.branch_or_program,
+            "room": s.room,
+            "day": s.day,
+            "start_time": s.start_time.strftime("%H:%M") if s.start_time else None,
+            "end_time": s.end_time.strftime("%H:%M") if s.end_time else None,
         }
-        for code, instr, sem, br in course_rows
+        for s in slots
     ]
 
     return {
         "semesters": sorted(semesters),
         "branches": sorted(branches),
         "instructors": sorted(instructors),
-        "courses": courses,
+        "courses": [
+            {
+                "code": e["code"],
+                "name": e["name"],
+                "instructor": e["instructor"],
+                "semester": e["semester"],
+                "branch": e["branch"],
+            }
+            for e in timetable_entries
+        ],
+        "timetable_entries": timetable_entries,
         "profile": {
             "first_name": profile.first_name if profile else None,
             "last_name": profile.last_name if profile else None,
@@ -127,6 +133,7 @@ async def create_extra(
     semester: int | None = None,
     branch: str | None = None,
     instructor: str | None = None,
+    room: str | None = None,
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
@@ -139,6 +146,7 @@ async def create_extra(
         semester=semester,
         branch=branch,
         instructor_name=instructor,
+        room=room,
         expires_at=event_date,
     )
     session.add(event)
