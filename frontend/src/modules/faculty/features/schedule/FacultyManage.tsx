@@ -595,8 +595,8 @@ export default function FacultyManage() {
   return (
     <div className="space-y-4 max-w-xl mx-auto">
       {/* Sub-tabs: Extra Class | Quiz */}
-      <div className="flex gap-2 overflow-x-auto w-full max-w-xl px-2 pb-1.5">
-        <nav className="flex gap-2" aria-label="Manage sub-tabs">
+      <div className="flex gap-2 items-center overflow-x-auto w-full max-w-xl px-2 pb-1.5">
+        <nav className="flex gap-2 shrink-0" aria-label="Manage sub-tabs">
           {(['extra', 'quiz'] as ManageSubTab[]).map(id => {
             const isActive = subTab === id;
             return (
@@ -628,6 +628,16 @@ export default function FacultyManage() {
             );
           })}
         </nav>
+        {/* Notification indicator beside the sub-tabs */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--cp-primary)] text-white px-2.5 py-0.5 text-[10px] font-semibold shadow-sm">
+            <Clock size={10} strokeWidth={2.5} aria-hidden />
+            {subTab === 'extra' ? 'Extra Class' : 'Quiz'}
+          </span>
+          <span className="text-[10px] font-medium" style={{ color: 'var(--cp-muted)' }}>
+            Manage
+          </span>
+        </div>
       </div>
 
       {subTab === 'extra' ? (
