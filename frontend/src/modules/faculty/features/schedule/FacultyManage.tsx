@@ -11,7 +11,9 @@ const SUB_TAB_LABELS: Record<ManageSubTab, string> = {
   created: 'Created',
 };
 
-const pad = (n: number) => n.toString().padStart(2, '0');
+function pad(n: number): string {
+  return n.toString().padStart(2, '0');
+}
 
 const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17];
 const MINUTES = [0, 15, 30, 45];
