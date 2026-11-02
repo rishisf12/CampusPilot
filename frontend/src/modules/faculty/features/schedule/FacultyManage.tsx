@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui';
 import { Plus } from 'lucide-react';
-import useProfile from '@shared/hooks/useProfile';
 
 type ManageSubTab = 'extra' | 'quiz' | 'created';
 
@@ -23,9 +22,6 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
 
   const formatted = hour != null && minute != null ? pad(hour) + ':' + pad(minute) : '';
 
-  const hourBtnClass = (h: number) => hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
-  const minBtnClass = (m: number) => minute === m ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
-
   return (
     <div className="relative inline-block w-full">
       <div className="flex gap-2">
@@ -45,7 +41,12 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Hour</span>
                   {HOURS.map((h) => (
-                    <button key={h} type="button" onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${hourBtnClass(h)}`}>
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }}
+                      className={`w-8 h-8 rounded text-sm font-medium ${hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]'`}}
+                    >
                       {pad(h)}
                     </button>
                   ))}
@@ -53,7 +54,7 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Minute</span>
                   {MINUTES.map((m) => (
-                    <button key={m} type="button" onClick={() => { setMinute(m); if (hour != null) onChange(pad(hour) + ':' + pad(m)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${minBtnClass(m)}`}>
+                    <button key={m} type="button" onClick={() => { setMinute(m); if (hour != null) onChange(pad(hour) + ':' + pad(m)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${minute === m ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]'`}}>
                       {pad(m)}
                     </button>
                   ))}
@@ -136,7 +137,9 @@ function ExtraEventForm({
           <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>Semester</label>
           <select value={selectedSemester ?? ''} onChange={(e) => setSelectedSemester(e.target.value ? Number(e.target.value) : null)} className={input.className}>
             <option value="">Select semester</option>
-            {(options.semesters || []).map((s: number) => <option key={s} value={s}>{s} Sem</option>)}
+            {(options.semesters || []).map((s: number) => (
+              <option key={s} value={s}>{s} Sem</option>
+            ))}
           </select>
         </div>
         <div>
@@ -150,7 +153,9 @@ function ExtraEventForm({
           <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>Instructor</label>
           <select value={selectedInstructor} onChange={(e) => setSelectedInstructor(e.target.value)} className={input.className}>
             <option value="">Select instructor</option>
-            {(options.instructors || []).map((i: string) => <option key={i} value={i}>{i}</option>)}
+            {(options.instructors || []).map((i: string) => (
+              <option key={i} value={i}>{i}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -261,7 +266,6 @@ export default function FacultyManage() {
           })}
         </nav>
       </div>
-
       {subTab === 'extra' ? (
         <ExtraEventForm subTab="extra" courses={options.courses} options={options} />
       ) : subTab === 'quiz' ? (
