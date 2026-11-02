@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui';
 import { Plus } from 'lucide-react';
+import useProfile from '@shared/hooks/useProfile';
 
 type ManageSubTab = 'extra' | 'quiz' | 'created';
 
@@ -41,12 +42,7 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Hour</span>
                   {HOURS.map((h) => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }}
-                      className={`w-8 h-8 rounded text-sm font-medium ${hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]'`}}
-                    >
+                    <button key={h} type="button" onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]'`}}>
                       {pad(h)}
                     </button>
                   ))}
@@ -68,15 +64,7 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-function ExtraEventForm({
-  subTab,
-  courses,
-  options,
-}: {
-  subTab: 'extra' | 'quiz';
-  courses: Array<{ code: string; name: string; semester?: number; branch?: string; instructor?: string }>;
-  options: { semesters: number[]; branches: string[]; instructors: string[]; courses: Array<{ code: string; name: string; semester?: number; branch?: string; instructor?: string }>; timetable_entries: any[]; profile: any };
-}) {
+function ExtraEventForm({ subTab, courses, options }: { subTab: 'extra' | 'quiz'; courses: Array<{ code: string; name: string; semester?: number; branch?: string; instructor?: string }>; options: any }) {
   const [selectedCode, setSelectedCode] = useState('');
   const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
   const [selectedBranch, setSelectedBranch] = useState('');
