@@ -11,9 +11,7 @@ const SUB_TAB_LABELS: Record<ManageSubTab, string> = {
   created: 'Created',
 };
 
-function pad(n: number): string {
-  return n.toString().padStart(2, '0');
-}
+const pad = (n: number) => n.toString().padStart(2, '0');
 
 const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17];
 const MINUTES = [0, 15, 30, 45];
@@ -24,6 +22,9 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
   const [minute, setMinute] = useState<number | null>(value ? Number(value.split(':')[1]) : null);
 
   const formatted = hour != null && minute != null ? pad(hour) + ':' + pad(minute) : '';
+
+  const hourClass = (h: number) => hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
+  const minuteClass = (m: number) => minute === m ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
 
   return (
     <div className="relative inline-block w-full">
@@ -44,7 +45,12 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Hour</span>
                   {HOURS.map((h) => (
-                    <button key={h} type="button" onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]'`}}>
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }}
+                      className={`w-8 h-8 rounded text-sm font-medium ${hourBtnClass(h)}`}
+                    >
                       {pad(h)}
                     </button>
                   ))}
@@ -52,7 +58,7 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Minute</span>
                   {MINUTES.map((m) => (
-                    <button key={m} type="button" onClick={() => { setMinute(m); if (hour != null) onChange(pad(hour) + ':' + pad(m)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${minute === m ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]'`}}>
+                    <button key={m} type="button" onClick={() => { setMinute(m); if (hour != null) onChange(pad(hour) + ':' + pad(m)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${minuteBtnClass(m)}`}>
                       {pad(m)}
                     </button>
                   ))}
