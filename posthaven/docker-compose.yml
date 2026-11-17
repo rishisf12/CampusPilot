@@ -1,0 +1,120 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: posthaven
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - posthaven-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d posthaven"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - posthaven-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  mailserver:
+    image: greenmail/standalone:latest
+    environment:
+      GREENMAIL_OPTS: >
+        -Dgreenmail.host=0.0.0.0
+        -Dgreenmail.setup.api
+        -Dgreenmail.smtp.port=3025
+        -Dgreenmail.smtp.ssl.port=3465
+        -Dgreenmail.pop3.port=3110
+        -Dgreenmail.pop3.ssl.port=3995
+        -Dgreenmail.imap.port=3143
+        -Dgreenmail.imap.ssl.port=3993
+        -Dgreenmail.api.port=8080
+        -Dgreenmail.disable_ssl_test_name=true
+    ports:
+      - "3025:3025"
+      - "3110:3110"
+      - "3143:3143"
+      - "3465:3465"
+      - "3993:3993"
+      - "3995:3995"
+      - "8080:8080"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      REDIS_URL: ${REDIS_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS}
+      ALLOW_PRIVATE_MAIL_HOSTS: ${ALLOW_PRIVATE_MAIL_HOSTS}
+      SYNC_HEADERS_LIMIT: ${SYNC_HEADERS_LIMIT}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
+      GREENMAIL_HOST: mailserver
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailserver:
+        condition: service_started
+    volumes:
+      - ./backend:/app:ro
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      REDIS_URL: ${REDIS_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      GREENMAIL_HOST: mailserver
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY}
+    command: ["python", "app/workers/worker.py"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app:ro
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  posthaven-db-data:
+  posthaven-redis-data:
