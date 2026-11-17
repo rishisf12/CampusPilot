@@ -6,8 +6,8 @@ import uuid
 
 
 class SnoozeBase(SQLModel):
-    message_id: uuid.UUID
-    wake_at: datetime
+    message_id: uuid.UUID = Field(sa_column=Column(ForeignKey("message.id", ondelete="CASCADE"), nullable=False, index=True))
+    wake_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     woke: bool = Field(default=False)
 
 

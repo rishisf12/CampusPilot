@@ -7,7 +7,7 @@ import uuid
 
 class RefreshTokenBase(SQLModel):
     token_hash: str = Field(index=True, unique=True, max_length=512)
-    expires_at: datetime
+    expires_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     revoked: bool = Field(default=False)
     replaced_by_token_hash: Optional[str] = Field(default=None, max_length=512)
 

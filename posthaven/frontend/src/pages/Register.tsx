@@ -18,7 +18,7 @@ export default function Register() {
     setLoading(true)
     try {
       await register(email, password, displayName || undefined)
-      navigate("/health")
+      navigate("/mail")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed")
     } finally {
@@ -42,18 +42,20 @@ export default function Register() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Display name</label>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="displayName">Display name</label>
             <input
               type="text"
+              id="displayName"
               className="mt-1 block w-full rounded-md border border-slate-300 bg-white p-2 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Email</label>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="register-email">Email</label>
             <input
               type="email"
+              id="register-email"
               required
               className="mt-1 block w-full rounded-md border border-slate-300 bg-white p-2 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={email}
@@ -61,9 +63,10 @@ export default function Register() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Password</label>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="register-password">Password</label>
             <input
               type="password"
+              id="register-password"
               required
               minLength={8}
               className="mt-1 block w-full rounded-md border border-slate-300 bg-white p-2 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"

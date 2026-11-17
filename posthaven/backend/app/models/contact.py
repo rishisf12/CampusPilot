@@ -12,7 +12,7 @@ class ContactBase(SQLModel):
     company: Optional[str] = Field(default=None, max_length=200)
     notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     avatar_url: Optional[str] = Field(default=None, max_length=512)
-    group_id: Optional[uuid.UUID] = Field(default=None, index=True)
+    group_id: Optional[uuid.UUID] = Field(default=None, sa_column=Column(ForeignKey("contactgroup.id", ondelete="SET NULL"), nullable=True, index=True))
 
 
 class Contact(ContactBase, table=True):

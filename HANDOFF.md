@@ -1,5 +1,9 @@
 # HANDOFF.md
 
+## Done (15 Nov — DS resume + GitHub profile refresh)
+- Profile README rishisf12/rishisf12 rewritten for Data Science focus (commit b2961e3 on main): ML benchmark curriculum, heart/next-word models, oppFeed featured; dead pocketF/UrTeam/CampusPilot-Mobile links removed. Repo description still says "Full-Stack Developer • React Native" — needs manual edit on github.com
+- Tailored resume for Vortizo AI Data Science Intern (remote, 6mo, ₹35k): `solidworks\Rishikesh_Resume_DataScience_Vortizo.{docx,pdf}` (1 page). Projects = real repos: Machine_Learning, heart/next-word (merged), CampusPilot, oppFeed. Generator: `%TEMP%\opencode\build_resume_ds.py` (python-docx + reportlab; run with system `python`, not the .venv — docx/reportlab not installed there)
+
 ## Done (Current — Faculty classroom + Events) — committed `c698eef`, pushed to origin/feature/mail-rebuild
 - Faculty module rebuilt student-style (web + mobile): Classroom ▸ **Live Schedule | Vacant Rooms**, main nav **Classroom | Events | Feedback | Profile**
 - Live Schedule filtered client-side by `profile.timetable_notation` vs `timetable_slot.instructor` (slash-separated parts, case-insensitive). Student-only `/schedule/now` endpoint NOT used (it 500s on faculty profiles) — current/next computed locally

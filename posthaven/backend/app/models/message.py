@@ -6,23 +6,23 @@ import uuid
 
 
 class MessageBase(SQLModel):
-    account_id: uuid.UUID
-    folder_id: uuid.UUID
-    thread_id: Optional[uuid.UUID] = Field(default=None, index=True)
+    account_id: uuid.UUID = Field(sa_column=Column(ForeignKey("mailaccount.id", ondelete="CASCADE"), nullable=False, index=True))
+    folder_id: uuid.UUID = Field(sa_column=Column(ForeignKey("folder.id", ondelete="CASCADE"), nullable=False, index=True))
+    thread_id: Optional[uuid.UUID] = Field(default=None, sa_column=Column(ForeignKey("thread.id", ondelete="SET NULL"), nullable=True, index=True))
     uid: int
     message_id: Optional[str] = Field(default=None, max_length=512)
     in_reply_to: Optional[str] = Field(default=None, max_length=512)
     references: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    from_json: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))  # {name, address}
-    to_json: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))
-    cc_json: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))
-    bcc_json: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))
+    from_json: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))  # {name, address}
+    to_json: Optional[list] = Field(default=None, sa_column=Column(JSON, nullable=True))
+    cc_json: Optional[list] = Field(default=None, sa_column=Column(JSON, nullable=True))
+    bcc_json: Optional[list] = Field(default=None, sa_column=Column(JSON, nullable=True))
     subject: Optional[str] = Field(default=None, max_length=1000)
     snippet: Optional[str] = Field(default=None, max_length=2000)
     body_text: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     body_html: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     search_vector: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))  # tsvector (PG)
-    flags: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))  # [\Seen, \Flagged, ...]
+    flags: Optional[list[str]] = Field(default=None, sa_column=Column(JSON, nullable=True))  # [\Seen, \Flagged, ...]
     size: int = Field(default=0)
     has_attachments: bool = Field(default=False)
     internal_date: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
@@ -58,15 +58,15 @@ class MessageRead(SQLModel):
     message_id: Optional[str]
     in_reply_to: Optional[str]
     references: Optional[str]
-    from_json: Optional[str]
-    to_json: Optional[str]
-    cc_json: Optional[str]
-    bcc_json: Optional[str]
+    from_json: Optional[dict]
+    to_json: Optional[list]
+    cc_json: Optional[list]
+    bcc_json: Optional[list]
     subject: Optional[str]
     snippet: Optional[str]
     body_text: Optional[str]
     body_html: Optional[str]
-    flags: Optional[str]
+    flags: Optional[list[str]]
     size: int
     has_attachments: bool
     internal_date: Optional[datetime]
@@ -80,11 +80,11 @@ class MessageListItem(SQLModel):
     thread_id: Optional[uuid.UUID]
     uid: int
     message_id: Optional[str]
-    from_json: Optional[str]
-    to_json: Optional[str]
+    from_json: Optional[dict]
+    to_json: Optional[list]
     subject: Optional[str]
     snippet: Optional[str]
-    flags: Optional[str]
+    flags: Optional[list[str]]
     size: int
     has_attachments: bool
     internal_date: Optional[datetime]

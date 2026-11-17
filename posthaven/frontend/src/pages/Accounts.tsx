@@ -13,6 +13,7 @@ export default function Accounts() {
   const [accounts, setAccounts] = useState<MailAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [syncing, setSyncing] = useState<string | null>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -30,6 +31,19 @@ export default function Accounts() {
     })
     return () => { cancelled = true }
   }, [])
+
+  const handleSync = async (id: string) => {
+    setSyncing(id)
+    setError("")
+    try {
+      const stats = await accountsApi.sync(id)
+      if (stats.errors?.length) setError(`Sync finished with errors: ${stats.errors.join("; ")}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync failed")
+    } finally {
+      setSyncing(null)
+    }
+  }
 
   const handleRemove = async (id: string) => {
     if (!window.confirm("Remove this account? Its mail data will be deleted.")) return
@@ -118,7 +132,14 @@ export default function Accounts() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={() => handleSync(acc.id)}
+                          disabled={syncing === acc.id}
+                          className="text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
+                        >
+                          {syncing === acc.id ? "Syncing…" : "Sync now"}
+                        </button>
                         <button
                           onClick={() => handleRemove(acc.id)}
                           className="text-xs text-red-600 hover:text-red-800 underline"

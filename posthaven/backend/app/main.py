@@ -6,6 +6,8 @@ from app.core.logging import configure_logging
 from app.core.middleware import SecurityHeadersMiddleware, RequestIDMiddleware, RateLimitMiddleware
 from app.db.session import init_db
 from app.api.v1.api import api_router
+from app.api.v1 import ws as ws_router
+from app.workers.idle_supervisor import get_supervisor
 
 configure_logging()
 
@@ -14,8 +16,11 @@ configure_logging()
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
+    supervisor = get_supervisor()
+    await supervisor.start()
     yield
-    # Shutdown (none needed yet)
+    # Shutdown
+    await supervisor.stop()
 
 
 app = FastAPI(
@@ -34,6 +39,8 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+# WebSocket endpoint lives at /ws (proxied by nginx; not under /api/v1)
+app.include_router(ws_router.router)
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestIDMiddleware)

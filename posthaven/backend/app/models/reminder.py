@@ -6,8 +6,8 @@ import uuid
 
 
 class ReminderBase(SQLModel):
-    message_id: uuid.UUID
-    due_at: datetime
+    message_id: uuid.UUID = Field(sa_column=Column(ForeignKey("message.id", ondelete="CASCADE"), nullable=False, index=True))
+    due_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     fired: bool = Field(default=False)
 
 

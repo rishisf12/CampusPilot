@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "/api"
+const API_BASE = import.meta.env.VITE_API_BASE ?? ""
 
 export interface MailAccount {
   id: string
@@ -117,6 +117,10 @@ export const accountsApi = {
     }) as Promise<MailAccount>,
   remove: (id: string) =>
     request(`/api/v1/accounts/${id}`, { method: "DELETE" }),
+  sync: (id: string, headersLimit = 200) =>
+    request(`/api/v1/accounts/${id}/sync?headers_limit=${headersLimit}`, {
+      method: "POST",
+    }) as Promise<{ folders: number; messages: number; errors: string[] }>,
   test: (params: {
     account_id?: string
     host?: string

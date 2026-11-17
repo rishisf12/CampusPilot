@@ -1,9 +1,19 @@
 # PostHaven — Bug Log
 
-| ID | Phase | Sev (1-4) | Found by | Symptom | Root cause | Fix (commit) | Regression test | Status |
-|----|-------|-----------|----------|---------|------------|--------------|-----------------|--------|
+| ID | Phase | Sev (1-4) | Found by | Symptom | Root cause | Fix | Regression test | Status |
+|----|-------|-----------|----------|---------|------------|-----|-----------------|--------|
+| PH-001 | 4/9 | 2 | Live verify (browser) | Blank page on every route | React Router v6 pathless `<Route>` with no children matched nothing → nothing rendered | Rewrote `App.tsx`: `PrivateRoute` layout + `<Outlet />`, explicit `/login` `/register` `/mail` `/accounts` `/add-account` `/compose` `/health`, `*` → `/` | Open `/` → lands on `/mail` shell; unknown path redirects | Fixed |
+| PH-002 | 9/10 | 2 | Live verify (API) | Login form does nothing / every API call 404s | All fetch libs used `/api` + `/api/v1/...` → `/api/api/v1/...`; nginx proxies `/api` unchanged to backend | Default `VITE_API_BASE`/fallback changed `"/api"` → `""` in `lib/api.ts`, `lib/auth.ts`, `lib/accounts.ts`, `lib/compose.ts` | `POST /api/v1/auth/register` → 201/409; `/api/v1/health/ready` → ok | Fixed |
+| PH-003 | 1/3 | 2 | Live verify (API) | `POST /auth/register` → 500 | `db/session.py` used SQLAlchemy `AsyncSession`; whole codebase calls SQLModel `.exec()` | `db/session.py` now uses `sqlmodel.ext.asyncio.session.AsyncSession` | Register new user → 201 | Fixed |
+| PH-004 | 1/3 | 2 | Live verify (API) | `POST /auth/register` → 500 (`Attachment failed to locate a name`) | Empty `app/models/__init__.py`; full model registry never imported, mappers not configured | `app/db/session.py` imports `app.db.base` (registers all models) | Register → 201; `configure_mappers()` OK | Fixed |
+| PH-005 | 1–8 | 2 | Live verify (API) | Mapper init fails: no FK join path (`MailAccount.folders` etc.) | Relationship columns declared as plain/`index=True` fields, no `ForeignKey`; plus mismatched `back_populates` (`Thread.user`→`messages`, `Draft.account`→`drafts`, `ScheduledSend.account`→`scheduled_sends`); migrations *do* create the FKs | Models declare `ForeignKey(...)` matching migration constraints; `Thread.user`→`back_populates="threads"`; one-way `Relationship()` for draft/scheduled-send account | Register → 201; folders/messages load | Fixed |
+| PH-006 | 1/6/7 | 2 | Live verify (API) | `POST /auth/register` → 500 `can't subtract offset-naive and offset-aware datetimes` | Model columns `expires_at`, `due_at`, `wake_at` were naive `DateTime`; all migrations use `DateTime(timezone=True)` | Declared as tz-aware `sa_column` matching migrations | Login + refresh token issue → 200 | Fixed |
+| PH-007 | 1 | 2 | Live verify (browser) | Login form hung/422; `change-password`, `create-scheduled` same class of bug | Backend took bare scalars as **query** params while frontend sends JSON bodies | `login`, `change-password`, `compose/scheduled` accept Pydantic/BaseModel JSON bodies (`LoginRequest`, `ChangePasswordRequest`, `ScheduledSendCreateRequest`); sweep of other bare scalar params found only intended path/query params | Login via UI → 200, httpOnly cookies set | Fixed |
+| PH-008 | 11 | 3 | Live verify (browser console) | WebSocket to `/ws` failed (every page) | WS router mounted under `/api/v1/ws`; nginx and frontend use `/ws` | WS router mounted at root (`/ws`) in `main.py`; removed from `/api/v1` api_router | Console clean on `/mail`; WS connects (cookie auth) | Fixed |
+| PH-009 | 5 | 2 | Live verify (browser) | `/mail` blank; `ReferenceError: loading is not defined` | `MessageList` used `loading` without destructuring it from `useMessagesStore` | Destructured `loading` from the store | `/mail` renders shell, zero console errors | Fixed |
 
 **Severity:** 1 = data loss / security / cross-tenant leak · 2 = core feature broken · 3 = degraded / UX bug · 4 = cosmetic.  
 **Rules:** Sev-1/2 block the phase gate. Every fixed bug needs a regression test path in the regression-test column.
 
-*No bugs logged yet — Phase 0 and Phase 1 code is complete but live verification is blocked by environment (no Docker daemon / npm registry access).*
+Notes: all bugs above were found by live verification on 2026-11-04. Earlier "fixes" (CDN React, inline debug content in `index.html`) were reverted — root cause was PH-001 and PH-002, never Vite/React.
+Phase reports (phase-00 … phase-12) predate live verification and still say "blocked by environment"; they should be re-verified against this build.

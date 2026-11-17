@@ -1,7 +1,6 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 import { useAuthStore } from "@/stores/auth"
-import { Link } from "react-router-dom"
 
 export default function Login() {
   const [email, setEmail] = useState("")
@@ -9,6 +8,7 @@ export default function Login() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const login = useAuthStore((state) => state.login)
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -16,6 +16,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login(email, password)
+      navigate("/mail")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {
@@ -39,9 +40,10 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Email</label>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="email">Email</label>
             <input
               type="email"
+              id="email"
               required
               className="mt-1 block w-full rounded-md border border-slate-300 bg-white p-2 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={email}
@@ -49,9 +51,10 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Password</label>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="password">Password</label>
             <input
               type="password"
+              id="password"
               required
               className="mt-1 block w-full rounded-md border border-slate-300 bg-white p-2 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={password}

@@ -1,26 +1,27 @@
 # PostHaven — Handoff
 
 ## Done
-- Phases 0–12 code complete (all scaffold + backend + frontend + docs)
-- Docs: PLAN.md, BUGLOG.md, ARCHITECTURE.md, API.md, CONTRIBUTING.md, OPERATIONS.md, README.md
-- Phase reports: docs/phases/phase-00 through phase-12
+- Phases 0–12 code complete; `docker compose up -d --build` brings up all services (healthy)
+- Live verification 2026-11-04 — full golden path works: register/login (JSON bodies, httpOnly
+  cookies) → `/mail` shell renders, zero console errors; `/ws` reachable; GreenMail up
+- 9 bugs found & fixed (see docs/BUGLOG.md PH-001…PH-009):
+  - Frontend: blank page (React Router v6 pathless `<Route>`); double `/api/api/v1` fetch base;
+    `MessageList` used undeclared `loading`; labels not linked to inputs; SW stale cache
+  - Backend: SQLAlchemy `AsyncSession` vs SQLModel `.exec()`; empty models registry (mappers not
+    configured); relationship join columns without `ForeignKey` + `back_populates` mismatches;
+    naive vs tz-aware datetimes (migrations use timestamptz); login/change-password/create-scheduled
+    expected query params while frontend sends JSON; WS mounted at `/api/v1/ws` instead of `/ws`
+- Docs: BUGLOG.md updated with live-verification findings
+- HANDOFF secret note: dev `.env` secrets must be rotated for production
 
 ## Decisions
-- Separate repo from CampusPilot at `posthaven/`
-- Same stack as CampusPilot: FastAPI/SQLModel/Postgres + React/Vite/Tailwind v4/PWA
-- GreenMail as dev mail server; ARQ for background jobs; Fernet for credential encryption
-- httpOnly JWT cookies for auth; SSRF guard on mail host tests
-
-## Blocker
-- No Docker daemon and no npm registry access in this environment — nothing built/run/tested
-- `docker compose config --quiet` validates; all files present
+- Separate project at `posthaven/`; stack per prompt; GreenMail dev server; ARQ worker;
+  httpOnly JWT cookies; Fernet credential encryption; SSRF guard on mail hosts
+- WS endpoint lives at `/ws` (outside `/api/v1`) to match nginx proxy and frontend
 
 ## Next step
-Move to environment with Docker + network; run:
-```
-cd posthaven
-docker compose up -d --build
-docker compose exec backend alembic upgrade head
-make seed
-```
-Then verify `/api/v1/health/ready` and proceed to fix any live issues.
+1. Hard-refresh http://localhost:5173 if UI looks stale (PWA SW) — or unregister SW in DevTools
+2. Seed GreenMail (`make seed`), `make trickle`; add accounts (mailserver:3143/3025, no TLS,
+   pass `secret123`); send mail and verify real-time delivery
+3. Re-verify & refresh phase reports (they say "blocked by environment" — no longer true)
+4. Commit per `phase-XX:` convention — nothing committed yet

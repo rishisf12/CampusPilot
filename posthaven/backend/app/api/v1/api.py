@@ -4,7 +4,6 @@ from app.api.v1 import auth
 from app.api.v1 import accounts
 from app.api.v1 import folders
 from app.api.v1 import messages
-from app.api.v1 import ws
 from app.api.v1 import compose
 from app.api.v1 import search
 from app.api.v1 import labels
@@ -21,7 +20,6 @@ api_router.include_router(auth.router)
 api_router.include_router(accounts.router)
 api_router.include_router(folders.router)
 api_router.include_router(messages.router)
-api_router.include_router(ws.router, prefix="")
 api_router.include_router(compose.router)
 api_router.include_router(search.router)
 api_router.include_router(labels.router)

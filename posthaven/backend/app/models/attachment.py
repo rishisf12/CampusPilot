@@ -6,7 +6,7 @@ import uuid
 
 
 class AttachmentBase(SQLModel):
-    message_id: uuid.UUID
+    message_id: uuid.UUID = Field(sa_column=Column(ForeignKey("message.id", ondelete="CASCADE"), nullable=False, index=True))
     filename: str = Field(max_length=512)
     mime_type: str = Field(max_length=255)
     size: int = Field(default=0)

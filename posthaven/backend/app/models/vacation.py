@@ -6,7 +6,7 @@ import uuid
 
 
 class VacationResponderBase(SQLModel):
-    account_id: uuid.UUID
+    account_id: uuid.UUID = Field(sa_column=Column(ForeignKey("mailaccount.id", ondelete="CASCADE"), nullable=False, index=True))
     enabled: bool = Field(default=False)
     subject: Optional[str] = Field(default=None, max_length=1000)
     body_text: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))

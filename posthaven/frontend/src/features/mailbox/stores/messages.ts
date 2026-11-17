@@ -1,20 +1,7 @@
 import { create } from "zustand"
+import type { MessageListItem } from "@/lib/messages"
 
-export interface MessageItem {
-  id: string
-  thread_id?: string | null
-  uid: number
-  message_id?: string | null
-  from_json?: string | null
-  to_json?: string | null
-  subject?: string | null
-  snippet?: string | null
-  flags?: string | null
-  size: number
-  has_attachments: boolean
-  internal_date?: string | null
-  received_at?: string | null
-}
+export type MessageItem = MessageListItem
 
 interface MessagesState {
   messages: MessageItem[]

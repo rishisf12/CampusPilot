@@ -51,19 +51,14 @@ def validate_mail_host(host: str, port: int) -> None:
             f"Private mail host '{host}' not allowed. Set ALLOW_PRIVATE_MAIL_HOSTS=true to enable (dev only)."
         )
 
+
+
+
 # --- Capability detection ---
 _CAPABILITY_KEYWORDS = (
     "IDLE", "CONDSTORE", "QRESYNC", "SORT", "THREAD", "MOVE", "SPECIAL-USE",
     "UTF8=ACCEPT", "IMAP4REV2", "LOGIN-REFERRALS",
 )
-
-
-def detect_capabilities(capabilities_line: str) -> list:
-    """Parse IMAP CAPABILITY response and return known supported capabilities."""
-    caps = capabilities_line.upper().split()
-    found = [c for c in _CAPABILITY_KEYWORDS if c in caps]
-    return sorted(set(found))
-
 
 # --- IMAP client wrapper ---
 class ImapClient:
@@ -90,15 +85,18 @@ class ImapClient:
             self._imap = aioimaplib.IMAP4_SSL(
                 host=self.host, port=self.port, timeout=self.timeout
             )
+            await self._imap.wait_hello_from_server()
         elif self.security == "starttls":
             self._imap = aioimaplib.IMAP4(
                 host=self.host, port=self.port, timeout=self.timeout
             )
+            await self._imap.wait_hello_from_server()
             await self._imap.starttls()
         elif self.security == "none":
             self._imap = aioimaplib.IMAP4(
                 host=self.host, port=self.port, timeout=self.timeout
             )
+            await self._imap.wait_hello_from_server()
         else:
             raise ValueError(f"Unsupported IMAP security: {self.security}")
         await self._imap.login(self.username, self.password)
@@ -106,15 +104,13 @@ class ImapClient:
     async def capabilities(self) -> list:
         if not self._imap:
             raise RuntimeError("Not connected")
-        typ, data = await self._imap.capability()
-        line = " ".join(d.decode() if isinstance(d, bytes) else str(d) for d in data)
-        return detect_capabilities(line)
+        return [c for c in _CAPABILITY_KEYWORDS if self._imap.has_capability(c)]
 
     async def list_folders(self) -> list:
         """Return list of (delimiter, folder_name)."""
         if not self._imap:
             raise RuntimeError("Not connected")
-        typ, data = await self._imap.list()
+        typ, data = await self._imap.list("\"\"", "*")
         folders: list = []
         if typ == "OK":
             for line in data:
@@ -142,18 +138,74 @@ class ImapClient:
         return {"typ": typ, "data": [d.decode() if isinstance(d, bytes) else str(d) for d in data]}
 
     async def idle(self, timeout: int = 29 * 60):
-        """Begin IMAP IDLE on the currently selected folder. Yields untagged responses."""
+        """Yield untagged server responses while in IMAP IDLE."""
         if not self._imap:
             raise RuntimeError("Not connected")
-        await self._imap.idle_start()
+        await self._imap.idle_start(timeout=float(timeout))
         try:
             while True:
-                line = await self._imap.idle_check(timeout=timeout)
-                if line is None:
+                resp = await self._imap.wait_server_push(timeout=float(timeout))
+                if resp is None:
                     return
-                yield line
+                yield str(resp)
         finally:
-            await self._imap.idle_done()
+            try:
+                await self._imap.idle_done()
+            except Exception:
+                pass
+
+    async def create_folder(self, name: str) -> None:
+        if not self._imap:
+            raise RuntimeError("Not connected")
+        await self._imap.create(name)
+
+    async def copy_uids(self, uid_set: str, destination: str) -> bool:
+        if not self._imap:
+            raise RuntimeError("Not connected")
+        typ, _ = await self._imap.uid("copy", uid_set, destination)
+        return typ == "OK"
+
+    async def store_uids(self, uid_set: str, add_flags: list[str] | None = None,
+                         remove_flags: list[str] | None = None) -> bool:
+        if not self._imap:
+            raise RuntimeError("Not connected")
+        if add_flags:
+            typ, _ = await self._imap.uid("store", uid_set, "+FLAGS", f"({' '.join(add_flags)})")
+            if typ != "OK":
+                return False
+        if remove_flags:
+            typ, _ = await self._imap.uid("store", uid_set, "-FLAGS", f"({' '.join(remove_flags)})")
+            if typ != "OK":
+                return False
+        return True
+
+    async def move_uids(self, uid_set: str, destination: str) -> bool:
+        """Move UIDs to destination. Tries MOVE extension, falls back to COPY+STORE+EXPUNGE."""
+        if not self._imap:
+            raise RuntimeError("Not connected")
+        try:
+            typ, _ = await self._imap.uid("move", uid_set, destination)
+            if typ == "OK":
+                return True
+        except Exception:
+            pass
+        if not await self.copy_uids(uid_set, destination):
+            return False
+        if not await self.store_uids(uid_set, add_flags=["\\Deleted"]):
+            return False
+        await self._imap.expunge()
+        return True
+
+    async def expunge(self) -> None:
+        if not self._imap:
+            raise RuntimeError("Not connected")
+        await self._imap.expunge()
+
+    async def append(self, mailbox: str, raw: bytes, flags: list[str] | None = None) -> bool:
+        if not self._imap:
+            raise RuntimeError("Not connected")
+        typ, _ = await self._imap.append(raw, mailbox, " ".join(flags) if flags else None)
+        return typ == "OK"
 
     async def logout(self) -> None:
         if self._imap:

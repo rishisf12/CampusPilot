@@ -1,6 +1,7 @@
 """Auth endpoints: register, login, refresh, logout, me, change-password."""
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
@@ -9,6 +10,14 @@ from app.core.security import create_access_token
 from app.core.config import settings
 from app.services import auth as auth_service
 from app.models.user import UserCreate, UserRead, UserRegisterResponse
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    new_password: str
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,12 +68,11 @@ async def register(
 @router.post("/login", response_model=UserRead)
 async def login(
     response: Response,
-    email: str,
-    password: str,
+    payload: LoginRequest,
     session: SessionDep,
     request: Request,
 ):
-    user = await auth_service.authenticate(session, email, password, request)
+    user = await auth_service.authenticate(session, payload.email, payload.password, request)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -131,11 +139,11 @@ async def me(current_user: CurrentUser):
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(
     response: Response,
-    new_password: str,
+    payload: ChangePasswordRequest,
     session: SessionDep,
     current_user: CurrentUser,
     request: Request,
 ):
-    await auth_service.change_password(session, current_user, new_password, request)
+    await auth_service.change_password(session, current_user, payload.new_password, request)
     _clear_auth_cookies(response)
     return None

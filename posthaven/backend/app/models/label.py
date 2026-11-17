@@ -22,8 +22,8 @@ class Label(LabelBase, table=True):
 
 
 class MessageLabelBase(SQLModel):
-    message_id: uuid.UUID
-    label_id: uuid.UUID
+    message_id: uuid.UUID = Field(sa_column=Column(ForeignKey("message.id", ondelete="CASCADE"), nullable=False, index=True))
+    label_id: uuid.UUID = Field(sa_column=Column(ForeignKey("label.id", ondelete="CASCADE"), nullable=False, index=True))
 
 
 class MessageLabel(MessageLabelBase, table=True):

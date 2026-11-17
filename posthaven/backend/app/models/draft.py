@@ -6,15 +6,15 @@ import uuid
 
 
 class DraftBase(SQLModel):
-    account_id: uuid.UUID
-    identity_id: Optional[uuid.UUID] = Field(default=None, index=True)
+    account_id: uuid.UUID = Field(sa_column=Column(ForeignKey("mailaccount.id", ondelete="CASCADE"), nullable=False, index=True))
+    identity_id: Optional[uuid.UUID] = Field(default=None, sa_column=Column(ForeignKey("identity.id", ondelete="SET NULL"), nullable=True, index=True))
     to_json: str = Field(sa_column=Column(JSON, nullable=False))
     cc_json: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))
     bcc_json: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))
     subject: str = Field(max_length=1000)
     body_text: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     body_html: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    reply_to_message_id: Optional[uuid.UUID] = Field(default=None, index=True)
+    reply_to_message_id: Optional[uuid.UUID] = Field(default=None, sa_column=Column(ForeignKey("message.id", ondelete="SET NULL"), nullable=True, index=True))
 
 
 class Draft(DraftBase, table=True):
@@ -30,7 +30,7 @@ class Draft(DraftBase, table=True):
     )
 
     user: "User" = Relationship(back_populates="drafts")
-    account: "MailAccount" = Relationship(back_populates="drafts")
+    account: "MailAccount" = Relationship()
 
 
 class DraftRead(SQLModel):

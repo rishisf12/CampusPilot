@@ -16,6 +16,7 @@ export default function AddAccount() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [testing, setTesting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<TestResult | null>(null)
   const navigate = useNavigate()
 
@@ -72,11 +73,15 @@ export default function AddAccount() {
       is_enabled: true,
       sync_enabled: true,
     }
+    setSaving(true)
     try {
-      await accountsApi.create(data)
+      const created = await accountsApi.create(data)
+      await accountsApi.sync(created.id)
       setStep("done")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -88,7 +93,7 @@ export default function AddAccount() {
             <h2 className="text-2xl font-bold text-green-900 mb-2">Account connected</h2>
             <p className="text-green-700 mb-4">Your mail account has been added and sync is starting.</p>
             <button
-              onClick={() => navigate("/health")}
+              onClick={() => navigate("/mail")}
               className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-800"
             >
             Go to inbox
@@ -271,9 +276,10 @@ export default function AddAccount() {
               </button>
               <button
                 onClick={handleSave}
-                className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-slate-900 hover:bg-slate-800"
+                disabled={saving}
+                className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
               >
-                Save account
+                {saving ? "Connecting…" : "Save account"}
               </button>
             </div>
           </div>

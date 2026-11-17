@@ -6,10 +6,10 @@ import uuid
 
 
 class FolderBase(SQLModel):
-    account_id: uuid.UUID
+    account_id: uuid.UUID = Field(sa_column=Column(ForeignKey("mailaccount.id", ondelete="CASCADE"), nullable=False, index=True))
     name: str = Field(max_length=255)
     delimiter: Optional[str] = Field(default=None, max_length=10)
-    parent_id: Optional[uuid.UUID] = Field(default=None, index=True)
+    parent_id: Optional[uuid.UUID] = Field(default=None, sa_column=Column(ForeignKey("folder.id", ondelete="SET NULL"), nullable=True, index=True))
     special_use: Optional[str] = Field(default=None, max_length=50)  # \Inbox, \Sent, \Drafts, \Trash, \Junk, \Archive
     subscribed: bool = Field(default=True)
     # IMAP state

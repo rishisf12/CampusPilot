@@ -33,15 +33,15 @@ services:
     image: greenmail/standalone:latest
     environment:
       GREENMAIL_OPTS: >
-        -Dgreenmail.host=0.0.0.0
-        -Dgreenmail.setup.api
-        -Dgreenmail.smtp.port=3025
-        -Dgreenmail.smtp.ssl.port=3465
-        -Dgreenmail.pop3.port=3110
-        -Dgreenmail.pop3.ssl.port=3995
-        -Dgreenmail.imap.port=3143
-        -Dgreenmail.imap.ssl.port=3993
-        -Dgreenmail.api.port=8080
+        -Dgreenmail.smtp.hostname=0.0.0.0 -Dgreenmail.smtp.port=3025
+        -Dgreenmail.smtp.ssl.hostname=0.0.0.0 -Dgreenmail.smtp.ssl.port=3465
+        -Dgreenmail.imap.hostname=0.0.0.0 -Dgreenmail.imap.port=3143
+        -Dgreenmail.imap.ssl.hostname=0.0.0.0 -Dgreenmail.imap.ssl.port=3993
+        -Dgreenmail.pop3.hostname=0.0.0.0 -Dgreenmail.pop3.port=3110
+        -Dgreenmail.pop3.ssl.hostname=0.0.0.0 -Dgreenmail.pop3.ssl.port=3995
+        -Dgreenmail.api.hostname=0.0.0.0 -Dgreenmail.api.port=8080
+        -Dgreenmail.users=alice:secret123@localhost,bob:secret123@localhost
+        -Dgreenmail.users.login=email
         -Dgreenmail.disable_ssl_test_name=true
     ports:
       - "3025:3025"

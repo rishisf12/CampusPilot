@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui';
 import { Plus } from 'lucide-react';
-import useProfile from '@shared/hooks/useProfile';
 
 type ManageSubTab = 'extra' | 'quiz' | 'created';
 
@@ -16,15 +15,20 @@ const pad = (n: number) => n.toString().padStart(2, '0');
 const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17];
 const MINUTES = [0, 15, 30, 45];
 
+function hourClass(h: number, hour: number | null) {
+  return hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
+}
+
+function minuteClass(m: number, minute: number | null) {
+  return minute === m ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
+}
+
 function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const [hour, setHour] = useState<number | null>(value ? Number(value.split(':')[0]) : null);
   const [minute, setMinute] = useState<number | null>(value ? Number(value.split(':')[1]) : null);
 
   const formatted = hour != null && minute != null ? pad(hour) + ':' + pad(minute) : '';
-
-  const hourClass = (h: number) => hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
-  const minuteClass = (m: number) => minute === m ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
 
   return (
     <div className="relative inline-block w-full">
@@ -45,12 +49,7 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Hour</span>
                   {HOURS.map((h) => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }}
-                      className={`w-8 h-8 rounded text-sm font-medium ${hourBtnClass(h)}`}
-                    >
+                    <button key={h} type="button" onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${hourClass(h)}`}>
                       {pad(h)}
                     </button>
                   ))}
@@ -58,7 +57,7 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Minute</span>
                   {MINUTES.map((m) => (
-                    <button key={m} type="button" onClick={() => { setMinute(m); if (hour != null) onChange(pad(hour) + ':' + pad(m)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${minuteBtnClass(m)}`}>
+                    <button key={m} type="button" onClick={() => { setMinute(m); if (hour != null) onChange(pad(hour) + ':' + pad(m)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${minuteClass(m)}`}>
                       {pad(m)}
                     </button>
                   ))}
@@ -84,7 +83,7 @@ function ExtraEventForm({ subTab, courses, options }: { subTab: 'extra' | 'quiz'
   const [statusMsg, setStatusMsg] = useState('');
 
   const input = { className: 'w-full rounded px-3 py-2 text-sm bg-[var(--cp-bg)] border border-[var(--cp-border)] text-[var(--cp-text)]' };
-  const filteredCourses = courses.filter((c) => (selectedSemester == null || c.semester === selectedSemester) && (!selectedBranch || c.branch === selectedBranch) && (!selectedInstructor || c.instructor === selectedInstructor));
+  const filteredCourses = courses.filter((c: any) => (selectedSemester == null || c.semester === selectedSemester) && (!selectedBranch || c.branch === selectedBranch) && (!selectedInstructor || c.instructor === selectedInstructor));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

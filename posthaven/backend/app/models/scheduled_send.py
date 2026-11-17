@@ -15,8 +15,8 @@ class SendStatus(str, enum.Enum):
 
 
 class ScheduledSendBase(SQLModel):
-    account_id: uuid.UUID
-    identity_id: Optional[uuid.UUID] = Field(default=None, index=True)
+    account_id: uuid.UUID = Field(sa_column=Column(ForeignKey("mailaccount.id", ondelete="CASCADE"), nullable=False, index=True))
+    identity_id: Optional[uuid.UUID] = Field(default=None, sa_column=Column(ForeignKey("identity.id", ondelete="SET NULL"), nullable=True, index=True))
     to_json: str = Field(sa_column=Column(JSON, nullable=False))
     cc_json: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))
     bcc_json: Optional[str] = Field(default=None, sa_column=Column(JSON, nullable=True))
@@ -37,7 +37,7 @@ class ScheduledSend(ScheduledSendBase, table=True):
     )
 
     user: "User" = Relationship(back_populates="scheduled_sends")
-    account: "MailAccount" = Relationship(back_populates="scheduled_sends")
+    account: "MailAccount" = Relationship()
 
 
 class ScheduledSendRead(SQLModel):
