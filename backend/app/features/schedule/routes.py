@@ -58,7 +58,7 @@ def live_schedule(
 
 
 @router.post("/courses/extra", response_model=ExtraCourseResponse, status_code=status.HTTP_201_CREATED)
-def add_extra_course(payload: ExtraCourseCreate, session: Session = Depends(get_session)):
+def add_extra_course(payload: ExtraCourseCreate, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     """
     Add a cross-semester extra course that appears in the user's schedule.
     """
@@ -96,7 +96,7 @@ def list_extra_courses(session: Session = Depends(get_session)):
 
 
 @router.delete("/courses/extra/{course_code}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_extra_course(course_code: str, session: Session = Depends(get_session)):
+def remove_extra_course(course_code: str, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     """Remove extra course flag (keeps course but removes from schedule)."""
     course = session.exec(select(Course).where(Course.code == course_code)).first()
     if not course:

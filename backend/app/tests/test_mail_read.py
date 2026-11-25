@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from fastapi.testclient import TestClient
 
 from core.database import create_db_and_tables
-from app.main import app
+from main import app
 from features.mail import service
 from features.mail.models import MailMessage, MailSection, MailCluster, MailSenderRule
 

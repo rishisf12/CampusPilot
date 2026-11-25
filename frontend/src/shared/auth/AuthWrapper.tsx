@@ -8,7 +8,9 @@ import {
   readPendingVerification,
   setEmailJustVerified,
   setToken,
+  STORAGE_KEY,
   writeCachedUser,
+  writeValue,
 } from '../lib/storage';
 import LoginForm from './LoginForm';
 import AdminLogin from './AdminLogin';
@@ -154,6 +156,8 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
    */
   const adoptSession = useCallback(async (accessToken: string): Promise<User> => {
     setToken(accessToken);
+    // exam lookups from the previous account must not leak into the new one
+    writeValue(STORAGE_KEY.quickLookup, null);
     const profile = await authApi.me();
     setUser(profile);
     writeCachedUser(profile);
@@ -224,6 +228,37 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
     setScreen('login');
     setOfferPasskey(false);
   }, []);
+
+  /**
+   * Cross-tab session sync.
+   *
+   * The token lives in the shared `localStorage.auth_token` key, so a second
+   * tab signing in as someone else changes the key for every tab.  Pick the
+   * change up here: adopt the new token instead of continuing under this
+   * tab's session, so this tab never sends one user's token while another
+   * user's profile is displayed or edited.
+   */
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    const onSessionChange = async (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY.token) return;
+      const nextToken = event.newValue;
+      if (nextToken) {
+        try {
+          await adoptSession(nextToken);
+        } catch {
+          /* the shared session may be rejected - land on the login screen */
+          setStatus('anonymous');
+          setScreen('login');
+        }
+      } else {
+        // The other tab removed the token; our session is no longer ours.
+        void handleLogout();
+      }
+    };
+    window.addEventListener('storage', onSessionChange);
+    return () => window.removeEventListener('storage', onSessionChange);
+  }, [status, adoptSession, handleLogout]);
 
   if (status === 'checking') {
     return (

@@ -4,6 +4,24 @@ import { Plus } from 'lucide-react';
 
 type ManageSubTab = 'extra' | 'quiz' | 'created';
 
+interface CourseOpt {
+  code: string;
+  name: string;
+  semester?: number;
+  branch?: string;
+  instructor?: string;
+  is_extra?: boolean;
+}
+
+interface ManageOptions {
+  semesters?: number[];
+  branches?: string[];
+  instructors?: string[];
+  courses?: CourseOpt[];
+  timetable_entries?: Array<Record<string, unknown>>;
+  profile?: Record<string, unknown> | null;
+}
+
 const SUB_TAB_LABELS: Record<ManageSubTab, string> = {
   extra: 'Extra Class',
   quiz: 'Quiz',
@@ -16,11 +34,15 @@ const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17];
 const MINUTES = [0, 15, 30, 45];
 
 function hourClass(h: number, hour: number | null) {
-  return hour === h ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
+  return hour === h
+    ? 'bg-[var(--cp-primary)] text-white'
+    : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
 }
 
 function minuteClass(m: number, minute: number | null) {
-  return minute === m ? 'bg-[var(--cp-primary)] text-white' : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
+  return minute === m
+    ? 'bg-[var(--cp-primary)] text-white'
+    : 'text-[var(--cp-text)] hover:bg-[var(--cp-surface)]';
 }
 
 function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -48,16 +70,34 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
               <div className="flex gap-4 px-2 py-2">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Hour</span>
-                  {HOURS.map((h) => (
-                    <button key={h} type="button" onClick={() => { setHour(h); if (minute != null) onChange(pad(h) + ':' + pad(minute)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${hourClass(h)}`}>
+                  {HOURS.map(h => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => {
+                        setHour(h);
+                        if (minute != null) onChange(pad(h) + ':' + pad(minute));
+                        setOpen(false);
+                      }}
+                      className={`w-8 h-8 rounded text-sm font-medium ${hourClass(h, hour)}`}
+                    >
                       {pad(h)}
                     </button>
                   ))}
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-[var(--cp-muted)] mb-1">Minute</span>
-                  {MINUTES.map((m) => (
-                    <button key={m} type="button" onClick={() => { setMinute(m); if (hour != null) onChange(pad(hour) + ':' + pad(m)); setOpen(false); }} className={`w-8 h-8 rounded text-sm font-medium ${minuteClass(m)}`}>
+                  {MINUTES.map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        setMinute(m);
+                        if (hour != null) onChange(pad(hour) + ':' + pad(m));
+                        setOpen(false);
+                      }}
+                      className={`w-8 h-8 rounded text-sm font-medium ${minuteClass(m, minute)}`}
+                    >
                       {pad(m)}
                     </button>
                   ))}
@@ -71,7 +111,15 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-function ExtraEventForm({ subTab, courses, options }: { subTab: 'extra' | 'quiz'; courses: Array<{ code: string; name: string; semester?: number; branch?: string; instructor?: string }>; options: any }) {
+function ExtraEventForm({
+  subTab,
+  courses,
+  options,
+}: {
+  subTab: 'extra' | 'quiz';
+  courses: CourseOpt[];
+  options: ManageOptions | null;
+}) {
   const [selectedCode, setSelectedCode] = useState('');
   const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -82,8 +130,16 @@ function ExtraEventForm({ subTab, courses, options }: { subTab: 'extra' | 'quiz'
   const [status, setStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [statusMsg, setStatusMsg] = useState('');
 
-  const input = { className: 'w-full rounded px-3 py-2 text-sm bg-[var(--cp-bg)] border border-[var(--cp-border)] text-[var(--cp-text)]' };
-  const filteredCourses = courses.filter((c: any) => (selectedSemester == null || c.semester === selectedSemester) && (!selectedBranch || c.branch === selectedBranch) && (!selectedInstructor || c.instructor === selectedInstructor));
+  const input = {
+    className:
+      'w-full rounded px-3 py-2 text-sm bg-[var(--cp-bg)] border border-[var(--cp-border)] text-[var(--cp-text)]',
+  };
+  const filteredCourses = courses.filter(
+    (c: CourseOpt) =>
+      (selectedSemester == null || c.semester === selectedSemester) &&
+      (!selectedBranch || c.branch === selectedBranch) &&
+      (!selectedInstructor || c.instructor === selectedInstructor)
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +153,15 @@ function ExtraEventForm({ subTab, courses, options }: { subTab: 'extra' | 'quiz'
       const res = await fetch('/extra-events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ course_code: selectedCode, label, event_date: dateStr, time_slot: timeSlot, semester: selectedSemester, branch: selectedBranch || undefined, instructor_name: selectedInstructor || undefined }),
+        body: JSON.stringify({
+          course_code: selectedCode,
+          label,
+          event_date: dateStr,
+          time_slot: timeSlot,
+          semester: selectedSemester,
+          branch: selectedBranch || undefined,
+          instructor_name: selectedInstructor || undefined,
+        }),
       });
       if (!res.ok) throw new Error('Server responded ' + res.status);
       setStatus('ok');
@@ -117,60 +181,111 @@ function ExtraEventForm({ subTab, courses, options }: { subTab: 'extra' | 'quiz'
 
   return (
     <Card>
-      <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--cp-text)' }}>{subTab === 'quiz' ? 'Add Quiz' : 'Add Extra Class'}</h2>
+      <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--cp-text)' }}>
+        {subTab === 'quiz' ? 'Add Quiz' : 'Add Extra Class'}
+      </h2>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>Course</label>
-          <select value={selectedCode} onChange={(e) => setSelectedCode(e.target.value)} className={input.className}>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Course
+          </label>
+          <select
+            value={selectedCode}
+            onChange={e => setSelectedCode(e.target.value)}
+            className={input.className}
+          >
             <option value="">Select course</option>
-            {filteredCourses.map((c: any) => (
-              <option key={c.code} value={c.code}>{c.code} — {c.name} {c.is_extra ? '(Extra)' : ''}</option>
+            {filteredCourses.map((c: CourseOpt) => (
+              <option key={c.code} value={c.code}>
+                {c.code} — {c.name} {c.is_extra ? '(Extra)' : ''}
+              </option>
             ))}
           </select>
         </div>
         <div>
-          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>Semester</label>
-          <select value={selectedSemester ?? ''} onChange={(e) => setSelectedSemester(e.target.value ? Number(e.target.value) : null)} className={input.className}>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Semester
+          </label>
+          <select
+            value={selectedSemester ?? ''}
+            onChange={e => setSelectedSemester(e.target.value ? Number(e.target.value) : null)}
+            className={input.className}
+          >
             <option value="">Select semester</option>
-            {(options.semesters || []).map((s: number) => (
-              <option key={s} value={s}>{s} Sem</option>
+            {(options?.semesters || []).map((s: number) => (
+              <option key={s} value={s}>
+                {s} Sem
+              </option>
             ))}
           </select>
         </div>
         <div>
-          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>Branch</label>
-          <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} className={input.className}>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Branch
+          </label>
+          <select
+            value={selectedBranch}
+            onChange={e => setSelectedBranch(e.target.value)}
+            className={input.className}
+          >
             <option value="">Select branch</option>
-            {(options.branches || []).map((b: string) => <option key={b} value={b}>{b}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>Instructor</label>
-          <select value={selectedInstructor} onChange={(e) => setSelectedInstructor(e.target.value)} className={input.className}>
-            <option value="">Select instructor</option>
-            {(options.instructors || []).map((i: string) => (
-              <option key={i} value={i}>{i}</option>
+            {(options?.branches || []).map((b: string) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
             ))}
           </select>
         </div>
         <div>
-          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>Date</label>
-          <input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} className={input.className} />
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Instructor
+          </label>
+          <select
+            value={selectedInstructor}
+            onChange={e => setSelectedInstructor(e.target.value)}
+            className={input.className}
+          >
+            <option value="">Select instructor</option>
+            {(options?.instructors || []).map((i: string) => (
+              <option key={i} value={i}>
+                {i}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
-          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>Time slot (vacant room lookup applies)</label>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Date
+          </label>
+          <input
+            type="date"
+            value={dateStr}
+            onChange={e => setDateStr(e.target.value)}
+            className={input.className}
+          />
+        </div>
+        <div>
+          <label className="block text-sm mb-1" style={{ color: 'var(--cp-muted)' }}>
+            Time slot (vacant room lookup applies)
+          </label>
           <div className="flex gap-2">
             <TimePicker value={timeSlot} onChange={setTimeSlot} />
           </div>
         </div>
-        <button type="submit" className="inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-medium bg-[var(--cp-primary)] text-white hover:brightness-110 transition w-full md:w-auto">
+        <button
+          type="submit"
+          className="inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-medium bg-[var(--cp-primary)] text-white hover:brightness-110 transition w-full md:w-auto"
+        >
           <Plus size={16} /> Add {subTab === 'quiz' ? 'Quiz' : 'Extra Class'}
         </button>
         {status === 'ok' && <p className="text-sm text-emerald-600 mt-2">{statusMsg}</p>}
         {status === 'error' && <p className="text-sm text-red-600 mt-2">{statusMsg}</p>}
       </form>
       {selectedCode && (
-        <div className="mt-3 p-3 rounded text-xs bg-[var(--cp-surface)] border border-[var(--cp-border)]" style={{ color: 'var(--cp-text)' }}>
+        <div
+          className="mt-3 p-3 rounded text-xs bg-[var(--cp-surface)] border border-[var(--cp-border)]"
+          style={{ color: 'var(--cp-text)' }}
+        >
           Selected: <b>{selectedCode}</b>
         </div>
       )}
@@ -185,7 +300,10 @@ function CreatedEventsList() {
         Created Extra Classes / Quizzes
       </h3>
       <div className="space-y-2">
-        <div className="p-2.5 rounded border" style={{ background: 'var(--cp-bg)', borderColor: 'var(--cp-border)' }}>
+        <div
+          className="p-2.5 rounded border"
+          style={{ background: 'var(--cp-bg)', borderColor: 'var(--cp-border)' }}
+        >
           <div className="flex items-center justify-between gap-2">
             <span className="font-mono font-semibold text-sm" style={{ color: 'var(--cp-text)' }}>
               CS8004
@@ -195,10 +313,16 @@ function CreatedEventsList() {
             </span>
           </div>
           <div className="flex gap-2 mt-1">
-            <button type="button" className="text-xs rounded px-2 py-0.5 bg-amber-500/20 text-amber-600">
+            <button
+              type="button"
+              className="text-xs rounded px-2 py-0.5 bg-amber-500/20 text-amber-600"
+            >
               Update
             </button>
-            <button type="button" className="text-xs rounded px-2 py-0.5 bg-red-500/20 text-red-600">
+            <button
+              type="button"
+              className="text-xs rounded px-2 py-0.5 bg-red-500/20 text-red-600"
+            >
               Cancel
             </button>
             <span className="text-xs ml-auto" style={{ color: 'var(--cp-muted)' }}>
@@ -212,15 +336,15 @@ function CreatedEventsList() {
 }
 
 export default function FacultyManage() {
-  const [options, setOptions] = useState<any>(null);
+  const [options, setOptions] = useState<ManageOptions | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [subTab, setSubTab] = useState<ManageSubTab>('extra');
 
   useEffect(() => {
     setOptionsLoading(true);
     fetch('/extra-events/options')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setOptions({
           semesters: data.semesters || [],
           branches: data.branches || [],
@@ -230,14 +354,26 @@ export default function FacultyManage() {
           profile: data.profile || null,
         });
       })
-      .catch(() => setOptions({ semesters: [], branches: [], instructors: [], courses: [], timetable_entries: [], profile: null }))
+      .catch(() =>
+        setOptions({
+          semesters: [],
+          branches: [],
+          instructors: [],
+          courses: [],
+          timetable_entries: [],
+          profile: null,
+        })
+      )
       .finally(() => setOptionsLoading(false));
   }, []);
 
   if (optionsLoading || !options) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="animate-spin rounded-full border-2 border-current border-t-transparent" style={{ color: 'var(--cp-primary)', width: 26, height: 26 }} />
+        <div
+          className="animate-spin rounded-full border-2 border-current border-t-transparent"
+          style={{ color: 'var(--cp-primary)', width: 26, height: 26 }}
+        />
       </div>
     );
   }
@@ -246,13 +382,30 @@ export default function FacultyManage() {
     <div className="space-y-4 max-w-xl mx-auto">
       <div className="flex gap-2 overflow-x-auto w-full max-w-xl px-2 pb-1.5">
         <nav className="flex gap-2 shrink-0" aria-label="Manage sub-tabs">
-          {(['extra', 'quiz', 'created'] as ManageSubTab[]).map((id) => {
+          {(['extra', 'quiz', 'created'] as ManageSubTab[]).map(id => {
             const isActive = subTab === id;
             return (
-              <button key={id} type="button" onClick={() => setSubTab(id)} aria-current={isActive ? 'page' : undefined} className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-lg transition-all duration-200" style={
-                isActive
-                  ? { borderRadius: '0.5rem', background: 'var(--cp-surface)', color: 'var(--cp-primary)', boxShadow: 'var(--cp-clay)', border: '1px solid rgba(255,255,255,.22)' }
-                  : { borderRadius: '0.5rem', background: 'rgba(255,255,255,.06)', color: 'var(--cp-text)', border: '1px solid rgba(163,177,198,.3)' }
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSubTab(id)}
+                aria-current={isActive ? 'page' : undefined}
+                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-lg transition-all duration-200"
+                style={
+                  isActive
+                    ? {
+                        borderRadius: '0.5rem',
+                        background: 'var(--cp-surface)',
+                        color: 'var(--cp-primary)',
+                        boxShadow: 'var(--cp-clay)',
+                        border: '1px solid rgba(255,255,255,.22)',
+                      }
+                    : {
+                        borderRadius: '0.5rem',
+                        background: 'rgba(255,255,255,.06)',
+                        color: 'var(--cp-text)',
+                        border: '1px solid rgba(163,177,198,.3)',
+                      }
                 }
               >
                 {SUB_TAB_LABELS[id]}
@@ -262,9 +415,9 @@ export default function FacultyManage() {
         </nav>
       </div>
       {subTab === 'extra' ? (
-        <ExtraEventForm subTab="extra" courses={options.courses} options={options} />
+        <ExtraEventForm subTab="extra" courses={options?.courses ?? []} options={options} />
       ) : subTab === 'quiz' ? (
-        <ExtraEventForm subTab="quiz" courses={options.courses} options={options} />
+        <ExtraEventForm subTab="quiz" courses={options?.courses ?? []} options={options} />
       ) : (
         <CreatedEventsList />
       )}

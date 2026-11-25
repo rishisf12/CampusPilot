@@ -1307,6 +1307,49 @@ def parse_mid_sem_file(file_path: Path, is_csv: bool = False) -> Dict[str, Any]:
     return {"rows": rows, "stats": {"rows_parsed": len(rows), "tables": len(tables)}}
 
 
+def _excel_cell_text(value: Any) -> str:
+    """Render one Excel cell the way the PDF table extractor renders text."""
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%d.%m.%Y")
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, str):
+        return value.strip()
+    return str(value)
+
+
+def _parse_excel_index_layout(wb: Any, sheet_name: str, reason: str = "") -> Dict[str, Any]:
+    """
+    Fall back to the official seating-index layout for Excel uploads.
+
+    Those sheets carry the day/date and the exam slot on their own band rows
+    above a ``S. No. | Lecture Hall | Course Code | Roll Numbers`` table, so
+    the flat CSV column names never match.  The sheet is rendered into the
+    same cell grid the PDF table extractor produces and handed to the parser
+    that reads the printed index.
+    """
+    ws = wb[sheet_name]
+    grid: List[List[str]] = []
+    for row_vals in ws.iter_rows(values_only=True):
+        if not row_vals or not any(v is not None and str(v).strip() for v in row_vals):
+            grid.append([])
+            continue
+        grid.append([_excel_cell_text(v) for v in row_vals])
+    wb.close()
+
+    rows, skipped = parse_indexing_tables([grid])
+    if not rows:
+        detail = f" ({reason})" if reason else ""
+        return {
+            "rows": [],
+            "stats": {"rows_parsed": 0, "warnings_count": 1},
+            "warnings": [f"No seating rows found in sheet '{sheet_name}'{detail}"],
+        }
+    return {"rows": rows, "stats": {"rows_parsed": len(rows), "rows_skipped": skipped}}
+
+
 def _parse_excel_seating_file(xlsx_path: Path) -> Dict[str, Any]:
     """Parse a seating-index Excel file.
 
@@ -1344,20 +1387,14 @@ def _parse_excel_seating_file(xlsx_path: Path) -> Dict[str, Any]:
             break
 
     if header_row is None:
-        return {
-            "rows": [],
-            "stats": {"rows_parsed": 0, "warnings_count": 1},
-            "warnings": [f"Could not find header row in sheet '{sheet_name}'"],
-        }
+        return _parse_excel_index_layout(wb, sheet_name)
 
     required_cols = {"roll_range", "room", "date", "time", "course_code"}
     missing = required_cols - set(col_map.keys())
     if missing:
-        return {
-            "rows": [],
-            "stats": {"rows_parsed": 0, "warnings_count": 1},
-            "warnings": [f"Missing required columns: {missing}. Found: {list(col_map.keys())}"],
-        }
+        return _parse_excel_index_layout(
+            wb, sheet_name, f"missing flat columns {sorted(missing)}"
+        )
 
     def get_col(key: str) -> str:
         idx = col_map.get(key)

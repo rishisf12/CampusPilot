@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
+from sqlalchemy import or_
 from datetime import date
 from core.database import get_session
 from core.deps import get_current_user
@@ -29,13 +30,20 @@ async def extra_event_options(
         select(UserProfile).where(UserProfile.user_id == user.id)
     ).first()
 
+    # The options list is shared global data (courses, branches, semesters),
+    # so personal uploads of other accounts must not leak into it.
+    scope = or_(
+        TimetableSlot.uploaded_by.is_(None),
+        TimetableSlot.uploaded_by == user.id,
+    )
+
     # Distinct values from the timetable - always the latest upload.
     semesters = [
         s
         for s in session.exec(
             select(TimetableSlot.semester).distinct().where(
                 TimetableSlot.semester.is_not(None)
-            )
+            ).where(scope)
         ).all()
         if s
     ]
@@ -44,7 +52,7 @@ async def extra_event_options(
         for b in session.exec(
             select(TimetableSlot.branch_or_program).distinct().where(
                 TimetableSlot.branch_or_program.is_not(None)
-            )
+            ).where(scope)
         ).all()
         if b
     ]
@@ -53,13 +61,13 @@ async def extra_event_options(
         for i in session.exec(
             select(TimetableSlot.instructor).distinct().where(
                 TimetableSlot.instructor.is_not(None)
-            )
+            ).where(scope)
         ).all()
         if i
     ]
 
     # Full timetable slot entries matching the filters.
-    query = select(TimetableSlot).distinct(TimetableSlot.course_code, TimetableSlot.day, TimetableSlot.start_time)
+    query = select(TimetableSlot).distinct(TimetableSlot.course_code, TimetableSlot.day, TimetableSlot.start_time).where(scope)
     if semester is not None:
         query = query.where(TimetableSlot.semester == semester)
     if branch:
@@ -162,6 +170,10 @@ async def delete_extra(
 ):
     event = session.get(ExtraEvent, event_id)
     if not event:
+        raise HTTPException(status_code=404, detail="Not found")
+    if event.instructor_id != user.id:
+        # Every account sees the public (admin) events plus its own personal
+        # ones - but only the account that created an event may cancel it.
         raise HTTPException(status_code=404, detail="Not found")
     event.cancelled = True
     session.commit()

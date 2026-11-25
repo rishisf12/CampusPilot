@@ -165,7 +165,12 @@ export default function DataManager({ onError }: { onError?: (m: string) => void
         accept=".pdf,.csv,.xlsx"
       />
       <Row title="Exam timetable (midsem)" sub="PDF/CSV" kind="exam-tt" accept=".pdf,.csv" />
-      <Row title="Exam seating index" sub="PDF/CSV" kind="exam-seat" accept=".pdf,.csv" />
+      <Row
+        title="Exam seating index"
+        sub="PDF/CSV/Excel"
+        kind="exam-seat"
+        accept=".pdf,.csv,.xlsx"
+      />
     </div>
   );
 }

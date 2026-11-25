@@ -116,6 +116,9 @@ export function clearSession(): void {
   removeValue(KEYS.user);
   removeValue(KEYS.pendingVerification);
   removeValue(KEYS.emailJustVerified);
+  // Session-derived caches: they belong to whoever the token was for.
+  removeValue(KEYS.quickLookup);
+  removeValue(KEYS.classAlarms);
 }
 
 /**
